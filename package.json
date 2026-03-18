@@ -1,6 +1,6 @@
 {
   "name": "even-toolkit",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Shared library for building Even Realities G2 glasses apps — bridge, display, gestures, action bars, timers, and more.",
   "type": "module",
   "main": "./dist/index.js",
@@ -99,8 +99,12 @@
     "@jappyjan/even-better-sdk": ">=0.0.10"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-router": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-router": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.7",
