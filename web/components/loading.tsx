@@ -8,45 +8,41 @@ interface LoadingProps {
 
 /*
  * Pixel-art loading spinner — progressive cell-by-cell fill on a 4×4 grid.
- * The grid is divided into 4 quadrants (clockwise: TL, TR, BR, BL).
- * Each cell fills one at a time in quadrant order, then empties the same way.
- * 32 frames total (16 fill + 16 empty) at 50ms = ~1.6s per cycle.
- * Minimum rendered size: 8×8px (each cell = 2×2 display pixels).
+ * Quadrant order: BL → BR → TR → TL (clockwise from bottom-left).
+ * Within each quadrant, cells follow the clockwise sweep direction
+ * so adjacent pixels fill sequentially — no visual jumps.
+ * 32 frames: 16 fill + 16 empty, 50ms each = ~1.6s cycle.
  */
 
-// Cells ordered by quadrant (clockwise: TL → TR → BR → BL).
-// Within each quadrant, cells follow the clockwise direction of travel.
 const fillOrder: [number, number][] = [
-  // Q0: top-left (fills →↓)
-  [0, 0], [0, 1], [1, 0], [1, 1],
-  // Q1: top-right (fills →↓)
-  [0, 2], [0, 3], [1, 2], [1, 3],
-  // Q2: bottom-right (fills ←↑, reversing direction)
-  [2, 3], [2, 2], [3, 3], [3, 2],
-  // Q3: bottom-left (fills ←↑, reversing direction)
-  [3, 1], [3, 0], [2, 1], [2, 0],
+  // BL: column-by-column left→right, top→bottom
+  [2, 0], [3, 0], [2, 1], [3, 1],
+  // BR: column-by-column left→right, top→bottom
+  [2, 2], [3, 2], [2, 3], [3, 3],
+  // TR: column-by-column right→left, bottom→top (reverse — continuing clockwise)
+  [1, 3], [0, 3], [1, 2], [0, 2],
+  // TL: column-by-column right→left, bottom→top (reverse — continuing clockwise)
+  [1, 1], [0, 1], [1, 0], [0, 0],
 ];
 
-const TOTAL_CELLS = 16;
-const TOTAL_FRAMES = TOTAL_CELLS * 2; // 16 fill + 16 empty
+const N = 16;
+const TOTAL = N * 2;
 
 function Loading({ size = 24, className }: LoadingProps) {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
     const id = setInterval(() => {
-      setFrame((f) => (f + 1) % TOTAL_FRAMES);
+      setFrame((f) => (f + 1) % TOTAL);
     }, 50);
     return () => clearInterval(id);
   }, []);
 
-  // During fill phase (0-15): cell i is visible if i <= frame
-  // During empty phase (16-31): cell i is visible if i > (frame - 16)
-  const isFilling = frame < TOTAL_CELLS;
-  const threshold = isFilling ? frame : frame - TOTAL_CELLS;
+  const filling = frame < N;
+  const t = filling ? frame : frame - N;
 
   const cellSize = 2;
-  const viewSize = 8; // 4 cells × 2px each = 8
+  const viewSize = 8;
 
   return (
     <div
@@ -60,7 +56,7 @@ function Loading({ size = 24, className }: LoadingProps) {
         shapeRendering="crispEdges"
       >
         {fillOrder.map(([r, c], i) => {
-          const visible = isFilling ? i <= threshold : i > threshold;
+          const on = filling ? i <= t : i > t;
           return (
             <rect
               key={i}
@@ -69,7 +65,7 @@ function Loading({ size = 24, className }: LoadingProps) {
               width={cellSize}
               height={cellSize}
               fill="currentColor"
-              opacity={visible ? 1 : 0}
+              opacity={on ? 1 : 0}
               style={{ transition: 'opacity 40ms ease' }}
             />
           );
