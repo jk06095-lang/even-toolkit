@@ -18,7 +18,8 @@
   "include": [
     "glasses/**/*.ts",
     "web/**/*.ts",
-    "web/**/*.tsx"
+    "web/**/*.tsx",
+    "stt/**/*.ts"
   ],
   "exclude": [
     "node_modules",

@@ -1,6 +1,6 @@
 {
   "name": "even-toolkit",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Design system & component library for Even Realities G2 smart glasses apps — 55+ web components, 191 pixel-art icons, glasses SDK bridge, and design tokens.",
   "type": "module",
   "main": "./dist/glasses/index.js",
@@ -301,7 +301,39 @@
     "./web/theme-light.css": "./web/theme/tokens-light.css",
     "./web/theme-dark.css": "./web/theme/tokens-dark.css",
     "./web/typography.css": "./web/theme/typography.css",
-    "./web/utilities.css": "./web/theme/utilities.css"
+    "./web/utilities.css": "./web/theme/utilities.css",
+    "./stt": {
+      "types": "./dist/stt/index.d.ts",
+      "import": "./dist/stt/index.js"
+    },
+    "./stt/engine": {
+      "types": "./dist/stt/engine.d.ts",
+      "import": "./dist/stt/engine.js"
+    },
+    "./stt/react": {
+      "types": "./dist/stt/react/useSTT.d.ts",
+      "import": "./dist/stt/react/useSTT.js"
+    },
+    "./stt/audio": {
+      "types": "./dist/stt/audio/pcm-utils.d.ts",
+      "import": "./dist/stt/audio/pcm-utils.js"
+    },
+    "./stt/providers/web-speech": {
+      "types": "./dist/stt/providers/web-speech.d.ts",
+      "import": "./dist/stt/providers/web-speech.js"
+    },
+    "./stt/providers/whisper-local": {
+      "types": "./dist/stt/providers/whisper-local/provider.d.ts",
+      "import": "./dist/stt/providers/whisper-local/provider.js"
+    },
+    "./stt/providers/whisper-api": {
+      "types": "./dist/stt/providers/whisper-api.d.ts",
+      "import": "./dist/stt/providers/whisper-api.js"
+    },
+    "./stt/providers/deepgram": {
+      "types": "./dist/stt/providers/deepgram.d.ts",
+      "import": "./dist/stt/providers/deepgram.js"
+    }
   },
   "files": [
     "dist",
@@ -320,7 +352,8 @@
     "clsx": ">=2.0.0",
     "react": ">=18.0.0",
     "react-router": ">=7.0.0",
-    "tailwind-merge": ">=2.0.0"
+    "tailwind-merge": ">=2.0.0",
+    "@huggingface/transformers": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -337,10 +370,14 @@
     },
     "class-variance-authority": {
       "optional": true
+    },
+    "@huggingface/transformers": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.7",
+    "@huggingface/transformers": "^3.8.1",
     "@jappyjan/even-better-sdk": "^0.0.10",
     "@types/react": "^19.0.0",
     "class-variance-authority": "^0.7.1",
