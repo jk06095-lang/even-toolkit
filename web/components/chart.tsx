@@ -1,15 +1,42 @@
 import * as React from 'react';
 import { cn } from '../utils/cn';
+import {
+  ResponsiveContainer,
+  LineChart as RLineChart,
+  Line,
+  BarChart as RBarChart,
+  Bar,
+  PieChart as RPieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Area,
+  AreaChart,
+} from 'recharts';
 
-// ─── Shared helpers ─────────────────────────────────────────────
+// ─── Colors ─────────────────────────────────────────────────────
 
-function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
+const COLORS = ['#232323', '#4BB956', '#FF453A', '#FEF991', '#7B7B7B', '#E4E4E4'];
 
-function scaleLinear(domain: [number, number], range: [number, number]) {
-  const [d0, d1] = domain;
-  const [r0, r1] = range;
-  return (v: number) => r0 + ((v - d0) / (d1 - d0)) * (r1 - r0);
-}
+// ─── Custom Tooltip ─────────────────────────────────────────────
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-surface rounded-[6px] shadow-[0_2px_8px_rgba(0,0,0,0.12)] px-3 py-2 text-[13px] tracking-[-0.13px]">
+      {label != null && <div className="text-text-dim mb-1">{label}</div>}
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+          <span className="text-text tabular-nums">{entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // ─── Sparkline ──────────────────────────────────────────────────
 
@@ -23,29 +50,24 @@ interface SparklineProps {
 
 function Sparkline({ data, width = 80, height = 24, color, className }: SparklineProps) {
   if (data.length < 2) return null;
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const yScale = scaleLinear([min, max || 1], [height - 2, 2]);
-  const xStep = (width - 4) / (data.length - 1);
 
-  const points = data.map((v, i) => `${2 + i * xStep},${yScale(v)}`).join(' ');
+  const chartData = data.map((value, index) => ({ index, value }));
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width={width}
-      height={height}
-      className={className}
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color ?? 'var(--color-accent)'}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div className={className} style={{ width, height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RLineChart data={chartData} margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+          <Line
+            type="monotone"
+            dataKey="value"
+            stroke={color ?? 'var(--color-accent)'}
+            strokeWidth={1.5}
+            dot={false}
+            isAnimationActive={false}
+          />
+        </RLineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -72,76 +94,110 @@ function LineChart({
 }: LineChartProps) {
   if (data.length < 2) return null;
 
-  const pad = { top: 10, right: 10, bottom: showLabels ? 24 : 10, left: showLabels ? 40 : 10 };
-  const w = width - pad.left - pad.right;
-  const h = height - pad.top - pad.bottom;
-
-  const xs = data.map((d) => d.x);
-  const ys = data.map((d) => d.y);
-  const xMin = Math.min(...xs), xMax = Math.max(...xs);
-  const yMin = Math.min(...ys), yMax = Math.max(...ys);
-  const xScale = scaleLinear([xMin, xMax], [0, w]);
-  const yScale = scaleLinear([yMin, yMax || 1], [h, 0]);
-
-  const linePoints = data.map((d) => `${pad.left + xScale(d.x)},${pad.top + yScale(d.y)}`).join(' ');
-  const areaPoints = linePoints + ` ${pad.left + w},${pad.top + h} ${pad.left},${pad.top + h}`;
-
-  const gradientId = React.useId();
   const accentColor = color ?? 'var(--color-accent)';
+  const gradientId = React.useId();
 
-  // Grid lines (5 horizontal)
-  const gridLines = showGrid ? Array.from({ length: 5 }, (_, i) => {
-    const y = pad.top + (h / 4) * i;
-    const val = lerp(yMax, yMin, i / 4);
-    return { y, val };
-  }) : [];
+  const chartData = data.map((d) => ({
+    x: d.x,
+    y: d.y,
+    label: d.label ?? d.x,
+  }));
+
+  if (showArea) {
+    return (
+      <div className={cn('w-full', className)} style={{ width, height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={chartData} margin={{ top: 10, right: 10, bottom: showLabels ? 0 : 10, left: showLabels ? 0 : 10 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={accentColor} stopOpacity={0.2} />
+                <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            {showGrid && (
+              <CartesianGrid
+                strokeDasharray="4 4"
+                stroke="var(--color-border)"
+                strokeWidth={0.5}
+                vertical={false}
+              />
+            )}
+            {showLabels && (
+              <XAxis
+                dataKey="label"
+                tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+                axisLine={false}
+                tickLine={false}
+              />
+            )}
+            {showLabels && (
+              <YAxis
+                tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+            )}
+            {!showLabels && <XAxis hide />}
+            {!showLabels && <YAxis hide />}
+            <Tooltip content={<CustomTooltip />} />
+            <Area
+              type="monotone"
+              dataKey="y"
+              stroke={accentColor}
+              strokeWidth={2}
+              fill={`url(#${gradientId})`}
+              dot={{ r: 3, fill: accentColor, strokeWidth: 0 }}
+              isAnimationActive={animated}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cn('w-full', className)}>
-      {showArea && (
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={accentColor} stopOpacity={0.2} />
-            <stop offset="100%" stopColor={accentColor} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-      )}
-
-      {/* Grid */}
-      {gridLines.map((g, i) => (
-        <g key={i}>
-          <line x1={pad.left} y1={g.y} x2={pad.left + w} y2={g.y} stroke="var(--color-border)" strokeDasharray="4 4" strokeWidth={0.5} />
-          {showLabels && (
-            <text x={pad.left - 6} y={g.y + 3} textAnchor="end" className="text-[11px] tracking-[-0.11px]" fill="var(--color-text-dim)">{Math.round(g.val)}</text>
+    <div className={cn('w-full', className)} style={{ width, height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RLineChart data={chartData} margin={{ top: 10, right: 10, bottom: showLabels ? 0 : 10, left: showLabels ? 0 : 10 }}>
+          {showGrid && (
+            <CartesianGrid
+              strokeDasharray="4 4"
+              stroke="var(--color-border)"
+              strokeWidth={0.5}
+              vertical={false}
+            />
           )}
-        </g>
-      ))}
-
-      {/* Area fill */}
-      {showArea && <polygon points={areaPoints} fill={`url(#${gradientId})`} />}
-
-      {/* Line */}
-      <polyline
-        points={linePoints}
-        fill="none"
-        stroke={accentColor}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={animated ? 'animate-draw-line' : ''}
-      />
-
-      {/* Dots */}
-      {data.map((d, i) => (
-        <circle
-          key={i}
-          cx={pad.left + xScale(d.x)}
-          cy={pad.top + yScale(d.y)}
-          r={3}
-          fill={accentColor}
-        />
-      ))}
-    </svg>
+          {showLabels && (
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          {showLabels && (
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+              axisLine={false}
+              tickLine={false}
+              width={36}
+            />
+          )}
+          {!showLabels && <XAxis hide />}
+          {!showLabels && <YAxis hide />}
+          <Tooltip content={<CustomTooltip />} />
+          <Line
+            type="monotone"
+            dataKey="y"
+            stroke={accentColor}
+            strokeWidth={2}
+            dot={{ r: 3, fill: accentColor, strokeWidth: 0 }}
+            isAnimationActive={animated}
+          />
+        </RLineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -165,38 +221,83 @@ function BarChart({
 }: BarChartProps) {
   if (data.length === 0) return null;
 
-  const pad = { top: 10, right: 10, bottom: showLabels ? 28 : 10, left: showLabels ? 40 : 10 };
-  const w = width - pad.left - pad.right;
-  const h = height - pad.top - pad.bottom;
-  const maxVal = Math.max(...data.map((d) => d.value), 1);
-  const barWidth = w / data.length * 0.7;
-  const gap = w / data.length * 0.3;
+  const defaultColor = color ?? 'var(--color-accent)';
+  const hasCustomColors = data.some((d) => d.color);
+
+  const chartData = data.map((d) => ({
+    label: d.label,
+    value: d.value,
+    fill: d.color ?? defaultColor,
+  }));
+
+  if (horizontal) {
+    return (
+      <div className={cn('w-full', className)} style={{ width, height }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RBarChart data={chartData} layout="vertical" margin={{ top: 10, right: 10, bottom: 10, left: showLabels ? 40 : 10 }}>
+            {showLabels && (
+              <YAxis
+                dataKey="label"
+                type="category"
+                tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+                axisLine={false}
+                tickLine={false}
+                width={36}
+              />
+            )}
+            {!showLabels && <YAxis type="category" hide />}
+            {showLabels && (
+              <XAxis
+                type="number"
+                tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+                axisLine={false}
+                tickLine={false}
+              />
+            )}
+            {!showLabels && <XAxis type="number" hide />}
+            <Tooltip content={<CustomTooltip />} />
+            <Bar dataKey="value" radius={[0, 4, 4, 0]} isAnimationActive={false}>
+              {hasCustomColors && chartData.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Bar>
+          </RBarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className={cn('w-full', className)}>
-      {data.map((item, i) => {
-        const barH = (item.value / maxVal) * h;
-        const x = pad.left + (w / data.length) * i + gap / 2;
-        const y = pad.top + h - barH;
-        const fillColor = item.color ?? color ?? 'var(--color-accent)';
-        return (
-          <g key={i}>
-            <rect x={x} y={y} width={barWidth} height={barH} rx={3} fill={fillColor} />
-            {showLabels && (
-              <text
-                x={x + barWidth / 2}
-                y={height - 6}
-                textAnchor="middle"
-                className="text-[11px] tracking-[-0.11px]"
-                fill="var(--color-text-dim)"
-              >
-                {item.label}
-              </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+    <div className={cn('w-full', className)} style={{ width, height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <RBarChart data={chartData} margin={{ top: 10, right: 10, bottom: showLabels ? 0 : 10, left: showLabels ? 0 : 10 }}>
+          {showLabels && (
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+              axisLine={false}
+              tickLine={false}
+            />
+          )}
+          {!showLabels && <XAxis hide />}
+          {showLabels && (
+            <YAxis
+              tick={{ fontSize: 11, fill: 'var(--color-text-dim)' }}
+              axisLine={false}
+              tickLine={false}
+              width={36}
+            />
+          )}
+          {!showLabels && <YAxis hide />}
+          <Tooltip content={<CustomTooltip />} />
+          <Bar dataKey="value" fill={defaultColor} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            {hasCustomColors && chartData.map((entry, i) => (
+              <Cell key={i} fill={entry.fill} />
+            ))}
+          </Bar>
+        </RBarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -212,59 +313,49 @@ interface PieChartProps {
   className?: string;
 }
 
-const PIE_COLORS = [
-  'var(--color-accent)',
-  'var(--color-positive)',
-  'var(--color-negative)',
-  'var(--color-accent-warning)',
-  'var(--color-text-dim)',
-  'var(--color-surface-lighter)',
-];
-
 function PieChart({ data, size = 160, donut = false, centerLabel, className }: PieChartProps) {
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
-  const r = size / 2 - 4;
-  const strokeWidth = donut ? r * 0.4 : r;
-  const radius = r - strokeWidth / 2;
-  const circumference = 2 * Math.PI * radius;
 
-  let offset = 0;
+  const chartData = data.map((d, i) => ({
+    name: d.label,
+    value: d.value,
+    fill: d.color ?? COLORS[i % COLORS.length],
+  }));
 
   return (
-    <div className={cn('flex items-start gap-4 flex-wrap', className)}>
-      <div className="relative shrink-0" style={{ width: size, height: size }}>
-        <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} className="-rotate-90">
-          {data.map((item, i) => {
-            const pct = item.value / total;
-            const dash = pct * circumference;
-            const currentOffset = offset;
-            offset += dash;
-            return (
-              <circle
-                key={i}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={item.color ?? PIE_COLORS[i % PIE_COLORS.length]}
-                strokeWidth={strokeWidth}
-                strokeDasharray={`${dash} ${circumference - dash}`}
-                strokeDashoffset={-currentOffset}
-              />
-            );
-          })}
-        </svg>
+    <div className={cn('flex flex-col items-center gap-4', className)}>
+      <div className="relative" style={{ width: size, height: size, maxWidth: '100%' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <RPieChart>
+            <Pie
+              data={chartData}
+              cx="50%"
+              cy="50%"
+              innerRadius={donut ? '55%' : 0}
+              outerRadius="90%"
+              paddingAngle={0}
+              dataKey="value"
+              strokeWidth={0}
+              isAnimationActive={false}
+            >
+              {chartData.map((entry, i) => (
+                <Cell key={i} fill={entry.fill} />
+              ))}
+            </Pie>
+            <Tooltip content={<CustomTooltip />} />
+          </RPieChart>
+        </ResponsiveContainer>
         {donut && centerLabel && (
-          <div className="absolute inset-0 flex items-center justify-center">
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span className="text-[17px] tracking-[-0.17px] font-normal">{centerLabel}</span>
           </div>
         )}
       </div>
       {/* Legend */}
-      <div className="flex flex-col gap-1.5 py-2">
+      <div className="flex flex-col gap-1.5 w-full max-w-xs">
         {data.map((item, i) => (
           <div key={i} className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color ?? PIE_COLORS[i % PIE_COLORS.length] }} />
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color ?? COLORS[i % COLORS.length] }} />
             <span className="text-[13px] tracking-[-0.13px] text-text">{item.label}</span>
             <span className="text-[11px] tracking-[-0.11px] text-text-dim ml-auto tabular-nums">{item.value}</span>
           </div>

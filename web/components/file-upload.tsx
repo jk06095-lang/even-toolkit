@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { cn } from '../utils/cn';
+import { IcEditUploadToCloud } from '../icons/svg-icons';
 
 interface FileUploadProps {
   onFiles: (files: File[]) => void;
@@ -54,21 +55,7 @@ function FileUpload({ onFiles, accept, multiple = false, maxSize, label, classNa
           isDragging ? 'border-accent bg-accent-alpha' : 'border-border hover:border-accent',
         )}
       >
-        {/* Upload icon (pixel art) */}
-        <svg viewBox="0 0 24 24" className="w-8 h-8 mx-auto mb-2 text-text-dim">
-          <rect x={10} y={4} width={2} height={2} fill="currentColor" />
-          <rect x={10} y={6} width={2} height={2} fill="currentColor" />
-          <rect x={10} y={8} width={2} height={2} fill="currentColor" />
-          <rect x={10} y={10} width={2} height={2} fill="currentColor" />
-          <rect x={10} y={12} width={2} height={2} fill="currentColor" />
-          <rect x={8} y={6} width={2} height={2} fill="currentColor" />
-          <rect x={12} y={6} width={2} height={2} fill="currentColor" />
-          <rect x={6} y={8} width={2} height={2} fill="currentColor" />
-          <rect x={14} y={8} width={2} height={2} fill="currentColor" />
-          <rect x={4} y={16} width={14} height={2} fill="currentColor" />
-          <rect x={4} y={14} width={2} height={2} fill="currentColor" />
-          <rect x={16} y={14} width={2} height={2} fill="currentColor" />
-        </svg>
+        <IcEditUploadToCloud className="w-8 h-8 mx-auto mb-2 text-text-dim" />
         <p className="text-[15px] tracking-[-0.15px] text-text-dim">
           {label ?? 'Drop files or tap to browse'}
         </p>

@@ -16,7 +16,7 @@ function NavBar({ items, activeId, onNavigate, className }: NavBarProps) {
   return (
     <nav
       className={cn(
-        'flex items-center gap-1 px-3 py-3.5 bg-surface rounded-[6px] overflow-x-auto scrollbar-hide',
+        'flex items-center gap-1 w-full box-border px-3 h-[52px] bg-surface rounded-b-[6px] overflow-x-auto scrollbar-hide',
         className,
       )}
     >

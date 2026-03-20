@@ -1,10 +1,29 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-<g clip-path="url(#clip0_10001_76829)">
-<path d="M12 26H10V24H12V26ZM10 24H8V22H10V24ZM14 24H12V22H14V24ZM8 22H6V20H8V22ZM16 22H14V20H16V22ZM6 20H4V18H6V20ZM18 20H16V18H18V20ZM4 18H2V16H4V18ZM20 18H18V16H20V18ZM22 16H20V14H22V16ZM24 14H22V12H24V14ZM26 12H24V10H26V12ZM28 10H26V8H28V10ZM30 8H28V6H30V8Z" fill="currentColor"/>
-</g>
-<defs>
-<clipPath id="clip0_10001_76829">
-<rect width="32" height="32" fill="white"/>
-</clipPath>
-</defs>
+<rect x="4" y="7" width="24" height="12" fill="#FEF991"/>
+<rect width="16" height="4" transform="matrix(1 0 0 -1 8 23)" fill="#FEF991"/>
+<rect x="12" y="23" width="8" height="4" fill="#FEF991"/>
+<rect x="7" y="5" width="8" height="4" fill="#FEF991"/>
+<rect x="18" y="5" width="8" height="4" fill="#FEF991"/>
+<rect x="8" y="3" width="5" height="2" fill="currentColor"/>
+<rect x="19" y="3" width="5" height="2" fill="currentColor"/>
+<rect x="2" y="9" width="2" height="8" fill="currentColor"/>
+<rect x="28" y="9" width="2" height="8" fill="currentColor"/>
+<rect x="15" y="7" width="2" height="2" fill="currentColor"/>
+<rect x="6" y="19" width="2" height="2" fill="currentColor"/>
+<rect x="4" y="17" width="2" height="2" fill="currentColor"/>
+<rect x="26" y="19" width="2" height="2" transform="rotate(90 26 19)" fill="currentColor"/>
+<rect x="28" y="17" width="2" height="2" transform="rotate(90 28 17)" fill="currentColor"/>
+<rect x="10" y="23" width="2" height="2" fill="currentColor"/>
+<rect x="8" y="21" width="2" height="2" fill="currentColor"/>
+<rect x="24" y="21" width="2" height="2" transform="rotate(90 24 21)" fill="currentColor"/>
+<rect x="12" y="25" width="2" height="2" fill="currentColor"/>
+<rect x="22" y="23" width="2" height="2" transform="rotate(90 22 23)" fill="currentColor"/>
+<rect x="20" y="25" width="2" height="2" transform="rotate(90 20 25)" fill="currentColor"/>
+<rect x="18" y="27" width="2" height="4" transform="rotate(90 18 27)" fill="currentColor"/>
+<rect x="13" y="5" width="2" height="2" fill="currentColor"/>
+<rect x="6" y="5" width="2" height="2" fill="currentColor"/>
+<rect x="24" y="5" width="2" height="2" fill="currentColor"/>
+<rect x="4" y="7" width="2" height="2" fill="currentColor"/>
+<rect x="26" y="7" width="2" height="2" fill="currentColor"/>
+<rect x="17" y="5" width="2" height="2" fill="currentColor"/>
 </svg>

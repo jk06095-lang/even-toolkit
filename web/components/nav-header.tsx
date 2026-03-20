@@ -10,12 +10,12 @@ interface NavHeaderProps {
 
 function NavHeader({ title, left, right, className }: NavHeaderProps) {
   return (
-    <div className={cn('flex items-center justify-between px-3 py-3.5 bg-surface rounded-[6px]', className)}>
-      <div className="flex items-center gap-2 shrink-0 w-6">{left}</div>
-      <span className="text-[17px] tracking-[-0.17px] font-normal text-accent text-center flex-1">
+    <div className={cn('flex items-center justify-between w-full box-border px-3 h-[52px] bg-surface rounded-b-[6px]', className)}>
+      <div className="flex items-center gap-2 shrink-0 min-w-[40px]">{left}</div>
+      <span className="text-[17px] tracking-[-0.17px] font-normal text-text text-center flex-1 truncate">
         {title}
       </span>
-      <div className="flex items-center gap-2 justify-end shrink-0 w-6">{right}</div>
+      <div className="flex items-center gap-2 justify-end shrink-0 min-w-[40px]">{right}</div>
     </div>
   );
 }

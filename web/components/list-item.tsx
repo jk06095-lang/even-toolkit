@@ -1,6 +1,7 @@
 import { cn } from '../utils/cn';
 import { useRef, useState, useCallback } from 'react';
-import type { ReactNode, TouchEvent as ReactTouchEvent, MouseEvent as ReactMouseEvent } from 'react';
+import type { ReactNode, TouchEvent as ReactTouchEvent } from 'react';
+import { IcEditTrash } from '../icons/svg-icons';
 
 interface ListItemProps {
   title: string;
@@ -14,23 +15,41 @@ interface ListItemProps {
 
 const SWIPE_THRESHOLD = 80;
 const DELETE_WIDTH = 72;
+const DIRECTION_LOCK_PX = 10;
 
 function ListItem({ title, subtitle, leading, trailing, onPress, onDelete, className }: ListItemProps) {
   const [offset, setOffset] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const startX = useRef(0);
+  const startY = useRef(0);
   const currentOffset = useRef(0);
+  const direction = useRef<'none' | 'horizontal' | 'vertical'>('none');
 
   const onTouchStart = useCallback((e: ReactTouchEvent) => {
     if (!onDelete) return;
     startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
     currentOffset.current = offset;
+    direction.current = 'none';
     setSwiping(true);
   }, [onDelete, offset]);
 
   const onTouchMove = useCallback((e: ReactTouchEvent) => {
     if (!swiping) return;
     const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+
+    // Lock direction on first significant move
+    if (direction.current === 'none') {
+      if (Math.abs(dx) > DIRECTION_LOCK_PX || Math.abs(dy) > DIRECTION_LOCK_PX) {
+        direction.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+      }
+      return;
+    }
+
+    // Vertical scroll — don't interfere
+    if (direction.current === 'vertical') return;
+
     const next = Math.min(0, Math.max(-DELETE_WIDTH, currentOffset.current + dx));
     setOffset(next);
   }, [swiping]);
@@ -38,6 +57,7 @@ function ListItem({ title, subtitle, leading, trailing, onPress, onDelete, class
   const onTouchEnd = useCallback(() => {
     if (!swiping) return;
     setSwiping(false);
+    if (direction.current === 'vertical') return;
     setOffset(offset < -SWIPE_THRESHOLD / 2 ? -DELETE_WIDTH : 0);
   }, [swiping, offset]);
 
@@ -45,7 +65,6 @@ function ListItem({ title, subtitle, leading, trailing, onPress, onDelete, class
 
   return (
     <div className="relative overflow-hidden">
-      {/* Delete action behind — only visible when swiped */}
       {onDelete && offset < 0 && (
         <button
           type="button"
@@ -53,13 +72,9 @@ function ListItem({ title, subtitle, leading, trailing, onPress, onDelete, class
           className="absolute right-0 top-0 bottom-0 flex items-center justify-center bg-negative text-text-highlight cursor-pointer"
           style={{ width: DELETE_WIDTH }}
         >
-          <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          </svg>
+          <IcEditTrash width={20} height={20} />
         </button>
       )}
-      {/* Foreground item */}
       <Comp
         type={onPress ? 'button' : undefined}
         onClick={onPress}

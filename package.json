@@ -294,6 +294,10 @@
       "types": "./dist/web/components/scroll-picker.d.ts",
       "import": "./dist/web/components/scroll-picker.js"
     },
+    "./web/icons/svg-icons": {
+      "types": "./dist/web/icons/svg-icons.d.ts",
+      "import": "./dist/web/icons/svg-icons.js"
+    },
     "./web/theme-light.css": "./web/theme/tokens-light.css",
     "./web/theme-dark.css": "./web/theme/tokens-dark.css",
     "./web/typography.css": "./web/theme/typography.css",
@@ -359,5 +363,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/fabioglimb/even-glass"
+  },
+  "dependencies": {
+    "recharts": "^3.8.0"
   }
 }
