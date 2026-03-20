@@ -1,7 +1,7 @@
 {
   "name": "even-toolkit",
-  "version": "0.6.0",
-  "description": "Shared library for building Even Realities G2 glasses apps — bridge, display, gestures, action bars, timers, and more.",
+  "version": "1.0.0",
+  "description": "Design system & component library for Even Realities G2 smart glasses apps — 55+ web components, 191 pixel-art icons, glasses SDK bridge, and design tokens.",
   "type": "module",
   "main": "./dist/glasses/index.js",
   "types": "./dist/glasses/index.d.ts",
@@ -362,7 +362,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fabioglimb/even-glass"
+    "url": "https://github.com/fabioglimb/even-toolkit"
+  },
+  "homepage": "https://github.com/fabioglimb/even-toolkit#readme",
+  "bugs": {
+    "url": "https://github.com/fabioglimb/even-toolkit/issues"
   },
   "dependencies": {
     "recharts": "^3.8.0"

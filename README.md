@@ -1,6 +1,10 @@
 # even-toolkit
 
-Shared library for building **Even Realities G2 glasses** apps. Provides the bridge, display rendering, gesture handling, UI components, and utilities used across G2 web apps.
+Design system & component library for **Even Realities G2** smart glasses apps.
+
+55+ web components, 191 pixel-art icons, glasses SDK bridge, light/dark themes, and design tokens — all following the Even Realities 2025 UIUX Design Guidelines.
+
+<!-- Live demo URL will be added here -->
 
 ## Install
 
@@ -8,98 +12,134 @@ Shared library for building **Even Realities G2 glasses** apps. Provides the bri
 npm install even-toolkit
 ```
 
-Peer dependencies (install in your app):
-```bash
-npm install @evenrealities/even_hub_sdk @jappyjan/even-better-sdk react react-router
+## What's Inside
+
+### `/web` — Web Component Library
+
+55+ React components with Tailwind CSS, designed for mobile-first companion apps.
+
+```tsx
+import { Button, Card, NavBar, ListItem, Toggle, AppShell } from 'even-toolkit/web';
 ```
 
-## Modules
+**Primitives:** Button, Card, Badge, Input, Textarea, Select, Checkbox, RadioGroup, Slider, InputGroup, Skeleton, Progress, StatusDot, Pill, Toggle, SegmentedControl, Table, Kbd, Divider
 
-### Core
+**Layout:** AppShell, Page, NavBar, NavHeader, ScreenHeader, SectionHeader, SettingsGroup, CategoryFilter, ListItem (swipe-to-delete), SearchBar, Tag, TagCarousel, TagCard, SliderIndicator, PageIndicator, StepIndicator, Timeline, StatGrid, StatusProgress
 
-| Import | Description |
-|--------|------------|
-| `even-toolkit/types` | `DisplayData`, `DisplayLine`, `GlassAction`, `GlassNavState`, `line()`, `separator()` |
-| `even-toolkit/bridge` | `EvenHubBridge` — wraps the SDK for text, column, chart, and image pages |
-| `even-toolkit/useGlasses` | React hook to connect any app to G2 glasses (display, events, polling) |
-| `even-toolkit/layout` | Display constants: `DISPLAY_W=576`, `DISPLAY_H=288`, image tile positions |
+**Feedback:** TimerRing, Dialog, ConfirmDialog, Toast, EmptyState, Loading, BottomSheet, CTAGroup, ScrollPicker, DatePicker, TimePicker, SelectionPicker
 
-### Input
+**Charts (recharts):** Sparkline, LineChart, BarChart, PieChart, StatCard
 
-| Import | Description |
-|--------|------------|
-| `even-toolkit/action-map` | Maps raw SDK events to `GlassAction` (click→SELECT, scroll→HIGHLIGHT_MOVE, double-click→GO_BACK) |
-| `even-toolkit/keyboard` | Keyboard bindings (arrows, enter, escape) + mouse wheel for simulator |
-| `even-toolkit/gestures` | Tap/scroll debouncing tuned for G2 hardware |
+**Media:** ChatContainer, ChatInput, Calendar, FileUpload, VoiceInput, ImageGrid, ImageViewer, AudioPlayer
 
-### UI Components
+### `/web/icons` — 191 Pixel-Art Icons
 
-| Import | Description |
-|--------|------------|
-| `even-toolkit/action-bar` | `buildActionBar()` — blinking `▶Name◀`/`▷Name◁` button bar, `buildStaticActionBar()` |
-| `even-toolkit/timer-display` | `renderTimerLines()` — `█ 02:00` + progress bar for countdown timers |
-| `even-toolkit/text-utils` | `truncate()`, `buildHeaderLine()`, `applyScrollIndicators()`, `SCROLL_UP`/`SCROLL_DOWN` |
-| `even-toolkit/useFlashPhase` | React hook — 500ms boolean toggle for blinking indicators |
+Official Even Realities icon set: 32x32 grid, 2x2px units, 6 categories.
 
-### Image Pipeline
+```tsx
+import { IcChevronBack, IcTrash, IcSettings } from 'even-toolkit/web/icons/svg-icons';
 
-| Import | Description |
-|--------|------------|
-| `even-toolkit/canvas-renderer` | Canvas-based chart/image rendering |
-| `even-toolkit/composer` | Image composition utilities |
-| `even-toolkit/png-utils` | 4-bit greyscale PNG encoding with upng-js |
+<IcChevronBack width={20} height={20} />
+```
 
-### Other
+**Categories:** Edit & Settings (32), Feature & Function (50), Guide System (20), Menu Bar (8), Navigate (23), Status (54), Health (12)
 
-| Import | Description |
-|--------|------------|
-| `even-toolkit/keep-alive` | Heartbeat to prevent SDK/webview sleep |
+### `/glasses` — G2 Glasses SDK Bridge
+
+Everything needed to render content on the G2 glasses display.
+
+```tsx
+import { useGlasses } from 'even-toolkit/useGlasses';
+import { line, separator } from 'even-toolkit/types';
+import { buildActionBar } from 'even-toolkit/action-bar';
+```
+
+**Core:** EvenHubBridge, useGlasses hook, useFlashPhase hook
+
+**Display:** DisplayData, DisplayLine, line(), separator(), text-utils, timer-display, canvas-renderer
+
+**Input:** action-map, gestures, keyboard bindings
+
+**Layout:** 576x288px display, text/columns/chart/home page modes, image tiles
+
+**Utilities:** splash screens, PNG encoding, text cleaning, pagination, keep-alive
+
+## Design Tokens
+
+Light theme following Even Realities 2025 guidelines:
+
+```css
+@import "even-toolkit/web/theme-light.css";
+@import "even-toolkit/web/typography.css";
+@import "even-toolkit/web/utilities.css";
+```
+
+| Token | Value | Usage |
+|-------|-------|-------|
+| `--color-text` | #232323 | Primary text (TC-1st) |
+| `--color-text-dim` | #7B7B7B | Secondary text (TC-2nd) |
+| `--color-bg` | #EEEEEE | Page background (BC-3rd) |
+| `--color-surface` | #FFFFFF | Card/component background (BC-1st) |
+| `--color-accent` | #232323 | Accent/highlight (BC-Highlight) |
+| `--color-positive` | #4BB956 | Success/connected (TC-Green) |
+| `--color-negative` | #FF453A | Error/warning (TC-Red) |
+| `--color-accent-warning` | #FEF991 | Active/toast (BC-Accent) |
+| `--radius-default` | 6px | Default border radius |
+| `--font-display` | FK Grotesk Neue | Display & body font |
+
+## Typography
+
+| Style | Size | Weight | Tracking |
+|-------|------|--------|----------|
+| Very Large Title | 24px | 400 | -0.72px |
+| Large Title | 20px | 400 | -0.6px |
+| Medium Title | 17px | 400 | -0.17px |
+| Medium Body | 17px | 300 | -0.17px |
+| Normal Title | 15px | 400 | -0.15px |
+| Normal Body | 15px | 300 | -0.15px |
+| Normal Subtitle | 13px | 400 | -0.13px |
+| Normal Detail | 11px | 400 | -0.11px |
 
 ## Quick Start
 
 ```tsx
-import { useGlasses } from 'even-toolkit/useGlasses';
-import { line } from 'even-toolkit/types';
-import { buildActionBar } from 'even-toolkit/action-bar';
-import { renderTimerLines } from 'even-toolkit/timer-display';
-import { useFlashPhase } from 'even-toolkit/useFlashPhase';
+// App.tsx
+import { AppShell, NavBar, ScreenHeader, Button, Card } from 'even-toolkit/web';
+import type { NavItem } from 'even-toolkit/web';
 
-function MyGlasses() {
-  const flashPhase = useFlashPhase(isActiveMode);
+const tabs: NavItem[] = [
+  { id: 'home', label: 'Home' },
+  { id: 'settings', label: 'Settings' },
+];
 
-  useGlasses({
-    getSnapshot: () => myAppState,
-    toDisplayData: (snapshot, nav) => ({
-      lines: [
-        line(buildHeaderLine('My App', buildActionBar(['Action1', 'Action2'], 0, null, flashPhase)), 'normal'),
-        line('Content here', 'meta'),
-      ],
-    }),
-    onGlassAction: (action, nav, snapshot) => nav,
-    deriveScreen: (path) => 'home',
-    appName: 'my-app',
-  });
-
-  return null;
+export function App() {
+  const [tab, setTab] = useState('home');
+  return (
+    <AppShell header={<NavBar items={tabs} activeId={tab} onNavigate={setTab} />}>
+      <div className="px-3 pt-4 pb-8">
+        <ScreenHeader title="My App" />
+        <Card>Hello from Even Toolkit</Card>
+      </div>
+    </AppShell>
+  );
 }
 ```
 
-## G2 Display Constraints
+```css
+/* app.css */
+@import "tailwindcss";
+@import "even-toolkit/web/theme-light.css";
+@import "even-toolkit/web/typography.css";
+@import "even-toolkit/web/utilities.css";
+```
 
-- Display: 576x288 pixels, monospace green-on-black
-- `█` (full block) and `─` (horizontal line) render correctly
-- `░▒▓` (shading), `╔═╗║` (double box drawing), `▀▄` (half blocks) do NOT work
-- Emoji codepoints are NOT supported
-- Multi-line character art does NOT align across rows
-- Image tiles: max 4 at 200x100 each, 4-bit greyscale PNG
+## Apps Built With Even Toolkit
 
-## Used By
-
-- [EvenKitchen](https://github.com/fabioglimb/even-kitchen) — Hands-free cooking companion
-- [EvenMarket](https://github.com/fabioglimb/even-market) — Real-time stock market HUD
-- EvenWorkout — Guided workout tracker
-- EvenPlants — Plant care companion
-- EvenCopilot — AI assistant
+- **EvenDemo** — Component showcase & design system reference <!-- vercel link -->
+- **EvenMarket** — Real-time stock market data on G2 glasses <!-- vercel link -->
+- **EvenKitchen** — Recipe management & step-by-step cooking <!-- vercel link -->
+- **EvenWorkout** — Workout tracking with rest timers <!-- vercel link -->
+- **EvenBrowser** — Text-based web browsing on G2 glasses <!-- vercel link -->
 
 ## License
 
