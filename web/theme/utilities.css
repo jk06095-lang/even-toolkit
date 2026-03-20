@@ -1,0 +1,24 @@
+/* Even Realities — Shared CSS Utilities */
+
+/* Hide scrollbar across browsers */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Pulsing status dot animation */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Timer ring smooth transition */
+.timer-ring-circle {
+  transition: stroke-dashoffset 0.5s ease;
+}

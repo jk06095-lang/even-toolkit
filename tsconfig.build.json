@@ -16,7 +16,9 @@
     "isolatedModules": true
   },
   "include": [
-    "*.ts"
+    "*.ts",
+    "web/**/*.ts",
+    "web/**/*.tsx"
   ],
   "exclude": [
     "node_modules",

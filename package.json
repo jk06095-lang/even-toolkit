@@ -1,6 +1,6 @@
 {
   "name": "even-toolkit",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Shared library for building Even Realities G2 glasses apps — bridge, display, gestures, action bars, timers, and more.",
   "type": "module",
   "main": "./dist/index.js",
@@ -81,10 +81,227 @@
     "./paginate-text": {
       "types": "./dist/paginate-text.d.ts",
       "import": "./dist/paginate-text.js"
-    }
+    },
+    "./web": {
+      "types": "./dist/web/index.d.ts",
+      "import": "./dist/web/index.js"
+    },
+    "./web/cn": {
+      "types": "./dist/web/utils/cn.d.ts",
+      "import": "./dist/web/utils/cn.js"
+    },
+    "./web/icons": {
+      "types": "./dist/web/icons/index.d.ts",
+      "import": "./dist/web/icons/index.js"
+    },
+    "./web/button": {
+      "types": "./dist/web/components/button.d.ts",
+      "import": "./dist/web/components/button.js"
+    },
+    "./web/card": {
+      "types": "./dist/web/components/card.d.ts",
+      "import": "./dist/web/components/card.js"
+    },
+    "./web/badge": {
+      "types": "./dist/web/components/badge.d.ts",
+      "import": "./dist/web/components/badge.js"
+    },
+    "./web/input": {
+      "types": "./dist/web/components/input.d.ts",
+      "import": "./dist/web/components/input.js"
+    },
+    "./web/textarea": {
+      "types": "./dist/web/components/textarea.d.ts",
+      "import": "./dist/web/components/textarea.js"
+    },
+    "./web/select": {
+      "types": "./dist/web/components/select.d.ts",
+      "import": "./dist/web/components/select.js"
+    },
+    "./web/progress": {
+      "types": "./dist/web/components/progress.d.ts",
+      "import": "./dist/web/components/progress.js"
+    },
+    "./web/status-dot": {
+      "types": "./dist/web/components/status-dot.d.ts",
+      "import": "./dist/web/components/status-dot.js"
+    },
+    "./web/pill": {
+      "types": "./dist/web/components/pill.d.ts",
+      "import": "./dist/web/components/pill.js"
+    },
+    "./web/toggle": {
+      "types": "./dist/web/components/toggle.d.ts",
+      "import": "./dist/web/components/toggle.js"
+    },
+    "./web/segmented-control": {
+      "types": "./dist/web/components/segmented-control.d.ts",
+      "import": "./dist/web/components/segmented-control.js"
+    },
+    "./web/table": {
+      "types": "./dist/web/components/table.d.ts",
+      "import": "./dist/web/components/table.js"
+    },
+    "./web/kbd": {
+      "types": "./dist/web/components/kbd.d.ts",
+      "import": "./dist/web/components/kbd.js"
+    },
+    "./web/divider": {
+      "types": "./dist/web/components/divider.d.ts",
+      "import": "./dist/web/components/divider.js"
+    },
+    "./web/nav-bar": {
+      "types": "./dist/web/components/nav-bar.d.ts",
+      "import": "./dist/web/components/nav-bar.js"
+    },
+    "./web/page": {
+      "types": "./dist/web/components/page.d.ts",
+      "import": "./dist/web/components/page.js"
+    },
+    "./web/screen-header": {
+      "types": "./dist/web/components/screen-header.d.ts",
+      "import": "./dist/web/components/screen-header.js"
+    },
+    "./web/section-header": {
+      "types": "./dist/web/components/section-header.d.ts",
+      "import": "./dist/web/components/section-header.js"
+    },
+    "./web/settings-group": {
+      "types": "./dist/web/components/settings-group.d.ts",
+      "import": "./dist/web/components/settings-group.js"
+    },
+    "./web/category-filter": {
+      "types": "./dist/web/components/category-filter.d.ts",
+      "import": "./dist/web/components/category-filter.js"
+    },
+    "./web/list-item": {
+      "types": "./dist/web/components/list-item.d.ts",
+      "import": "./dist/web/components/list-item.js"
+    },
+    "./web/search-bar": {
+      "types": "./dist/web/components/search-bar.d.ts",
+      "import": "./dist/web/components/search-bar.js"
+    },
+    "./web/timer-ring": {
+      "types": "./dist/web/components/timer-ring.d.ts",
+      "import": "./dist/web/components/timer-ring.js"
+    },
+    "./web/dialog": {
+      "types": "./dist/web/components/dialog.d.ts",
+      "import": "./dist/web/components/dialog.js"
+    },
+    "./web/toast": {
+      "types": "./dist/web/components/toast.d.ts",
+      "import": "./dist/web/components/toast.js"
+    },
+    "./web/empty-state": {
+      "types": "./dist/web/components/empty-state.d.ts",
+      "import": "./dist/web/components/empty-state.js"
+    },
+    "./web/loading": {
+      "types": "./dist/web/components/loading.d.ts",
+      "import": "./dist/web/components/loading.js"
+    },
+    "./web/nav-header": {
+      "types": "./dist/web/components/nav-header.d.ts",
+      "import": "./dist/web/components/nav-header.js"
+    },
+    "./web/bottom-sheet": {
+      "types": "./dist/web/components/bottom-sheet.d.ts",
+      "import": "./dist/web/components/bottom-sheet.js"
+    },
+    "./web/cta-group": {
+      "types": "./dist/web/components/cta-group.d.ts",
+      "import": "./dist/web/components/cta-group.js"
+    },
+    "./web/tag": {
+      "types": "./dist/web/components/tag.d.ts",
+      "import": "./dist/web/components/tag.js"
+    },
+    "./web/indicator": {
+      "types": "./dist/web/components/indicator.d.ts",
+      "import": "./dist/web/components/indicator.js"
+    },
+    "./web/checkbox": {
+      "types": "./dist/web/components/checkbox.d.ts",
+      "import": "./dist/web/components/checkbox.js"
+    },
+    "./web/radio-group": {
+      "types": "./dist/web/components/radio-group.d.ts",
+      "import": "./dist/web/components/radio-group.js"
+    },
+    "./web/slider": {
+      "types": "./dist/web/components/slider.d.ts",
+      "import": "./dist/web/components/slider.js"
+    },
+    "./web/skeleton": {
+      "types": "./dist/web/components/skeleton.d.ts",
+      "import": "./dist/web/components/skeleton.js"
+    },
+    "./web/input-group": {
+      "types": "./dist/web/components/input-group.d.ts",
+      "import": "./dist/web/components/input-group.js"
+    },
+    "./web/step-indicator": {
+      "types": "./dist/web/components/step-indicator.d.ts",
+      "import": "./dist/web/components/step-indicator.js"
+    },
+    "./web/confirm-dialog": {
+      "types": "./dist/web/components/confirm-dialog.d.ts",
+      "import": "./dist/web/components/confirm-dialog.js"
+    },
+    "./web/chat": {
+      "types": "./dist/web/components/chat.d.ts",
+      "import": "./dist/web/components/chat.js"
+    },
+    "./web/calendar": {
+      "types": "./dist/web/components/calendar.d.ts",
+      "import": "./dist/web/components/calendar.js"
+    },
+    "./web/chart": {
+      "types": "./dist/web/components/chart.d.ts",
+      "import": "./dist/web/components/chart.js"
+    },
+    "./web/timeline": {
+      "types": "./dist/web/components/timeline.d.ts",
+      "import": "./dist/web/components/timeline.js"
+    },
+    "./web/stat-grid": {
+      "types": "./dist/web/components/stat-grid.d.ts",
+      "import": "./dist/web/components/stat-grid.js"
+    },
+    "./web/status-progress": {
+      "types": "./dist/web/components/status-progress.d.ts",
+      "import": "./dist/web/components/status-progress.js"
+    },
+    "./web/file-upload": {
+      "types": "./dist/web/components/file-upload.d.ts",
+      "import": "./dist/web/components/file-upload.js"
+    },
+    "./web/voice-input": {
+      "types": "./dist/web/components/voice-input.d.ts",
+      "import": "./dist/web/components/voice-input.js"
+    },
+    "./web/image-viewer": {
+      "types": "./dist/web/components/image-viewer.d.ts",
+      "import": "./dist/web/components/image-viewer.js"
+    },
+    "./web/audio-player": {
+      "types": "./dist/web/components/audio-player.d.ts",
+      "import": "./dist/web/components/audio-player.js"
+    },
+    "./web/scroll-picker": {
+      "types": "./dist/web/components/scroll-picker.d.ts",
+      "import": "./dist/web/components/scroll-picker.js"
+    },
+    "./web/theme-light.css": "./web/theme/tokens-light.css",
+    "./web/theme-dark.css": "./web/theme/tokens-dark.css",
+    "./web/typography.css": "./web/theme/typography.css",
+    "./web/utilities.css": "./web/theme/utilities.css"
   },
   "files": [
     "dist",
+    "web",
     "README.md",
     "LICENSE"
   ],
@@ -93,10 +310,13 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
+    "@evenrealities/even_hub_sdk": ">=0.0.7",
+    "@jappyjan/even-better-sdk": ">=0.0.10",
+    "class-variance-authority": ">=0.7.0",
+    "clsx": ">=2.0.0",
     "react": ">=18.0.0",
     "react-router": ">=7.0.0",
-    "@evenrealities/even_hub_sdk": ">=0.0.7",
-    "@jappyjan/even-better-sdk": ">=0.0.10"
+    "tailwind-merge": ">=3.0.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -104,14 +324,26 @@
     },
     "react-router": {
       "optional": true
+    },
+    "clsx": {
+      "optional": true
+    },
+    "tailwind-merge": {
+      "optional": true
+    },
+    "class-variance-authority": {
+      "optional": true
     }
   },
   "devDependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.7",
     "@jappyjan/even-better-sdk": "^0.0.10",
     "@types/react": "^19.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "react": "^19.0.0",
     "react-router": "^7.0.0",
+    "tailwind-merge": "^3.5.0",
     "typescript": "~5.4.0"
   },
   "keywords": [
