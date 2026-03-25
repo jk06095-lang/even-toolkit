@@ -33,15 +33,15 @@ export function buildActionBar(
       return `${L}${name}${R}`;
     }
     if (activeIdx < 0 && i === selectedIndex) {
-      // Selected in button-select mode: solid triangles
-      return `\u25B6${name}\u25C0`;
+      // Selected in button-select mode: empty triangles (default)
+      return `\u25B7${name}\u25C1`;
     }
     return ` ${name} `;
   }).join(' ');
 }
 
 /**
- * Build a static action bar (no blinking, always solid triangles on selected).
+ * Build a static action bar (no blinking, empty triangles on selected).
  * Useful for screens like recipe detail or completion where there's no mode switching.
  */
 export function buildStaticActionBar(
@@ -50,7 +50,7 @@ export function buildStaticActionBar(
 ): string {
   return buttons.map((name, i) => {
     if (i === selectedIndex) {
-      return `\u25B6${name}\u25C0`;
+      return `\u25B7${name}\u25C1`;
     }
     return ` ${name} `;
   }).join(' ');
