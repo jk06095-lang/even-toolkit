@@ -2,7 +2,7 @@
 
 Design system & component library for **Even Realities G2** smart glasses apps.
 
-55+ web components, 191 pixel-art icons, glasses SDK bridge, light/dark themes, and design tokens — all following the Even Realities 2025 UIUX Design Guidelines.
+55+ web components, 191 pixel-art icons, glasses SDK bridge with per-screen architecture, speech-to-text module, light/dark themes, and design tokens — all following the Even Realities 2025 UIUX Design Guidelines.
 
 **[Live Demo → even-demo.vercel.app](https://even-demo.vercel.app)**
 
@@ -10,6 +10,12 @@ Design system & component library for **Even Realities G2** smart glasses apps.
 
 ```bash
 npm install even-toolkit
+```
+
+Scaffold a new app instantly:
+
+```bash
+npx create-even-app my-app
 ```
 
 ## What's Inside
@@ -44,37 +50,172 @@ import { IcChevronBack, IcTrash, IcSettings } from 'even-toolkit/web/icons/svg-i
 
 **Categories:** Edit & Settings (32), Feature & Function (50), Guide System (20), Menu Bar (8), Navigate (23), Status (54), Health (12)
 
-### `/glasses` — G2 Glasses SDK Bridge
+---
 
-Everything needed to render content on the G2 glasses display.
+## Glasses SDK
 
-```tsx
-import { useGlasses } from 'even-toolkit/useGlasses';
-import { line, separator } from 'even-toolkit/types';
-import { buildActionBar } from 'even-toolkit/action-bar';
+Everything needed to build G2 glasses apps with a clean, per-screen architecture.
+
+### Per-Screen Architecture (v1.4)
+
+Each glasses screen lives in its own file with co-located display + action logic:
+
+```
+src/glass/
+  shared.ts              — Snapshot type + actions interface
+  selectors.ts           — Screen router (3 lines of wiring)
+  splash.ts              — Splash image + loading text
+  AppGlasses.tsx         — useGlasses hook setup
+  screens/
+    home.ts              — { display, action }
+    detail.ts            — { display, action }
+    active.ts            — { display, action }
 ```
 
-**Core:** EvenHubBridge, useGlasses hook, useFlashPhase hook
+#### Define a screen
 
-**Display:** DisplayData, DisplayLine, line(), separator(), text-utils, timer-display, canvas-renderer
+```ts
+import type { GlassScreen } from 'even-toolkit/glass-screen-router';
+import { buildScrollableList } from 'even-toolkit/glass-display-builders';
+import { moveHighlight } from 'even-toolkit/glass-nav';
 
-**Input:** action-map, gestures, keyboard bindings
+export const homeScreen: GlassScreen<MySnapshot, MyActions> = {
+  display(snapshot, nav) {
+    return {
+      lines: buildScrollableList({
+        items: snapshot.items,
+        highlightedIndex: nav.highlightedIndex,
+        maxVisible: 5,
+        formatter: (item) => item.title,
+      }),
+    };
+  },
 
-**Layout:** 576x288px display, text/columns/chart/home page modes, image tiles
+  action(action, nav, snapshot, ctx) {
+    if (action.type === 'HIGHLIGHT_MOVE') {
+      return { ...nav, highlightedIndex: moveHighlight(nav.highlightedIndex, action.direction, snapshot.items.length - 1) };
+    }
+    if (action.type === 'SELECT_HIGHLIGHTED') {
+      ctx.navigate(`/item/${snapshot.items[nav.highlightedIndex].id}`);
+      return nav;
+    }
+    return nav;
+  },
+};
+```
+
+#### Wire screens together
+
+```ts
+import { createGlassScreenRouter } from 'even-toolkit/glass-screen-router';
+import { homeScreen } from './screens/home';
+import { detailScreen } from './screens/detail';
+
+export const { toDisplayData, onGlassAction } = createGlassScreenRouter({
+  'home': homeScreen,
+  'detail': detailScreen,
+}, 'home');
+```
+
+### Navigation Helpers (`glass-nav`)
+
+```ts
+import { moveHighlight, clampIndex, calcMaxScroll, wrapIndex } from 'even-toolkit/glass-nav';
+
+// Clamped movement (0 to max)
+moveHighlight(current, 'up', max)    // Math.max(0, Math.min(max, current - 1))
+moveHighlight(current, 'down', max)  // Math.max(0, Math.min(max, current + 1))
+
+// Clamp index to button count
+clampIndex(index, buttonCount)       // Math.min(Math.max(0, index), count - 1)
+
+// Max scroll offset
+calcMaxScroll(totalLines, slots)     // Math.max(0, totalLines - slots)
+
+// Wrapping movement (loops around)
+wrapIndex(current, 'down', count)    // (current + 1) % count
+```
+
+### Display Builders (`glass-display-builders`)
+
+```ts
+import {
+  buildScrollableList,
+  buildScrollableContent,
+  slidingWindowStart,
+  G2_TEXT_LINES,          // 10
+  DEFAULT_CONTENT_SLOTS,  // 7 (below glassHeader)
+} from 'even-toolkit/glass-display-builders';
+
+// Scrollable highlighted list with scroll indicators
+const lines = buildScrollableList({
+  items: recipes,
+  highlightedIndex: nav.highlightedIndex,
+  maxVisible: 5,
+  formatter: (r) => r.title,
+});
+
+// Header + scrollable content with indicators
+const display = buildScrollableContent({
+  title: 'Recipe Detail',
+  actionBar: buildStaticActionBar(['Start'], 0),
+  contentLines: ['Line 1', 'Line 2', ...],
+  scrollPos: nav.highlightedIndex,
+});
+```
+
+### Mode Encoding (`glass-mode`)
+
+Pack multiple navigation modes into a single `highlightedIndex`:
+
+```ts
+import { createModeEncoder } from 'even-toolkit/glass-mode';
+
+const mode = createModeEncoder({
+  buttons: 0,    // 0-99: button selection
+  scroll: 100,   // 100+: scroll mode (offset = index - 100)
+  links: 200,    // 200+: link navigation
+});
+
+mode.getMode(150)    // 'scroll'
+mode.getOffset(150)  // 50
+mode.encode('scroll', 25)  // 125
+```
+
+### Route Mapping (`glass-router`)
+
+```ts
+import { createScreenMapper, createIdExtractor, getHomeTiles } from 'even-toolkit/glass-router';
+
+const deriveScreen = createScreenMapper([
+  { pattern: '/', screen: 'home' },
+  { pattern: /^\/item\/[^/]+$/, screen: 'detail' },
+], 'home');
+
+const extractId = createIdExtractor(/^\/item\/([^/]+)/);
+const homeTiles = getHomeTiles(appSplash);
+```
+
+### Core Glasses Modules
+
+```ts
+import { useGlasses } from 'even-toolkit/useGlasses';
+import { useFlashPhase } from 'even-toolkit/useFlashPhase';
+import { EvenHubBridge } from 'even-toolkit/bridge';
+import { line, separator, glassHeader } from 'even-toolkit/types';
+import { buildActionBar, buildStaticActionBar } from 'even-toolkit/action-bar';
+import { truncate, applyScrollIndicators } from 'even-toolkit/text-utils';
+import { renderTimerLines } from 'even-toolkit/timer-display';
+import { createSplash, TILE_PRESETS } from 'even-toolkit/splash';
+```
+
+**Display:** 576x288px, 10 text lines, text/columns/chart/home page modes, image tiles (max 288x144)
+
+**Input:** action-map (tap/double-tap/scroll events), gestures (debounce), keyboard bindings
 
 **Utilities:** splash screens, PNG encoding, text cleaning, pagination, keep-alive
 
-### Glasses Display Helpers
-
-```tsx
-import { glassHeader, line, separator } from 'even-toolkit/types';
-
-// Header with separator
-lines.push(...glassHeader('MY APP'));
-
-// Header with action bar
-lines.push(...glassHeader('STEP 1/4', buildActionBar([...], 0, null, true)));
-```
+---
 
 ## Speech-to-Text (STT)
 
@@ -130,9 +271,10 @@ Automatically detects the best audio source:
 - **Browser mic** — via `getUserMedia` (desktop)
 - Custom `AudioSource` — pass your own
 
+---
+
 ## SDK 0.0.9 Support
 
-- Container limit increased to 12 (8 text + 4 image)
 - Max image size: 288x144
 - IMU control: `bridge.imuEnable()` / `bridge.imuDisable()`
 - Launch source detection: `LaunchSource` type
@@ -177,7 +319,6 @@ Light theme following Even Realities 2025 guidelines:
 ## Quick Start
 
 ```tsx
-// App.tsx
 import { AppShell, NavBar, ScreenHeader, Button, Card } from 'even-toolkit/web';
 import type { NavItem } from 'even-toolkit/web';
 
@@ -200,7 +341,6 @@ export function App() {
 ```
 
 ```css
-/* app.css */
 @import "tailwindcss";
 @import "even-toolkit/web/theme-light.css";
 @import "even-toolkit/web/typography.css";
