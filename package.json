@@ -1,6 +1,6 @@
 {
   "name": "even-toolkit",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Design system & component library for Even Realities G2 smart glasses apps — 55+ web components, 191 pixel-art icons, glasses SDK bridge, and design tokens.",
   "type": "module",
   "main": "./dist/glasses/index.js",
@@ -81,6 +81,26 @@
     "./paginate-text": {
       "types": "./dist/glasses/paginate-text.d.ts",
       "import": "./dist/glasses/paginate-text.js"
+    },
+    "./glass-nav": {
+      "types": "./dist/glasses/glass-nav.d.ts",
+      "import": "./dist/glasses/glass-nav.js"
+    },
+    "./glass-display-builders": {
+      "types": "./dist/glasses/glass-display-builders.d.ts",
+      "import": "./dist/glasses/glass-display-builders.js"
+    },
+    "./glass-mode": {
+      "types": "./dist/glasses/glass-mode.d.ts",
+      "import": "./dist/glasses/glass-mode.js"
+    },
+    "./glass-router": {
+      "types": "./dist/glasses/glass-router.d.ts",
+      "import": "./dist/glasses/glass-router.js"
+    },
+    "./glass-screen-router": {
+      "types": "./dist/glasses/glass-screen-router.d.ts",
+      "import": "./dist/glasses/glass-screen-router.js"
     },
     "./web": {
       "types": "./dist/web/index.d.ts",
