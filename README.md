@@ -16,7 +16,11 @@ Scaffold a new app instantly:
 
 ```bash
 npx @even-toolkit/create-even-app my-app
+# or
+npx even-toolkit my-app
 ```
+
+Choose from 6 templates: minimal, dashboard, notes, chat, tracker, media.
 
 ## What's Inside
 
