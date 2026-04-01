@@ -21,10 +21,6 @@ interface DialogProps {
 function Dialog({ open, onClose, title, icon, children, actions, className }: DialogProps) {
   const [visible, setVisible] = React.useState(false);
   const [closing, setClosing] = React.useState(false);
-  const stopPropagation = React.useCallback((event: React.SyntheticEvent) => {
-    event.stopPropagation();
-  }, []);
-
   React.useEffect(() => {
     if (open) {
       setVisible(true);
@@ -62,16 +58,12 @@ function Dialog({ open, onClose, title, icon, children, actions, className }: Di
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center px-6 overscroll-contain"
-      onTouchStartCapture={stopPropagation}
-      onTouchMoveCapture={stopPropagation}
-      onTouchEndCapture={stopPropagation}
-      onWheelCapture={stopPropagation}
       style={{ animation: closing ? 'fadeOut 200ms ease forwards' : 'fadeIn 200ms ease' }}
     >
       <div className="absolute inset-0 bg-overlay" onClick={onClose} />
       <div
         className={cn(
-          'relative z-10 w-full max-w-[311px] bg-surface rounded-[6px] shadow-[0_4px_24px_rgba(0,0,0,0.16)] p-4',
+          'relative z-10 w-full max-w-[311px] bg-surface rounded-[6px] shadow-[0_4px_24px_rgba(0,0,0,0.16)] p-4 overscroll-contain',
           className,
         )}
         style={{ animation: closing ? 'fadeOut 200ms ease forwards' : 'fadeIn 250ms ease' }}

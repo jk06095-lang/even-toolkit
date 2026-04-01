@@ -121,6 +121,9 @@ export type { RadioGroupProps, RadioOption } from './components/radio-group';
 export { Slider } from './components/slider';
 export type { SliderProps } from './components/slider';
 
+export { PagedCarousel, CardCarousel } from './components/paged-carousel';
+export type { PagedCarouselProps, CardCarouselProps } from './components/paged-carousel';
+
 export { Skeleton, skeletonVariants } from './components/skeleton';
 export type { SkeletonProps } from './components/skeleton';
 

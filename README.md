@@ -15,7 +15,7 @@ npm install even-toolkit
 Scaffold a new app instantly:
 
 ```bash
-npx create-even-app my-app
+npx @even-toolkit/create-even-app my-app
 ```
 
 ## What's Inside
@@ -30,7 +30,7 @@ import { Button, Card, NavBar, ListItem, Toggle, AppShell } from 'even-toolkit/w
 
 **Primitives:** Button, Card, Badge, Input, Textarea, Select, MultiSelect, Checkbox, RadioGroup, Slider, InputGroup, Skeleton, Progress, StatusDot, Pill, Toggle, SegmentedControl, Table, Kbd, Divider
 
-**Layout:** AppShell, Page, NavBar, NavHeader, SideDrawer, DrawerShell, DrawerTrigger, ScreenHeader, SectionHeader, SettingsGroup, CategoryFilter, ListItem (swipe-to-delete), SearchBar, Tag, TagCarousel, TagCard, SliderIndicator, PageIndicator, StepIndicator, Timeline, StatGrid, StatusProgress
+**Layout:** AppShell, Page, NavBar, NavHeader, SideDrawer, DrawerShell, DrawerTrigger, ScreenHeader, SectionHeader, SettingsGroup, CategoryFilter, ListItem (swipe-to-delete), SearchBar, Tag, TagCarousel, TagCard, PagedCarousel, CardCarousel, SliderIndicator, PageIndicator, StepIndicator, Timeline, StatGrid, StatusProgress
 
 **Feedback:** TimerRing, Dialog, ConfirmDialog, Toast, EmptyState, Loading, BottomSheet, CTAGroup, ScrollPicker, DatePicker, TimePicker, SelectionPicker
 
