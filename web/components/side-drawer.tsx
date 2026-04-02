@@ -207,7 +207,7 @@ function DrawerTrigger({ onClick, className }: { onClick: () => void; className?
 /* ── Drawer Header Context ── */
 
 interface DrawerHeaderConfig {
-  title?: string;
+  title?: ReactNode;
   left?: ReactNode;
   right?: ReactNode;
   below?: ReactNode;

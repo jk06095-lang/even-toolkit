@@ -65,13 +65,12 @@ function DrawerShell({
     : !allItemIds.has(pathname);
 
   // Resolve header values (screen overrides > defaults)
-  const headerTitleText = headerOverride?.title ?? getPageTitle(pathname);
-  const headerTitle = pageTitlePrefix ? (
+  const headerTitle = headerOverride?.title ?? (pageTitlePrefix ? (
     <div className="flex items-center justify-center gap-1.5 min-w-0">
       <span className="shrink-0">{pageTitlePrefix}</span>
-      <span className="truncate">{headerTitleText}</span>
+      <span className="truncate">{getPageTitle(pathname)}</span>
     </div>
-  ) : headerTitleText;
+  ) : getPageTitle(pathname));
   const headerHidden = headerOverride?.hidden ?? false;
 
   const handleBack = useCallback(() => {

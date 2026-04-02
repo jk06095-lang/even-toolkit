@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.2
+
+Released: 2026-04-02
+
+No breaking changes.
+
+### Added
+
+- `DrawerShell` header overrides now accept full React node titles cleanly for embedded controls like browser URL bars
+
+### Changed
+
+- `NavHeader` no longer reserves empty left or right spacing when those slots are unused
+- header layout handling is more reliable for screens that need full-width interactive content in the title area
+
+### Notes
+
+- This release is backward compatible with existing 1.6.x consumers.
+
 ## 1.5.0
 
 Released: 2026-03-31
