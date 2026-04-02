@@ -1,6 +1,6 @@
 {
   "name": "even-toolkit",
-  "version": "1.5.6",
+  "version": "1.5.7",
   "bin": {
     "even-toolkit": "./bin/create.js"
   },
@@ -76,6 +76,10 @@
     "./splash": {
       "types": "./dist/glasses/splash.d.ts",
       "import": "./dist/glasses/splash.js"
+    },
+    "./storage": {
+      "types": "./dist/glasses/storage.d.ts",
+      "import": "./dist/glasses/storage.js"
     },
     "./text-clean": {
       "types": "./dist/glasses/text-clean.d.ts",
