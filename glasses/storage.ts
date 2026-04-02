@@ -1,53 +1,26 @@
 /**
  * Persistent storage for Even Hub apps.
  *
- * The Even Hub WebView doesn't persist browser localStorage across app restarts.
- * This module uses the SDK's `bridge.setLocalStorage/getLocalStorage` which DO persist,
- * with browser localStorage as a sync-read cache and fallback for web/dev.
- *
- * Usage:
- *   import { storageSet, storageGetSync, hydrateFromSDK } from 'even-toolkit/storage';
- *
- *   // In main.tsx — hydrate before render:
- *   hydrateFromSDK(['my-app:settings', 'my-app:data']).finally(() => {
- *     createRoot(...).render(<App />);
- *   });
- *
- *   // Read (synchronous):
- *   const data = storageGetSync<MyData>('my-app:data', defaultValue);
- *
- *   // Write (dual-write to localStorage + SDK bridge):
- *   storageSet('my-app:data', data);
+ * Uses the SDK bridge's setLocalStorage/getLocalStorage directly.
+ * No browser localStorage, no caching — the SDK bridge is the single source of truth.
+ * Falls back silently when SDK is not available (web/dev).
  */
 
-/**
- * Get a bridge object that has setLocalStorage/getLocalStorage.
- * Checks window.__evenBridge (our wrapper) first,
- * then tries the raw SDK bridge directly via waitForEvenAppBridge.
- */
 function getBridge(): any {
   const bridge = (window as any).__evenBridge;
   if (bridge?.setLocalStorage) return bridge;
-  // Also check raw bridge exposed on the wrapper
   if (bridge?.rawBridge?.setLocalStorage) return bridge.rawBridge;
   return null;
 }
 
-/**
- * Try to get a raw SDK bridge for hydration (before useGlasses sets window.__evenBridge).
- * Returns null if SDK is not available (web/dev environment).
- */
-async function getRawBridgeForHydration(): Promise<any> {
-  // If our wrapper is already set, use it
+async function getRawBridge(): Promise<any> {
   const existing = getBridge();
   if (existing) return existing;
-
-  // Try to get raw bridge directly from the SDK
   try {
     const { EvenBetterSdk } = await import('@jappyjan/even-better-sdk');
     const raw = await Promise.race([
       EvenBetterSdk.getRawBridge(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
     ]);
     return raw;
   } catch {
@@ -55,70 +28,51 @@ async function getRawBridgeForHydration(): Promise<any> {
   }
 }
 
-/**
- * Read a JSON value synchronously from browser localStorage.
- * Call `hydrateFromSDK()` at startup to ensure localStorage has the latest SDK data.
- */
-export function storageGetSync<T>(key: string, fallback: T): T {
+/** Read a JSON value from SDK storage */
+export async function storageGet<T>(key: string, fallback: T): Promise<T> {
+  const bridge = getBridge() ?? await getRawBridge();
+  if (!bridge?.getLocalStorage) return fallback;
   try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
+    const raw = await bridge.getLocalStorage(key);
+    if (raw && raw !== '') return JSON.parse(raw);
   } catch { /* ignore */ }
   return fallback;
 }
 
-/**
- * Write a JSON-serializable value to both localStorage and SDK bridge.
- */
-export function storageSet(key: string, value: unknown): void {
-  const json = JSON.stringify(value);
-  try { localStorage.setItem(key, json); } catch { /* ignore */ }
-  const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    bridge.setLocalStorage(key, json).catch(() => {});
+/** Read a raw string from SDK storage */
+export async function storageGetRaw(key: string): Promise<string> {
+  const bridge = getBridge() ?? await getRawBridge();
+  if (!bridge?.getLocalStorage) return '';
+  try {
+    return await bridge.getLocalStorage(key);
+  } catch {
+    return '';
   }
 }
 
-/**
- * Write a raw string value to both localStorage and SDK bridge.
- * Use for pre-serialized or encrypted values that shouldn't be double-stringified.
- */
-export function storageSetRaw(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* ignore */ }
+/** Write a JSON value to SDK storage */
+export async function storageSet(key: string, value: unknown): Promise<void> {
   const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    bridge.setLocalStorage(key, value).catch(() => {});
-  }
+  if (!bridge?.setLocalStorage) return;
+  try {
+    await bridge.setLocalStorage(key, JSON.stringify(value));
+  } catch { /* ignore */ }
 }
 
-/**
- * Remove a key from both localStorage and SDK bridge.
- */
-export function storageRemove(key: string): void {
-  localStorage.removeItem(key);
+/** Write a raw string to SDK storage */
+export async function storageSetRaw(key: string, value: string): Promise<void> {
   const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    bridge.setLocalStorage(key, '').catch(() => {});
-  }
+  if (!bridge?.setLocalStorage) return;
+  try {
+    await bridge.setLocalStorage(key, value);
+  } catch { /* ignore */ }
 }
 
-/**
- * Hydrate browser localStorage from SDK bridge on app startup.
- * Call once before React renders so `storageGetSync` reads fresh data.
- * Gets the raw SDK bridge directly (doesn't depend on useGlasses).
- *
- * @param keys - All storage keys used by the app
- */
-export async function hydrateFromSDK(keys: string[]): Promise<void> {
-  const bridge = await getRawBridgeForHydration();
-  if (!bridge?.getLocalStorage) return;
-
-  for (const key of keys) {
-    try {
-      const value = await bridge.getLocalStorage(key);
-      if (value && value !== '') {
-        localStorage.setItem(key, value);
-      }
-    } catch { /* ignore */ }
-  }
+/** Remove a key from SDK storage */
+export async function storageRemove(key: string): Promise<void> {
+  const bridge = getBridge();
+  if (!bridge?.setLocalStorage) return;
+  try {
+    await bridge.setLocalStorage(key, '');
+  } catch { /* ignore */ }
 }
