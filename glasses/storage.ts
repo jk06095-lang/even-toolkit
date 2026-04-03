@@ -1,90 +1,78 @@
-/**
- * Persistent storage for Even Hub apps.
- *
- * Writes to BOTH the SDK bridge AND browser localStorage.
- * Reads from SDK bridge first, falls back to localStorage.
- * This ensures persistence on the real Even Hub (bridge)
- * and in development/simulator (localStorage).
- */
+import { waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 
-function getBridge(): any {
-  const bridge = (window as any).__evenBridge;
-  if (bridge?.setLocalStorage) return bridge;
-  if (bridge?.rawBridge?.setLocalStorage) return bridge.rawBridge;
-  return null;
+type StorageBridge = Pick<EvenAppBridge, 'getLocalStorage' | 'setLocalStorage'>;
+
+let bridgePromise: Promise<StorageBridge> | null = null;
+let writeChain: Promise<void> = Promise.resolve();
+
+async function waitForBridge(): Promise<StorageBridge> {
+  if (bridgePromise) return bridgePromise;
+
+  bridgePromise = waitForEvenAppBridge()
+    .then((bridge) => bridge as StorageBridge)
+    .catch((error) => {
+      bridgePromise = null;
+      throw error;
+    });
+
+  return bridgePromise;
 }
 
-async function getRawBridge(): Promise<any> {
-  const existing = getBridge();
-  if (existing) return existing;
-  try {
-    const { EvenBetterSdk } = await import('@jappyjan/even-better-sdk');
-    const raw = await Promise.race([
-      EvenBetterSdk.getRawBridge(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
-    ]);
-    return raw;
-  } catch {
-    return null;
-  }
+async function readRawValue(key: string): Promise<string> {
+  await writeChain.catch(() => undefined);
+  const bridge = await waitForBridge();
+  return await bridge.getLocalStorage(key);
 }
 
-/** Read a JSON value — tries SDK bridge first, then localStorage */
+async function writeRawValue(key: string, value: string): Promise<void> {
+  writeChain = writeChain
+    .catch(() => undefined)
+    .then(async () => {
+      const bridge = await waitForBridge();
+      const result = await bridge.setLocalStorage(key, value);
+      if (result === false) {
+        throw new Error('Bridge storage rejected write');
+      }
+    });
+
+  await writeChain;
+}
+
 export async function storageGet<T>(key: string, fallback: T): Promise<T> {
-  const bridge = getBridge() ?? await getRawBridge();
-  if (bridge?.getLocalStorage) {
-    try {
-      const raw = await bridge.getLocalStorage(key);
-      if (raw && raw !== '') return JSON.parse(raw);
-    } catch { /* fall through */ }
-  }
   try {
-    const raw = localStorage.getItem(key);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
+    const raw = await readRawValue(key);
+    if (raw && raw !== '') return JSON.parse(raw) as T;
+  } catch {
+    // Ignore bridge storage failures and fall back to the provided default.
+  }
   return fallback;
 }
 
-/** Read a raw string — tries SDK bridge first, then localStorage */
 export async function storageGetRaw(key: string): Promise<string> {
-  const bridge = getBridge() ?? await getRawBridge();
-  if (bridge?.getLocalStorage) {
-    try {
-      const val = await bridge.getLocalStorage(key);
-      if (val && val !== '') return val;
-    } catch { /* fall through */ }
-  }
   try {
-    return localStorage.getItem(key) ?? '';
+    const value = await readRawValue(key);
+    return typeof value === 'string' ? value : '';
   } catch {
     return '';
   }
 }
 
-/** Write a JSON value to BOTH SDK bridge and localStorage */
 export async function storageSet(key: string, value: unknown): Promise<void> {
-  const json = JSON.stringify(value);
-  try { localStorage.setItem(key, json); } catch { /* ignore */ }
-  const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    try { await bridge.setLocalStorage(key, json); } catch { /* ignore */ }
+  try {
+    await writeRawValue(key, JSON.stringify(value));
+  } catch {
+    // Ignore bridge storage failures; callers already handle empty fallbacks.
   }
 }
 
-/** Write a raw string to BOTH SDK bridge and localStorage */
 export async function storageSetRaw(key: string, value: string): Promise<void> {
-  try { localStorage.setItem(key, value); } catch { /* ignore */ }
-  const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    try { await bridge.setLocalStorage(key, value); } catch { /* ignore */ }
+  try {
+    await writeRawValue(key, value);
+  } catch {
+    // Ignore bridge storage failures; callers already handle empty fallbacks.
   }
 }
 
-/** Remove a key from BOTH SDK bridge and localStorage */
 export async function storageRemove(key: string): Promise<void> {
-  try { localStorage.removeItem(key); } catch { /* ignore */ }
-  const bridge = getBridge();
-  if (bridge?.setLocalStorage) {
-    try { await bridge.setLocalStorage(key, ''); } catch { /* ignore */ }
-  }
+  await storageSetRaw(key, '');
 }

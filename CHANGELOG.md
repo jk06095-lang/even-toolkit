@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.3
+
+Released: 2026-04-03
+
+No breaking changes.
+
+### Added
+
+- shared bridge-only storage now uses the official `waitForEvenAppBridge()` flow for app persistence helpers
+
+### Changed
+
+- `NavHeader` string titles are now strictly centered even when only the left slot is populated
+- shared storage no longer mirrors to browser `localStorage`
+
+### Notes
+
+- this release is intended for current Even Hub / QR bridge persistence behavior
+
 ## 1.6.2
 
 Released: 2026-04-02
