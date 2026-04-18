@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '../utils/cn';
 
 interface SelectOption {
@@ -21,19 +22,38 @@ interface SelectProps {
  */
 function Select({ value, options, onValueChange, placeholder, className, disabled, dropdownPosition = 'bottom' }: SelectProps) {
   const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const selected = options.find((o) => o.value === value);
   const label = selected?.label ?? placeholder ?? 'Select...';
 
+  const updateRect = useCallback(() => {
+    if (!triggerRef.current) return;
+    const r = triggerRef.current.getBoundingClientRect();
+    setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+  }, []);
+
   useEffect(() => {
     if (!open) return;
+    updateRect();
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const insideTrigger = ref.current?.contains(target);
+      const insideDropdown = dropdownRef.current?.contains(target);
+      if (!insideTrigger && !insideDropdown) setOpen(false);
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+    window.addEventListener('scroll', updateRect, true);
+    window.addEventListener('resize', updateRect);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('scroll', updateRect, true);
+      window.removeEventListener('resize', updateRect);
+    };
+  }, [open, updateRect]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,6 +70,7 @@ function Select({ value, options, onValueChange, placeholder, className, disable
   return (
     <div ref={ref} className={cn('relative', className)} style={{ minWidth: 0 }}>
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen(!open)}
@@ -72,13 +93,19 @@ function Select({ value, options, onValueChange, placeholder, className, disable
         </svg>
       </button>
 
-      {open && (
+      {open && rect && typeof document !== 'undefined' && createPortal(
         <div
-          className={cn(
-            'absolute z-50 left-0 right-0 bg-surface rounded-[6px] border border-border overflow-hidden',
-            dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1',
-          )}
-          style={{ maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          ref={dropdownRef}
+          className="fixed z-[9999] bg-surface rounded-[6px] border border-border overflow-hidden"
+          style={{
+            top: dropdownPosition === 'top' ? undefined : rect.top + rect.height + 4,
+            bottom: dropdownPosition === 'top' ? window.innerHeight - rect.top + 4 : undefined,
+            left: rect.left,
+            width: rect.width,
+            maxHeight: 200,
+            overflowY: 'auto',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+          }}
         >
           {options.map((o) => (
             <button
@@ -95,7 +122,8 @@ function Select({ value, options, onValueChange, placeholder, className, disable
               {o.label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
