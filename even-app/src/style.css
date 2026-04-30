@@ -1,0 +1,623 @@
+/* ═══════════════════════════════════════════════════
+   Project ECHO — Even Realities Design System
+   Based on even-toolkit/web/theme tokens-light.css
+   ═══════════════════════════════════════════════════ */
+
+/* ── Even Realities Design Tokens (Light Theme) ── */
+:root {
+  /* Text */
+  --color-text: #232323;
+  --color-text-dim: #7B7B7B;
+  --color-text-muted: #7B7B7B;
+  --color-text-highlight: #FFFFFF;
+
+  /* Backgrounds */
+  --color-bg: #EEEEEE;
+  --color-surface: #FFFFFF;
+  --color-surface-light: #F6F6F6;
+  --color-surface-lighter: #E4E4E4;
+
+  /* Borders */
+  --color-border: #E4E4E4;
+  --color-border-light: #EEEEEE;
+
+  /* Accent & Semantic */
+  --color-accent: #232323;
+  --color-accent-alpha: rgba(35, 35, 35, 0.08);
+  --color-accent-warning: #FEF991;
+
+  /* Status */
+  --color-positive: #4BB956;
+  --color-positive-alpha: rgba(75, 185, 86, 0.15);
+  --color-negative: #FF453A;
+  --color-negative-alpha: rgba(255, 69, 58, 0.15);
+
+  /* Overlay & Input */
+  --color-overlay: rgba(0, 0, 0, 0.50);
+  --color-input-bg: rgba(35, 35, 35, 0.08);
+
+  /* Phase Colors */
+  --phase1: #26a69a;
+  --phase1-alpha: rgba(38, 166, 154, 0.12);
+  --phase2: #FF453A;
+  --phase2-alpha: rgba(255, 69, 58, 0.10);
+  --phase3: #E8A800;
+  --phase3-alpha: rgba(232, 168, 0, 0.10);
+  --phase4: #3D7BF7;
+  --phase4-alpha: rgba(61, 123, 247, 0.10);
+
+  /* Layout (from design guidelines) */
+  --radius: 6px;
+  --spacing-margin: 12px;
+  --spacing-card: 16px;
+  --spacing-same: 6px;
+  --spacing-cross: 12px;
+  --spacing-section: 24px;
+
+  /* Fonts (FK Grotesk fallback chain) */
+  --font-display: "FK Grotesk Neue", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: "FK Grotesk Neue", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", monospace;
+}
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: -0.15px;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: var(--spacing-margin);
+  min-height: 100vh;
+}
+
+/* ── Typography (FK Grotesk 8 Styles) ── */
+.text-vlarge-title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.72px;
+}
+.text-large-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 400;
+  letter-spacing: -0.6px;
+}
+.text-medium-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.17px;
+}
+.text-normal-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.15px;
+}
+.text-normal-body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 300;
+  letter-spacing: -0.15px;
+}
+.text-subtitle {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.13px;
+}
+.text-detail {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+}
+
+/* ── App Header ── */
+.app-header {
+  text-align: center;
+  padding: var(--spacing-section) 0 var(--spacing-cross);
+}
+.app-header .logo {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  margin-bottom: 4px;
+}
+.app-header h1 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.72px;
+  color: var(--color-text);
+}
+.app-header .subtitle {
+  font-size: 13px;
+  letter-spacing: -0.13px;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+}
+
+/* ── Phase Nav (Segmented Control style) ── */
+.phase-nav {
+  display: flex;
+  border-radius: var(--radius);
+  background: var(--color-surface-lighter);
+  padding: 2px;
+  margin-bottom: var(--spacing-section);
+}
+.phase-tab {
+  all: unset;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+  padding: 10px 4px;
+  border-radius: 4px;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.13px;
+  color: var(--color-text-dim);
+  transition: all 0.2s;
+}
+.phase-tab:hover {
+  color: var(--color-text);
+}
+.phase-tab.active {
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.06);
+}
+
+/* ── Card (matching even-toolkit Card component) ── */
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  padding: var(--spacing-card);
+  margin-bottom: var(--spacing-cross);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: var(--spacing-cross);
+}
+.card-header .icon {
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+.card-header h3 {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.17px;
+}
+.card-header .badge {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  padding: 2px 8px;
+  border-radius: var(--radius);
+  margin-left: auto;
+}
+.badge-neutral {
+  background: var(--color-surface-light);
+  color: var(--color-text-dim);
+}
+.badge-positive {
+  background: var(--color-positive-alpha);
+  color: var(--color-positive);
+}
+.badge-negative {
+  background: var(--color-negative-alpha);
+  color: var(--color-negative);
+}
+.badge-accent {
+  background: var(--color-accent-alpha);
+  color: var(--color-accent);
+}
+
+/* ── Status Dot ── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+.status-dot.listening {
+  background: var(--color-positive);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.status-dot.idle { background: var(--color-surface-lighter); }
+.status-dot.error { background: var(--color-negative); }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Waveform Visualizer (from UI/UX resources) ── */
+.waveform-container {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+}
+.waveform-bar {
+  width: 3px;
+  border-radius: 9999px;
+  background-color: var(--color-positive);
+  height: 4px;
+  transition: height 0.1s ease-out;
+}
+.waveform-bar.animating {
+  animation: waveform-pulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes waveform-pulse {
+  0% { height: 4px; }
+  100% { height: 20px; }
+}
+
+/* ── Progress Bar (matching even-toolkit Progress) ── */
+.silence-meter {
+  width: 100%;
+  height: 4px;
+  background: var(--color-surface-lighter);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: var(--spacing-cross) 0 var(--spacing-same);
+}
+.silence-meter .fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s linear;
+  background: var(--color-accent);
+}
+.silence-meter.warning .fill {
+  background: var(--color-negative);
+}
+
+/* ── Chunk Flash ── */
+.chunk-flash {
+  background: var(--color-accent-warning);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: var(--spacing-cross) 0;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--color-text);
+  text-align: center;
+  animation: flashIn 0.25s ease-out;
+}
+@keyframes flashIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Button (matching even-toolkit Button) ── */
+.btn {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: -0.17px;
+  transition: all 0.15s;
+  user-select: none;
+}
+.btn-highlight {
+  background: var(--color-accent);
+  color: var(--color-text-highlight);
+}
+.btn-highlight:hover { opacity: 0.9; }
+
+.btn-default {
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.btn-default:hover { background: var(--color-surface-light); }
+
+.btn-danger {
+  background: var(--color-surface);
+  color: var(--color-negative);
+}
+.btn-danger:hover { background: var(--color-surface-light); }
+
+.btn-ghost {
+  color: var(--color-text-dim);
+}
+.btn-ghost:hover {
+  color: var(--color-text);
+  background: var(--color-surface-light);
+}
+
+.btn-full { width: 100%; }
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Stats Grid (matching even-toolkit StatGrid) ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-same);
+}
+.stat-item {
+  background: var(--color-surface-light);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+}
+.stat-item .value {
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.72px;
+  font-variant-numeric: tabular-nums;
+}
+.stat-item .label {
+  font-size: 13px;
+  letter-spacing: -0.13px;
+  color: var(--color-text-dim);
+  margin-top: 2px;
+}
+
+/* ── Hint History ── */
+.hint-list {
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hint-list::-webkit-scrollbar { display: none; }
+.hint-list li {
+  padding: 8px 12px;
+  border-left: 2px solid var(--color-border);
+  margin-bottom: var(--spacing-same);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-dim);
+}
+.hint-list li:last-child {
+  border-left-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+/* ── Textarea ── */
+.textarea {
+  width: 100%;
+  min-height: 140px;
+  background: var(--color-input-bg);
+  border: none;
+  border-radius: var(--radius);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: -0.13px;
+  color: var(--color-text);
+  resize: vertical;
+  transition: box-shadow 0.15s;
+}
+.textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+.textarea::placeholder { color: var(--color-text-muted); }
+
+/* ── Select ── */
+.select-group {
+  display: flex;
+  gap: var(--spacing-same);
+}
+.select-group select {
+  flex: 1;
+  height: 44px;
+  background: var(--color-input-bg);
+  border: none;
+  border-radius: var(--radius);
+  padding: 0 12px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  letter-spacing: -0.15px;
+  font-weight: 300;
+  color: var(--color-text);
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+.select-group select:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+
+/* ── Week Selector ── */
+.week-selector {
+  display: flex;
+  gap: var(--spacing-same);
+  margin-bottom: var(--spacing-same);
+}
+.week-btn {
+  all: unset;
+  cursor: pointer;
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.15px;
+  color: var(--color-text-dim);
+  background: var(--color-surface-light);
+  transition: all 0.15s;
+}
+.week-btn:hover { color: var(--color-text); }
+.week-btn.active {
+  background: var(--color-accent);
+  color: var(--color-text-highlight);
+}
+
+/* ── Schedule List ── */
+.schedule-list { list-style: none; }
+.schedule-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-cross);
+  padding: 10px 12px;
+  background: var(--color-surface-light);
+  border-radius: var(--radius);
+  margin-bottom: var(--spacing-same);
+}
+.schedule-item .time {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--phase4);
+  min-width: 50px;
+}
+.schedule-item .chunk {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-dim);
+}
+
+/* ── Calibration Ring ── */
+.calibration-ring {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 2px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: var(--spacing-section) auto;
+}
+.calibration-ring .freq {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 400;
+  letter-spacing: -0.72px;
+}
+.calibration-ring .unit {
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+
+/* ── Connection Badge ── */
+.connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  background: var(--color-surface-light);
+  color: var(--color-text-dim);
+}
+.connection-badge.connected {
+  background: var(--color-positive-alpha);
+  color: var(--color-positive);
+}
+
+/* ── Phase Indicator ── */
+.phase-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.13px;
+  margin-bottom: var(--spacing-cross);
+}
+.phase-indicator.p1 { background: var(--phase1-alpha); color: var(--phase1); }
+.phase-indicator.p2 { background: var(--phase2-alpha); color: var(--phase2); }
+.phase-indicator.p3 { background: var(--phase3-alpha); color: var(--phase3); }
+.phase-indicator.p4 { background: var(--phase4-alpha); color: var(--phase4); }
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-section) var(--spacing-card);
+  color: var(--color-text-muted);
+}
+.empty-state .icon {
+  font-size: 32px;
+  margin-bottom: var(--spacing-same);
+  opacity: 0.5;
+}
+.empty-state p {
+  font-size: 13px;
+  letter-spacing: -0.13px;
+  line-height: 1.6;
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.phase-view { animation: fadeIn 0.2s ease-out; }
+
+/* ── Scrollbar (hidden, matching even-toolkit) ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* ── Utility ── */
+.text-center { text-align: center; }
+.mt-section { margin-top: var(--spacing-section); }
+.mt-cross { margin-top: var(--spacing-cross); }
+.mt-same { margin-top: var(--spacing-same); }
+.gap-same { gap: var(--spacing-same); }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }

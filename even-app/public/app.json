@@ -1,0 +1,29 @@
+{
+  "package_id": "com.cheatkey.echo",
+  "edition": "202601",
+  "name": "Project ECHO",
+  "version": "0.1.0",
+  "entrypoint": "index.html",
+  "permissions": [
+    {
+      "name": "g2-microphone",
+      "desc": "Required for real-time English speech recognition and coaching."
+    },
+    {
+      "name": "location",
+      "desc": "Required for secure Bluetooth connection with G2 hardware."
+    },
+    {
+      "name": "network",
+      "desc": "Required for Gemini AI English coaching and local development assets.",
+      "whitelist": [
+        "https://generativelanguage.googleapis.com",
+        "http://192.168.0.17:5173",
+        "http://192.168.0.17:5174"
+      ]
+    }
+  ],
+  "supported_languages": ["en"],
+  "min_app_version": "2.0.0",
+  "min_sdk_version": "0.0.10"
+}

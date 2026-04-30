@@ -13,6 +13,7 @@ import {
   ListItemContainerProperty,
   CreateStartUpPageContainer,
   EvenAppBridge,
+  waitForEvenAppBridge,
   type EvenHubEvent,
 } from '@evenrealities/even_hub_sdk';
 
@@ -543,13 +544,7 @@ export class GlassesSdk {
 
     try {
       GlassesLogger.info('[SDK] Initializing bridge.');
-      const bridge = EvenAppBridge.getInstance();
-      let waited = 0;
-      while (!bridge.ready) {
-        await new Promise((r) => setTimeout(r, 100));
-        waited++;
-        if (waited % 10 === 0) GlassesLogger.info(`[SDK] Waiting for bridge.ready (${waited * 100}ms).`);
-      }
+      const bridge = await waitForEvenAppBridge();
       GlassesLogger.info('[SDK] Bridge is ready.');
       bridge.onEvenHubEvent((event: EvenHubEvent) => {
         GlassesLogger.debug('[SDK] Event received, dispatching.');
