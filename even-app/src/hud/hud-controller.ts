@@ -12,6 +12,12 @@
  *
  * CRITICAL: createStartUpPageContainer MUST be called before any
  * rebuildPageContainer calls. This is the SDK requirement.
+ *
+ * AUDIO FLOW (hardware):
+ *   1. waitForEvenAppBridge() — SDK-managed, returns when bridge is truly ready
+ *   2. createStartUpPageContainer() — MUST succeed before audioControl
+ *   3. onEvenHubEvent() — register audio listener BEFORE opening mic
+ *   4. audioControl(true) — opens G2 glasses mic, PCM pushed via onEvenHubEvent
  */
 
 import {
@@ -39,6 +45,7 @@ export class HUDController {
   private unsubscribeEvents?: () => void;
   private audioPacketCount = 0;
   private lastVolumeBars = '';
+  private _audioOpen = false;
 
   get ready(): boolean { return this._ready; }
   get mode(): HUDMode { return this._mode; }
@@ -47,51 +54,30 @@ export class HUDController {
   /**
    * Initialize the bridge connection to G2 glasses.
    * Steps:
-   * 1. Wait for bridge ready (with timeout)
-   * 2. Call createStartUpPageContainer (REQUIRED before any rebuild)
-   * 3. Mark as ready
+   * 1. Wait for bridge ready using the SDK's waitForEvenAppBridge() (CRITICAL)
+   * 2. Call createStartUpPageContainer (REQUIRED before any rebuild or audioControl)
+   * 3. Register onEvenHubEvent listener for audio data
+   * 4. Mark as ready
    */
   async init(): Promise<boolean> {
     try {
-      console.log('[HUD] Waiting for EvenAppBridge (Enhanced)...');
-      
-      const findBridge = (): any => (window as any).EvenAppBridge;
+      console.log('[HUD] Waiting for EvenAppBridge via SDK waitForEvenAppBridge()...');
 
-      // 1. Try to get bridge with a combination of events and polling
-      this.bridge = await new Promise((resolve, reject) => {
-        // Immediate check
-        const b = findBridge();
-        if (b) return resolve(b);
-
-        // Event listener
-        const onReady = () => {
-          console.log('[HUD] EvenAppBridgeReady event fired');
-          resolve(findBridge());
-        };
-        window.addEventListener('EvenAppBridgeReady', onReady, { once: true });
-
-        // Polling as a last resort
-        const interval = setInterval(() => {
-          const b = findBridge();
-          if (b) {
-            clearInterval(interval);
-            window.removeEventListener('EvenAppBridgeReady', onReady);
-            resolve(b);
-          }
-        }, 500);
-
-        // Timeout
-        setTimeout(() => {
-          clearInterval(interval);
-          window.removeEventListener('EvenAppBridgeReady', onReady);
-          reject(new Error('Bridge connection timeout (20s)'));
-        }, 20000);
-      });
+      // Use the SDK's official waitForEvenAppBridge() with a timeout wrapper.
+      // The SDK handles ready-state internally; our manual polling was unreliable
+      // on actual hardware where the Flutter host injects the bridge asynchronously.
+      this.bridge = await Promise.race([
+        waitForEvenAppBridge(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Bridge connection timeout (25s)')), 25000)
+        ),
+      ]);
 
       if (!this.bridge) throw new Error('Bridge object is null after wait');
-      console.log('[HUD] Bridge instance acquired, creating startup page...');
+      console.log('[HUD] Bridge instance acquired via SDK, creating startup page...');
 
       // CRITICAL: Must call createStartUpPageContainer first!
+      // audioControl() WILL FAIL if this hasn't been called.
       // For Edition 202601, we ensure at least one container is defined.
       const startupResult = await this.bridge.createStartUpPageContainer(
         new CreateStartUpPageContainer({
@@ -117,18 +103,68 @@ export class HUDController {
 
       console.log('[HUD] Startup page created, result:', startupResult);
 
-      // Listen for audio events using the correct SDK method: onEvenHubEvent
-      // Store unsubscribe function for proper cleanup
+      // Register the event listener for audio data BEFORE calling audioControl.
+      // The SDK's onEvenHubEvent delivers parsed events including audioEvent.
+      // audioPcm is normalized to Uint8Array by the SDK, but we add safety checks.
       this.unsubscribeEvents = this.bridge.onEvenHubEvent((event: any) => {
-        const audioPcm = event?.audioEvent?.audioPcm;
-        if (audioPcm && audioPcm.length > 0) {
-          this.audioPacketCount++;
-          // Debug logging for first 5 packets
-          if (this.audioPacketCount <= 5) {
-            console.log(`[HUD] Audio packet #${this.audioPacketCount}: ${audioPcm.length} bytes`);
+        // Handle audio events
+        const audioEvt = event?.audioEvent;
+        if (audioEvt) {
+          let audioPcm = audioEvt.audioPcm;
+          if (audioPcm && audioPcm.length > 0) {
+            // Ensure we have a proper Uint8Array.
+            // On real hardware the SDK may deliver number[] depending on
+            // the host serialization format (JSON number array vs base64).
+            if (!(audioPcm instanceof Uint8Array)) {
+              if (Array.isArray(audioPcm)) {
+                audioPcm = new Uint8Array(audioPcm);
+              } else if (audioPcm instanceof ArrayBuffer) {
+                audioPcm = new Uint8Array(audioPcm);
+              } else if (typeof audioPcm === 'string') {
+                // base64 string — decode to Uint8Array
+                try {
+                  const binaryStr = atob(audioPcm);
+                  const len = binaryStr.length;
+                  audioPcm = new Uint8Array(len);
+                  for (let i = 0; i < len; i++) {
+                    audioPcm[i] = binaryStr.charCodeAt(i);
+                  }
+                } catch (e) {
+                  console.warn('[HUD] Failed to decode base64 audio data:', e);
+                  return;
+                }
+              }
+            }
+
+            this.audioPacketCount++;
+            // Debug logging for first 10 packets to diagnose hardware issues
+            if (this.audioPacketCount <= 10) {
+              console.log(
+                `[HUD] Audio packet #${this.audioPacketCount}: ${audioPcm.length} bytes, ` +
+                `type: ${audioPcm.constructor.name}, first4: [${Array.from(audioPcm.slice(0, 4))}]`
+              );
+            }
+            // Periodic stats
+            if (this.audioPacketCount % 200 === 0) {
+              console.log(`[HUD] Audio stats: ${this.audioPacketCount} packets received`);
+            }
+
+            for (const cb of this.audioListeners) {
+              try {
+                cb(audioPcm);
+              } catch (e) {
+                console.warn('[HUD] Audio listener error:', e);
+              }
+            }
           }
-          for (const cb of this.audioListeners) {
-            cb(audioPcm);
+        }
+
+        // Log system events that might affect audio (e.g., foreground/background)
+        if (event?.sysEvent) {
+          const sys = event.sysEvent;
+          if (sys.eventType !== undefined && sys.eventType !== 8) {
+            // Not IMU — log it for debugging
+            console.log('[HUD] System event:', sys.eventType, sys.eventSource);
           }
         }
       });
@@ -136,6 +172,11 @@ export class HUDController {
       this._startupDone = true;
       this._ready = true;
       this._connected = true;
+
+      // Small delay to let the glasses fully process createStartUpPageContainer
+      await this.sleep(300);
+
+      console.log('[HUD] ✓ Bridge fully initialized and ready for audio');
       return true;
     } catch (err) {
       console.warn('[HUD] Bridge initialization failed:', err);
@@ -488,29 +529,88 @@ export class HUDController {
     };
   }
 
-  /** Tell the glasses to start/stop sending microphone data */
+  /**
+   * Tell the glasses to start/stop sending microphone data.
+   *
+   * IMPORTANT on real hardware:
+   * - createStartUpPageContainer MUST have been called first (the SDK docs state this)
+   * - We retry up to 3 times with increasing delay if the first attempt fails
+   * - A small delay after audioControl(true) is needed for the hardware to
+   *   start streaming
+   */
   async setAudioCapture(enabled: boolean): Promise<void> {
-    if (!this.bridge || !this._ready) {
+    if (!this.bridge || !this._ready || !this._startupDone) {
       console.warn(`[HUD] setAudioCapture(${enabled}) skipped — bridge not ready`);
       return;
     }
+
     console.log(`[HUD] Setting audio capture: ${enabled}`);
-    try {
-      // Use the official SDK API directly
-      const result = await this.bridge.audioControl(enabled);
-      console.log(`[HUD] audioControl(${enabled}) result:`, result);
-      if (!result) {
-        console.warn('[HUD] audioControl returned false — mic may not be available');
+
+    if (enabled) {
+      // Retry logic for opening mic — hardware may not be ready immediately
+      const maxRetries = 3;
+      let success = false;
+
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const result = await this.bridge.audioControl(true);
+          console.log(`[HUD] audioControl(true) attempt ${attempt}/${maxRetries}, result:`, result);
+
+          if (result) {
+            success = true;
+            this._audioOpen = true;
+            this.audioPacketCount = 0;
+
+            // Give hardware time to spin up the mic stream
+            await this.sleep(500);
+            console.log('[HUD] ✓ Mic opened — waiting for audio packets...');
+            break;
+          } else {
+            console.warn(`[HUD] audioControl(true) returned falsy: ${result}, retrying...`);
+          }
+        } catch (err) {
+          console.warn(`[HUD] audioControl(true) attempt ${attempt} error:`, err);
+        }
+
+        // Exponential backoff between retries
+        if (attempt < maxRetries) {
+          const delay = attempt * 1000;
+          console.log(`[HUD] Waiting ${delay}ms before retry...`);
+          await this.sleep(delay);
+        }
       }
-      if (enabled) {
-        this.audioPacketCount = 0; // Reset packet counter
+
+      if (!success) {
+        console.error('[HUD] ✗ Failed to open mic after all retries');
       }
-    } catch (err) {
-      console.warn('[HUD] audioControl failed:', err);
+    } else {
+      // Closing mic — single attempt is fine
+      try {
+        const result = await this.bridge.audioControl(false);
+        console.log(`[HUD] audioControl(false) result:`, result);
+        this._audioOpen = false;
+      } catch (err) {
+        console.warn('[HUD] audioControl(false) failed:', err);
+      }
     }
   }
 
+  /** Whether the G2 mic is currently open */
+  get audioOpen(): boolean {
+    return this._audioOpen;
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   dispose(): void {
+    // Close mic if open
+    if (this._audioOpen && this.bridge) {
+      this.bridge.audioControl(false).catch(() => {});
+      this._audioOpen = false;
+    }
+
     // Unsubscribe from events
     this.unsubscribeEvents?.();
     this.unsubscribeEvents = undefined;

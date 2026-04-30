@@ -262,8 +262,22 @@ export class SessionEngine {
    * Start the Web Speech API recognizer for real-time text.
    * This is a best-effort feature — works in Chrome/Edge browsers,
    * may not work in WebView environments.
+   *
+   * IMPORTANT: On real hardware WebView, Web Speech API uses the PHONE
+   * microphone, not the G2 glasses mic. When the G2 bridge audio is active,
+   * we skip this to avoid:
+   * 1. Permission conflicts (phone-microphone vs g2-microphone)
+   * 2. Two audio capture streams fighting for resources
+   * 3. Web Speech API crashing the WebView on some Android versions
    */
   private startSpeechRecognizer(): void {
+    // Skip if we're using the G2 glasses mic — Web Speech API would try to
+    // use the phone mic separately, causing conflicts in the WebView
+    if (this.vad?.audioSource === 'bridge') {
+      console.log('[Session] Using G2 mic — skipping Web Speech API to avoid phone mic conflict');
+      return;
+    }
+
     if (!SpeechRecognizer.isSupported()) {
       console.log('[Session] Web Speech API not available — real-time transcript disabled');
       return;

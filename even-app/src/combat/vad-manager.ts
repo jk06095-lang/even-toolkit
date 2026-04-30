@@ -12,6 +12,13 @@
  *
  * The Bridge→MicVAD fallback ensures audio ALWAYS works even when
  * the glasses are connected for display but mic data isn't flowing.
+ *
+ * HARDWARE MIC NOTES:
+ * - audioControl(true) must be called AFTER createStartUpPageContainer
+ * - Audio data arrives as Uint8Array via onEvenHubEvent → audioEvent.audioPcm
+ * - PCM format: 16-bit signed LE, mono, 16kHz
+ * - First audio packet may take 1-2s to arrive after audioControl(true)
+ * - We normalize all incoming data to Uint8Array (may arrive as number[])
  */
 
 import { MicVAD, FrameProcessor, Message } from '@ricky0123/vad-web';
@@ -141,8 +148,8 @@ export class VADManager {
       
       await bridgeVad.start();
 
-      // Wait up to 5 seconds for first audio packet
-      const gotAudio = await bridgeVad.waitForFirstPacket(5000);
+      // Wait up to 8 seconds for first audio packet (hardware can be slow)
+      const gotAudio = await bridgeVad.waitForFirstPacket(8000);
       
       if (gotAudio) {
         this.vad = bridgeVad;
@@ -278,6 +285,12 @@ interface BridgeVADCallbacks {
 /**
  * Manual VAD implementation for Bridge PCM stream.
  * Does not use browser AudioContext/getUserMedia.
+ *
+ * HARDWARE AUDIO FORMAT:
+ * - PCM 16-bit signed little-endian
+ * - Mono channel
+ * - 16000 Hz sample rate
+ * - Packets vary in size (typically 320-640 bytes per chunk)
  */
 class BridgeVAD {
   private processor: FrameProcessor;
@@ -294,13 +307,17 @@ class BridgeVAD {
   private receivedData = false;
   private packetCount = 0;
   private totalBytes = 0;
+  private totalSamples = 0;
   private firstPacketResolve?: (value: boolean) => void;
+  private firstPacketTime = 0;
 
   static async new(hud: HUDController, callbacks: BridgeVADCallbacks): Promise<BridgeVAD> {
     const modelURL = '/silero_vad_legacy.onnx';
     
     // 1. Load model
+    console.log('[VAD] BridgeVAD: Loading Silero model...');
     const model = await SileroLegacy.new(ort, () => defaultModelFetcher(modelURL));
+    console.log('[VAD] BridgeVAD: Model loaded');
     
     // 2. Create FrameProcessor
     const processor = new FrameProcessor(model.process, model.reset_state, {
@@ -327,15 +344,19 @@ class BridgeVAD {
     this.active = true;
     this.packetCount = 0;
     this.totalBytes = 0;
+    this.totalSamples = 0;
     this.receivedData = false;
+    this.firstPacketTime = 0;
 
     console.log('[VAD] BridgeVAD: Starting audio stream from glasses...');
 
-    // 1. Subscribe to audio events
+    // 1. Subscribe to audio events BEFORE opening the mic
     this.unsub = this.hud.onAudioData(this.handlePcm.bind(this));
 
-    // 2. Open audio stream on glasses
+    // 2. Open audio stream on glasses (with retry logic inside HUDController)
     await this.hud.setAudioCapture(true);
+
+    console.log('[VAD] BridgeVAD: audioControl(true) sent, waiting for data...');
   }
 
   /**
@@ -351,6 +372,7 @@ class BridgeVAD {
       setTimeout(() => {
         if (!this.receivedData) {
           this.firstPacketResolve = undefined;
+          console.warn(`[VAD] BridgeVAD: No audio packet received after ${timeoutMs}ms`);
           resolve(false);
         }
       }, timeoutMs);
@@ -362,29 +384,56 @@ class BridgeVAD {
     this.unsub?.();
     this.processor.pause();
     await this.hud.setAudioCapture(false);
+
+    console.log(
+      `[VAD] BridgeVAD stopped. Stats: ${this.packetCount} packets, ` +
+      `${(this.totalBytes / 1024).toFixed(1)} KB, ${this.totalSamples} samples`
+    );
   }
 
   private async handlePcm(bytes: Uint8Array): Promise<void> {
     // Skip empty packets
     if (!bytes || bytes.length === 0) return;
 
+    // Ensure we have proper Uint8Array (HUDController should handle this,
+    // but double-check for safety)
+    let safeBytes = bytes;
+    if (!(bytes instanceof Uint8Array)) {
+      if (Array.isArray(bytes)) {
+        safeBytes = new Uint8Array(bytes as any);
+      } else {
+        console.warn('[VAD] BridgeVAD: Unexpected audio data type:', typeof bytes);
+        return;
+      }
+    }
+
     if (!this.receivedData) {
       this.receivedData = true;
-      console.log('[VAD] BridgeVAD: First audio packet received from glasses!');
+      this.firstPacketTime = Date.now();
+      console.log(
+        `[VAD] BridgeVAD: ✓ First audio packet received! ` +
+        `Size: ${safeBytes.length} bytes, Type: ${safeBytes.constructor.name}`
+      );
       // Resolve the waitForFirstPacket promise
       this.firstPacketResolve?.(true);
       this.firstPacketResolve = undefined;
     }
 
     this.packetCount++;
-    this.totalBytes += bytes.length;
+    this.totalBytes += safeBytes.length;
 
     // Periodic diagnostics (every 100 packets)
     if (this.packetCount % 100 === 0) {
-      console.log(`[VAD] BridgeVAD stats: ${this.packetCount} packets, ${(this.totalBytes / 1024).toFixed(1)} KB total`);
+      const elapsed = (Date.now() - this.firstPacketTime) / 1000;
+      console.log(
+        `[VAD] BridgeVAD stats: ${this.packetCount} packets, ` +
+        `${(this.totalBytes / 1024).toFixed(1)} KB total, ` +
+        `${this.totalSamples} samples, ${elapsed.toFixed(1)}s elapsed`
+      );
     }
 
-    const samples = pcm16ToFloat32(bytes);
+    const samples = pcm16ToFloat32(safeBytes);
+    this.totalSamples += samples.length;
     
     for (let i = 0; i < samples.length; i++) {
       this.ringBuffer[this.bufferIdx++] = samples[i];
@@ -394,22 +443,29 @@ class BridgeVAD {
         const frame = new Float32Array(this.ringBuffer);
         this.bufferIdx = 0;
 
-        const result = await this.processor.process(frame);
-        
-        if (result.probs) {
-          this.callbacks.onFrameProcessed(result.probs, frame);
-        }
+        try {
+          const result = await this.processor.process(frame);
+          
+          if (result.probs) {
+            this.callbacks.onFrameProcessed(result.probs, frame);
+          }
 
-        switch (result.msg) {
-          case Message.SpeechStart:
-            this.callbacks.onSpeechStart();
-            break;
-          case Message.SpeechEnd:
-            if (result.audio) this.callbacks.onSpeechEnd(result.audio);
-            break;
-          case Message.VADMisfire:
-            this.callbacks.onVADMisfire();
-            break;
+          switch (result.msg) {
+            case Message.SpeechStart:
+              this.callbacks.onSpeechStart();
+              break;
+            case Message.SpeechEnd:
+              if (result.audio) this.callbacks.onSpeechEnd(result.audio);
+              break;
+            case Message.VADMisfire:
+              this.callbacks.onVADMisfire();
+              break;
+          }
+        } catch (err) {
+          // Don't let a single frame processing error kill the entire pipeline
+          if (this.packetCount <= 5) {
+            console.warn('[VAD] BridgeVAD: Frame processing error:', err);
+          }
         }
       }
     }
