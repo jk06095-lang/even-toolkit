@@ -48,10 +48,15 @@ function renderApp(): void {
 
     <!-- G2 Connection -->
     <div style="text-align: center; margin-bottom: 20px;">
-      <span class="connection-badge" id="g2-badge">
+      <div class="connection-badge" id="g2-badge">
         <span class="status-dot idle" id="g2-dot"></span>
-        G2 Glasses: Disconnected
-      </span>
+        G2 Glasses: Initializing Bridge...
+      </div>
+      <div id="g2-diagnostics" style="font-size: 11px; color: var(--color-text-muted); margin-top: 5px; display: none;">
+        Device: <span id="diag-status">none</span> | 
+        Startup: <span id="diag-startup">-</span> |
+        Wearing: <span id="diag-wearing">-</span>
+      </div>
     </div>
 
     <!-- Phase Navigation -->
@@ -121,7 +126,10 @@ function switchPhase(phase: number): void {
 
 async function initHUD(): Promise<void> {
   const badge = document.getElementById('g2-badge');
-  const dot = document.getElementById('g2-dot');
+  const diag = document.getElementById('g2-diagnostics');
+  const diagStatus = document.getElementById('diag-status');
+  const diagStartup = document.getElementById('diag-startup');
+  const diagWearing = document.getElementById('diag-wearing');
   
   if (badge) {
     badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: Connecting...`;
@@ -129,29 +137,50 @@ async function initHUD(): Promise<void> {
   }
 
   if (!hud) hud = new HUDController();
-  const connected = await hud.init();
 
-  if (badge) {
-    badge.style.cursor = 'pointer';
-    if (connected) {
-      badge.classList.add('connected');
-      badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected`;
-    } else {
-      badge.classList.remove('connected');
-      badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: Disconnected (Retry)`;
+  // Listen for real-time status changes
+  hud.onStatusChanged((status) => {
+    if (!badge) return;
+    
+    if (diag) diag.style.display = 'block';
+    if (diagStatus) diagStatus.textContent = status.connectType;
+    if (diagWearing) {
+      const isWearing = status.isWearing ?? status.wearing ?? status.is_wearing;
+      if (isWearing === undefined) diagWearing.textContent = 'UNKNOWN';
+      else diagWearing.textContent = isWearing ? 'YES' : 'NO';
+    }
+
+    const isConnected = status.connectType === 'connected';
+    badge.classList.toggle('connected', isConnected);
+    
+    if (isConnected) {
+      const isWearing = status.isWearing ?? status.wearing ?? status.is_wearing;
+      const wearStr = isWearing ? ' (Wearing)' : ' (Not Wearing)';
+      const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
+      badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;
       
-      // Allow manual retry
+      // Set up echo display if needed
+      if (!echoDisplay && hud) {
+        echoDisplay = new EchoDisplay();
+        echoDisplay.setHUD(hud);
+      }
+    } else {
+      badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: ${status.connectType.toUpperCase()} (Retry)`;
       badge.onclick = () => {
         badge.onclick = null;
         initHUD();
       };
     }
-  }
+  });
 
-  // Set up echo display
-  if (connected && !echoDisplay) {
-    echoDisplay = new EchoDisplay();
-    if (hud) echoDisplay.setHUD(hud);
+  try {
+    const success = await hud.init();
+    // We get the startup result via the internal logs usually, 
+    // but here we can try to reflect it if we exposed it.
+    // For now, let's just show bridge found.
+    if (diagStartup) diagStartup.textContent = 'OK';
+  } catch (err) {
+    if (diagStartup) diagStartup.textContent = 'FAIL';
   }
 }
 
