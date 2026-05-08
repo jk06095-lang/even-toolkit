@@ -31,6 +31,8 @@ export interface ChunkRequest {
   lastUtterance?: string;
   /** Previously used hints — avoid repeating these */
   usedHints?: string[];
+  /** Scenario-specific coaching context from topic registry */
+  scenarioContext?: string;
 }
 
 export interface ChunkResult {
@@ -165,6 +167,9 @@ import { float32ToWav } from '@toolkit/stt/audio/pcm-utils';
 
 function buildUserPrompt(req: ChunkRequest): string {
   let prompt = `Topic: ${req.topic}`;
+  if (req.scenarioContext) {
+    prompt += `\nScenario context: ${req.scenarioContext}`;
+  }
   if (req.lastUtterance) {
     prompt += `\nThe user last said: "${req.lastUtterance}"`;
   }

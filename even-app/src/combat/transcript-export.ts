@@ -12,6 +12,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import type { SessionTranscript, TranscriptEntry } from './transcript-store';
+import { getScenarioById } from './topic-registry';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
 
@@ -59,6 +60,7 @@ export interface ExportStage3 {
   difficulty_assessment: string;  // e.g. "Week 2 ready" or "Needs more Week 1"
   next_session_focus: string;     // 1-sentence coaching directive
   gem_instruction: string;        // Korean instruction for Gemini Gem
+  scenario_gem_prompt?: string;   // Topic-specific Gem prompt from registry
 }
 
 export interface SessionExportJSON {
@@ -258,6 +260,13 @@ export async function generateExportJSON(
   const stage1 = buildStage1(session);
   const stage2 = buildStage2(session);
   const stage3 = await buildStage3(stage1, stage2);
+
+  // Attach scenario-specific Gem prompt if available
+  // category field stores the scenario ID from topic-registry
+  const scenario = getScenarioById(session.category);
+  if (scenario) {
+    stage3.scenario_gem_prompt = scenario.gemPrompt;
+  }
 
   return {
     export_version: '1.0.0',

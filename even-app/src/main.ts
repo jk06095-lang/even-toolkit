@@ -25,6 +25,8 @@ import { EchoDisplay } from './ambient/echo-display';
 import { HUDController } from './hud/hud-controller';
 import { TranscriptStore } from './combat/transcript-store';
 import { downloadExportJSON } from './combat/transcript-export';
+import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from './combat/topic-registry';
+import { renderTopicSelector, renderScenarioGrid, fillTopicDetail } from './ui/topic-selector-view';
 
 // ── Global State ──
 
@@ -35,6 +37,8 @@ let hud: HUDController | null = null;
 let ambientScheduler: AmbientScheduler | null = null;
 let echoDisplay: EchoDisplay | null = null;
 let currentWeek = 1;
+let selectedScenario: TopicScenario | null = null;
+let expressionUsage: Map<string, boolean> = new Map();
 
 // ── App Shell ──
 
@@ -279,9 +283,91 @@ function bindCombatEvents(): void {
   });
   selectWeek(currentWeek);
 
+  // Topic selector
+  initTopicSelector();
+
+  // Change topic button
+  document.getElementById('btn-change-topic')?.addEventListener('click', () => {
+    selectedScenario = null;
+    const selCard = document.getElementById('selected-topic-card');
+    if (selCard) selCard.style.display = 'none';
+    initTopicSelector();
+  });
+
   // Start/Stop session
   document.getElementById('btn-start-session')?.addEventListener('click', startSession);
   document.getElementById('btn-stop-session')?.addEventListener('click', stopSession);
+}
+
+function initTopicSelector(): void {
+  const area = document.getElementById('topic-selector-area');
+  if (!area) return;
+
+  if (selectedScenario) {
+    area.innerHTML = '';
+    showSelectedTopicCard(selectedScenario);
+    return;
+  }
+
+  area.innerHTML = renderTopicSelector();
+
+  // Bind category tabs
+  const tabs = document.querySelectorAll('.topic-cat-tab');
+  const firstCat = getCategories()[0] ?? 'daily';
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const cat = (tab as HTMLElement).dataset.cat as TopicCategory;
+      tabs.forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      const grid = document.getElementById('topic-scenario-grid');
+      if (grid) {
+        grid.innerHTML = renderScenarioGrid(cat, selectedScenario?.id);
+        bindScenarioCards();
+      }
+    });
+  });
+
+  // Show first category
+  const firstTab = tabs[0] as HTMLElement | undefined;
+  if (firstTab) {
+    firstTab.classList.add('active');
+    const grid = document.getElementById('topic-scenario-grid');
+    if (grid) {
+      grid.innerHTML = renderScenarioGrid(firstCat as TopicCategory);
+      bindScenarioCards();
+    }
+  }
+}
+
+function bindScenarioCards(): void {
+  document.querySelectorAll('.topic-scenario-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const id = (card as HTMLElement).dataset.scenario;
+      if (!id) return;
+      const scenario = getScenarioById(id);
+      if (!scenario) return;
+      selectedScenario = scenario;
+      fillTopicDetail(scenario);
+
+      // Highlight selected card
+      document.querySelectorAll('.topic-scenario-card').forEach((c) => {
+        (c as HTMLElement).style.borderColor = 'var(--color-border)';
+        (c as HTMLElement).style.borderWidth = '1px';
+      });
+      (card as HTMLElement).style.borderColor = 'var(--phase2)';
+      (card as HTMLElement).style.borderWidth = '2px';
+    });
+  });
+}
+
+function showSelectedTopicCard(scenario: TopicScenario): void {
+  const card = document.getElementById('selected-topic-card');
+  if (!card) return;
+  card.style.display = 'block';
+  setElText('selected-topic-emoji', scenario.emoji);
+  setElText('selected-topic-label', scenario.label);
+  setElText('selected-topic-situation', scenario.situation);
 }
 
 function selectWeek(week: number): void {
@@ -306,15 +392,27 @@ function selectWeek(week: number): void {
 }
 
 async function startSession(): Promise<void> {
-  const topicSelect = document.getElementById('topic-select') as HTMLSelectElement;
-  const category = (topicSelect?.value ?? 'general') as ChunkCategory;
-  const topicLabels: Record<string, string> = {
-    general: 'General English Practice',
-    nampodong: 'Nampodong Local Guide 🇰🇷',
-    business: 'Silicon Valley Pitch Meeting',
-    travel: 'Travel & Directions',
-    food: 'Food & Restaurant Recommendation',
-  };
+  // Use selected scenario or fall back to general
+  const scenario = selectedScenario;
+  const category = scenario ? toLegacyCategory(scenario.id) as ChunkCategory : 'general';
+  const topicLabel = scenario ? scenario.label : 'General English Practice';
+
+  // Initialize expression tracking if scenario has key expressions
+  expressionUsage = new Map();
+  if (scenario) {
+    scenario.keyExpressions.forEach((expr) => expressionUsage.set(expr, false));
+    showExpressionTracker(scenario.keyExpressions);
+  }
+
+  // Show waveform panel
+  const wavePanel = document.getElementById('waveform-panel');
+  if (wavePanel) wavePanel.style.display = 'block';
+
+  // Hide topic selector area during session
+  const topicArea = document.getElementById('topic-selector-area');
+  if (topicArea) topicArea.style.display = 'none';
+  const selCard = document.getElementById('selected-topic-card');
+  if (selCard) selCard.style.display = 'none';
 
   session = new SessionEngine(currentWeek, {
     onStateChange: handleSessionState,
@@ -337,6 +435,8 @@ async function startSession(): Promise<void> {
           timing.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         }
         // Keep visible throughout session — no auto-hide
+        // Check expression usage
+        checkExpressionUsage(transcript);
       }
     },
     onLiveTranscript: (text, isFinal) => {
@@ -362,6 +462,8 @@ async function startSession(): Promise<void> {
               timing.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
             }
           }
+          // Check expression usage on final transcript
+          checkExpressionUsage(text.trim());
           // Clear the live transcript after a beat
           setTimeout(() => {
             if (liveContainer) liveContainer.style.display = 'none';
@@ -384,21 +486,36 @@ async function startSession(): Promise<void> {
       }
     },
     onVolume: (volume: number) => {
-      // Drive waveform bars with real volume data
-      for (let i = 0; i < 5; i++) {
+      // Drive 16 waveform bars with real volume data
+      for (let i = 0; i < 16; i++) {
         const bar = document.getElementById(`wb-${i}`);
         if (bar) {
-          // Stagger the bars for natural look
-          const barVolume = Math.max(0, volume - i * 0.03);
-          const height = Math.max(4, Math.min(20, barVolume * 40));
+          // Create wave pattern: center bars taller, edges shorter
+          const centerDist = Math.abs(i - 7.5) / 8;
+          const barVolume = Math.max(0, volume * (1 - centerDist * 0.5));
+          // Add slight randomness for organic feel
+          const jitter = 1 + (Math.random() - 0.5) * 0.3;
+          const height = Math.max(3, Math.min(36, barVolume * 50 * jitter));
           bar.style.height = `${height}px`;
-          bar.classList.remove('animating'); // Use real data, not CSS animation
+          // Color based on volume
+          bar.style.background = volume > 0.3 ? 'var(--color-positive)' : 'var(--color-text-muted)';
         }
+      }
+      // Update waveform status text
+      const wfStatus = document.getElementById('waveform-status');
+      if (wfStatus) {
+        wfStatus.textContent = volume > 0.1 ? '● Audio detected' : 'Waiting for audio...';
+        wfStatus.style.color = volume > 0.1 ? 'var(--color-positive)' : 'var(--color-text-muted)';
       }
     },
   });
 
-  session.setTopic(topicLabels[category] ?? 'Practice', category);
+  session.setTopic(
+    topicLabel,
+    category,
+    scenario?.id ?? '',
+    scenario?.geminiCoachContext ?? '',
+  );
 
   // UI updates
   toggleSessionUI(true);
@@ -426,13 +543,26 @@ async function stopSession(): Promise<void> {
   hud?.clearDisplay();
 
   // Reset waveform bars
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 16; i++) {
     const bar = document.getElementById(`wb-${i}`);
     if (bar) {
       bar.style.height = '4px';
-      bar.classList.remove('animating');
+      bar.style.background = 'var(--color-positive)';
     }
   }
+
+  // Hide waveform panel
+  const wavePanel = document.getElementById('waveform-panel');
+  if (wavePanel) wavePanel.style.display = 'none';
+
+  // Show topic selector area again
+  const topicArea = document.getElementById('topic-selector-area');
+  if (topicArea) topicArea.style.display = 'block';
+  if (selectedScenario) showSelectedTopicCard(selectedScenario);
+
+  // Hide expression tracker
+  const exprTracker = document.getElementById('expression-tracker');
+  if (exprTracker) exprTracker.style.display = 'none';
 
   // Hide live transcript and audio source
   const liveContainer = document.getElementById('live-transcript-container');
@@ -461,16 +591,13 @@ function handleSessionState(state: SessionState): void {
   const vadLabel = document.getElementById('vad-label');
   const chunkDisplay = document.getElementById('chunk-display');
 
+  // Waveform idle animation for 16 bars
   const isListening = state === 'listening';
-  for (let i = 0; i < 5; i++) {
-    const bar = document.getElementById(`wb-${i}`);
-    if (bar) {
-      if (isListening) {
-        bar.classList.add('animating');
-        bar.style.animationDelay = `${i * 0.1}s`;
-      } else {
-        bar.classList.remove('animating');
-        bar.style.animationDelay = '0s';
+  if (!isListening) {
+    for (let i = 0; i < 16; i++) {
+      const bar = document.getElementById(`wb-${i}`);
+      if (bar) {
+        bar.style.height = state === 'loading_vad' ? '6px' : '4px';
       }
     }
   }
@@ -832,6 +959,77 @@ function updatePendingList(items: PendingItem[]): void {
 function setElText(id: string, text: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+// ── Expression Tracking ──
+
+function showExpressionTracker(expressions: string[]): void {
+  const tracker = document.getElementById('expression-tracker');
+  const list = document.getElementById('expr-list');
+  const score = document.getElementById('expr-score');
+  if (!tracker || !list) return;
+
+  tracker.style.display = 'block';
+  if (score) score.textContent = `0/${expressions.length} used`;
+
+  list.innerHTML = expressions
+    .map((expr) => `<div class="expr-item" data-expr="${expr}" style="padding: 3px 0; display: flex; align-items: center; gap: 6px;">
+      <span class="expr-check" style="color: var(--color-text-muted); font-size: 11px;">○</span>
+      <span style="color: var(--color-text-dim);">${expr}</span>
+    </div>`)
+    .join('');
+}
+
+function checkExpressionUsage(userText: string): void {
+  if (!selectedScenario || expressionUsage.size === 0) return;
+
+  const lower = userText.toLowerCase();
+  let changed = false;
+
+  for (const [expr, used] of expressionUsage) {
+    if (used) continue;
+    // Extract the core pattern (remove placeholder parentheses content)
+    const pattern = expr
+      .replace(/\([^)]*\)/g, '')  // remove (placeholder)
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+
+    // Check if user used the core pattern (allow partial match for 3+ word patterns)
+    const words = pattern.split(' ').filter((w) => w.length > 1);
+    const matchCount = words.filter((w) => lower.includes(w)).length;
+    const matchRatio = words.length > 0 ? matchCount / words.length : 0;
+
+    if (matchRatio >= 0.6) {
+      expressionUsage.set(expr, true);
+      changed = true;
+    }
+  }
+
+  if (changed) updateExpressionUI();
+}
+
+function updateExpressionUI(): void {
+  const items = document.querySelectorAll('.expr-item');
+  let usedCount = 0;
+
+  items.forEach((item) => {
+    const expr = (item as HTMLElement).dataset.expr;
+    if (!expr) return;
+    const used = expressionUsage.get(expr) ?? false;
+    const check = item.querySelector('.expr-check');
+    if (used) {
+      usedCount++;
+      if (check) {
+        (check as HTMLElement).textContent = '●';
+        (check as HTMLElement).style.color = 'var(--color-positive)';
+      }
+      (item as HTMLElement).style.opacity = '0.6';
+    }
+  });
+
+  const score = document.getElementById('expr-score');
+  if (score) score.textContent = `${usedCount}/${expressionUsage.size} used`;
 }
 
 // ── Bootstrap ──

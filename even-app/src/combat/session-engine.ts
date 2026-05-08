@@ -78,6 +78,8 @@ export class SessionEngine {
   private _state: SessionState = 'idle';
   private _topic = 'General English Practice';
   private _category: ChunkCategory = 'general';
+  private _scenarioId = '';
+  private _scenarioContext = '';
 
   // Analytics
   private sessionStartTime = 0;
@@ -125,9 +127,11 @@ export class SessionEngine {
   /**
    * Configure the session topic and category before starting.
    */
-  setTopic(topic: string, category: ChunkCategory = 'general'): void {
+  setTopic(topic: string, category: ChunkCategory = 'general', scenarioId = '', scenarioContext = ''): void {
     this._topic = topic;
     this._category = category;
+    this._scenarioId = scenarioId;
+    this._scenarioContext = scenarioContext;
   }
 
   /**
@@ -158,7 +162,7 @@ export class SessionEngine {
     this.transcriptStore = new TranscriptStore(
       this.weekConfig.week,
       this._topic,
-      this._category,
+      this._scenarioId || this._category,
     );
 
     this.vad = new VADManager({
@@ -196,6 +200,7 @@ export class SessionEngine {
             category: this._category,
             lastUtterance: this.lastLiveTranscript || undefined,
             usedHints: this.usedHintChunks,
+            scenarioContext: this._scenarioContext || undefined,
           });
 
           if (result) {
@@ -435,6 +440,7 @@ export class SessionEngine {
         category: this._category,
         lastUtterance: this.lastLiveTranscript || undefined,
         usedHints: this.usedHintChunks,
+        scenarioContext: this._scenarioContext || undefined,
       });
 
       // Check if session was stopped during API call
