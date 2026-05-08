@@ -39,6 +39,8 @@ let echoDisplay: EchoDisplay | null = null;
 let currentWeek = 1;
 let selectedScenario: TopicScenario | null = null;
 let expressionUsage: Map<string, boolean> = new Map();
+let currentActiveHint: string | null = null;
+let currentMode: 'general' | 'scenario' | null = null;
 
 // ── App Shell ──
 
@@ -276,6 +278,23 @@ function showCalibrationResult(cal: CalibrationResult): void {
 // ═══════════════════════════════════════════
 
 function bindCombatEvents(): void {
+  // Mode selection
+  document.getElementById('btn-mode-general')?.addEventListener('click', () => {
+    currentMode = 'general';
+    document.getElementById('general-practice-area')!.style.display = 'block';
+    document.getElementById('scenario-practice-area')!.style.display = 'none';
+    document.getElementById('btn-mode-general')!.style.borderColor = 'var(--phase2)';
+    document.getElementById('btn-mode-scenario')!.style.borderColor = 'transparent';
+  });
+
+  document.getElementById('btn-mode-scenario')?.addEventListener('click', () => {
+    currentMode = 'scenario';
+    document.getElementById('general-practice-area')!.style.display = 'none';
+    document.getElementById('scenario-practice-area')!.style.display = 'block';
+    document.getElementById('btn-mode-scenario')!.style.borderColor = 'var(--phase2)';
+    document.getElementById('btn-mode-general')!.style.borderColor = 'transparent';
+  });
+
   // Week selector
   const weekBtns = document.querySelectorAll('#week-selector .week-btn');
   weekBtns.forEach((btn) => {
@@ -297,9 +316,32 @@ function bindCombatEvents(): void {
     initTopicSelector();
   });
 
-  // Start/Stop session
-  document.getElementById('btn-start-session')?.addEventListener('click', startSession);
+  // Start/Stop/Pause session
+  document.getElementById('btn-start-general')?.addEventListener('click', () => {
+    selectedScenario = null; // Ensure general mode
+    startSession();
+  });
+  document.getElementById('btn-start-scenario')?.addEventListener('click', () => {
+    if (!selectedScenario) return;
+    startSession();
+  });
   document.getElementById('btn-stop-session')?.addEventListener('click', stopSession);
+  
+  document.getElementById('btn-pause-session')?.addEventListener('click', async () => {
+    if (!session) return;
+    const btnPause = document.getElementById('btn-pause-session') as HTMLButtonElement;
+    if (session.state === 'paused') {
+      await session.resume();
+      btnPause.textContent = 'Pause';
+      btnPause.classList.remove('btn-highlight');
+      btnPause.classList.add('btn-neutral');
+    } else {
+      await session.pause();
+      btnPause.textContent = 'Resume';
+      btnPause.classList.remove('btn-neutral');
+      btnPause.classList.add('btn-highlight');
+    }
+  });
 }
 
 function initTopicSelector(): void {
@@ -419,7 +461,10 @@ async function startSession(): Promise<void> {
 
   session = new SessionEngine(currentWeek, {
     onStateChange: handleSessionState,
-    onChunkGenerated: handleChunkGenerated,
+    onChunkGenerated: (result) => {
+      currentActiveHint = result.chunk;
+      handleChunkGenerated(result);
+    },
     onSpeechDetected: handleSpeechDetected,
     onSilenceStart: handleSilenceStart,
     onSessionLog: (log) => {
@@ -437,9 +482,18 @@ async function startSession(): Promise<void> {
           const now = new Date();
           timing.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         }
-        // Keep visible throughout session — no auto-hide
         // Check expression usage
         checkExpressionUsage(transcript);
+
+        // Check if the transcript contains the active hint
+        if (currentActiveHint) {
+          const cleanText = transcript.toLowerCase().replace(/[^\\w\\s]/g, '');
+          const cleanHint = currentActiveHint.toLowerCase().replace(/[^\\w\\s]/g, '');
+          if (cleanText.includes(cleanHint)) {
+            hud?.showGoodJob();
+            currentActiveHint = null; // clear it
+          }
+        }
       }
     },
     onLiveTranscript: (text, isFinal) => {
@@ -451,9 +505,18 @@ async function startSession(): Promise<void> {
         liveContainer.style.display = 'block';
         liveText.textContent = text;
 
+        // Check hint usage on live text too for snappy feedback
+        if (currentActiveHint) {
+          const cleanText = text.toLowerCase().replace(/[^\\w\\s]/g, '');
+          const cleanHint = currentActiveHint.toLowerCase().replace(/[^\\w\\s]/g, '');
+          if (cleanText.includes(cleanHint)) {
+            hud?.showGoodJob();
+            currentActiveHint = null; // clear it
+          }
+        }
+
         if (isFinal) {
           // Update the recognized display with final text
-          // (does NOT hide it — stays visible through session)
           const display = document.getElementById('transcript-display');
           const transcriptText = document.getElementById('transcript-text');
           const timing = document.getElementById('speech-timing');
@@ -564,10 +627,20 @@ async function stopSession(): Promise<void> {
   const wavePanel = document.getElementById('waveform-panel');
   if (wavePanel) wavePanel.style.display = 'none';
 
-  // Show topic selector area again
-  const topicArea = document.getElementById('topic-selector-area');
-  if (topicArea) topicArea.style.display = 'block';
-  if (selectedScenario) showSelectedTopicCard(selectedScenario);
+  // Show mode selector area again and reset selection
+  const modeSelector = document.getElementById('mode-selector-card');
+  if (modeSelector) modeSelector.style.display = 'block';
+  
+  const generalArea = document.getElementById('general-practice-area');
+  const scenarioArea = document.getElementById('scenario-practice-area');
+  if (generalArea) generalArea.style.display = 'none';
+  if (scenarioArea) scenarioArea.style.display = 'none';
+  
+  const btnGen = document.getElementById('btn-mode-general');
+  const btnScen = document.getElementById('btn-mode-scenario');
+  if (btnGen) btnGen.style.borderColor = 'transparent';
+  if (btnScen) btnScen.style.borderColor = 'transparent';
+  currentMode = null;
 
   // Hide expression tracker
   const exprTracker = document.getElementById('expression-tracker');
@@ -581,15 +654,36 @@ async function stopSession(): Promise<void> {
   const transcriptDisplay = document.getElementById('transcript-display');
   if (transcriptDisplay) transcriptDisplay.style.display = 'none';
 }
-
 function toggleSessionUI(active: boolean): void {
-  const btnStart = document.getElementById('btn-start-session') as HTMLButtonElement;
+  const btnStartGen = document.getElementById('btn-start-general') as HTMLButtonElement;
+  const btnStartScen = document.getElementById('btn-start-scenario') as HTMLButtonElement;
+  const modeSelector = document.getElementById('mode-selector-card');
   const btnStop = document.getElementById('btn-stop-session') as HTMLButtonElement;
+  const btnPause = document.getElementById('btn-pause-session') as HTMLButtonElement;
   const statsCard = document.getElementById('live-stats-card');
   const historyCard = document.getElementById('hint-history-card');
+  const sessionCard = document.getElementById('session-card');
 
-  if (btnStart) btnStart.style.display = active ? 'none' : 'flex';
+  if (btnStartGen) btnStartGen.style.display = active ? 'none' : 'block';
+  if (btnStartScen) btnStartScen.style.display = active ? 'none' : 'block';
+  if (modeSelector) modeSelector.style.display = active ? 'none' : 'block';
+  
+  // Hide the specific practice areas when active to declutter
+  if (active) {
+    const genArea = document.getElementById('general-practice-area');
+    const scenArea = document.getElementById('scenario-practice-area');
+    if (genArea) genArea.style.display = 'none';
+    if (scenArea) scenArea.style.display = 'none';
+  }
+
+  if (sessionCard) sessionCard.style.display = active ? 'block' : 'none';
   if (btnStop) btnStop.style.display = active ? 'flex' : 'none';
+  if (btnPause) {
+    btnPause.style.display = active ? 'flex' : 'none';
+    btnPause.textContent = 'Pause';
+    btnPause.classList.remove('btn-highlight');
+    btnPause.classList.add('btn-neutral');
+  }
   if (statsCard) statsCard.style.display = active ? 'block' : 'none';
   if (historyCard) historyCard.style.display = active ? 'block' : 'none';
 }
@@ -620,13 +714,15 @@ function handleSessionState(state: SessionState): void {
       silence_detected: 'Silence!',
       chunk_generating: 'Generating...',
       hud_flash: 'Hint Sent',
+      paused: 'Paused',
       session_end: 'Ended',
     };
     status.textContent = labels[state] ?? state;
     status.className = state === 'listening' ? 'badge badge-positive' :
                        state === 'loading_vad' ? 'badge badge-accent' :
                        state === 'silence_detected' ? 'badge badge-negative' :
-                       state === 'hud_flash' ? 'badge badge-accent' : 'badge badge-neutral';
+                       state === 'hud_flash' ? 'badge badge-accent' : 
+                       state === 'paused' ? 'badge badge-neutral' : 'badge badge-neutral';
   }
 
   if (vadDot) {

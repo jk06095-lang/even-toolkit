@@ -2,7 +2,7 @@
  * Combat View — Phase 2 UI
  * Uses Even Realities design system tokens.
  *
- * Layout: Topic Selector (pre-session) → Combat Session (active) → Stats
+ * Layout: Mode Selector -> (General Practice OR Scenario Training) -> Combat Session -> Stats
  * Enhanced with: real-time waveform, expression tracking, scenario context
  */
 
@@ -22,34 +22,64 @@ export function renderCombatView(): string {
     <div class="phase-view" id="phase2-view">
       <div class="phase-indicator p2">● Active Training</div>
 
-      <div class="card">
+      <!-- Mode Selector -->
+      <div class="card" id="mode-selector-card">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-surface-light)">📅</div>
-          <h3>Week</h3>
+          <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">🎯</div>
+          <h3>Select Training Mode</h3>
         </div>
-        <div class="week-selector" id="week-selector">${weekOptions}</div>
-        <p class="text-detail" id="week-desc" style="text-align: center; color: var(--color-text-dim);"></p>
+        <div style="display: flex; gap: var(--spacing-same); margin-top: var(--spacing-same);">
+          <div class="mode-card" id="btn-mode-general" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🧠</div>
+            <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">General Practice</div>
+            <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Curriculum-based random hints</div>
+          </div>
+          <div class="mode-card" id="btn-mode-scenario" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
+            <div style="font-size: 24px; margin-bottom: 8px;">🎭</div>
+            <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">Scenario Training</div>
+            <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Focused idiom & situation practice</div>
+          </div>
+        </div>
       </div>
 
-      <!-- Topic Selector Area (replaced by topic-selector-view dynamically) -->
-      <div id="topic-selector-area"></div>
-
-      <!-- Selected Topic Display (shown after selection) -->
-      <div class="card" id="selected-topic-card" style="display: none;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span id="selected-topic-emoji" style="font-size: 24px;"></span>
-            <div>
-              <div class="text-normal-body" id="selected-topic-label" style="color: var(--color-text); font-weight: 600;"></div>
-              <div class="text-detail" id="selected-topic-situation" style="color: var(--color-text-muted);"></div>
-            </div>
+      <!-- General Practice View -->
+      <div id="general-practice-area" style="display: none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="icon" style="background: var(--color-surface-light)">📅</div>
+            <h3>Curriculum Week</h3>
           </div>
-          <button class="btn" id="btn-change-topic" style="padding: 4px 10px; font-size: 11px; min-width: auto;">Change</button>
+          <div class="week-selector" id="week-selector">${weekOptions}</div>
+          <p class="text-detail" id="week-desc" style="text-align: center; color: var(--color-text-dim);"></p>
+        </div>
+        <div style="margin-top: var(--spacing-cross);">
+          <button class="btn btn-highlight btn-full" id="btn-start-general">Start Curriculum Session</button>
+        </div>
+      </div>
+
+      <!-- Scenario Practice View -->
+      <div id="scenario-practice-area" style="display: none;">
+        <div id="topic-selector-area"></div>
+        
+        <div class="card" id="selected-topic-card" style="display: none;">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="selected-topic-emoji" style="font-size: 24px;"></span>
+              <div>
+                <div class="text-normal-body" id="selected-topic-label" style="color: var(--color-text); font-weight: 600;"></div>
+                <div class="text-detail" id="selected-topic-situation" style="color: var(--color-text-muted);"></div>
+              </div>
+            </div>
+            <button class="btn" id="btn-change-topic" style="padding: 4px 10px; font-size: 11px; min-width: auto;">Change</button>
+          </div>
+          <div style="margin-top: var(--spacing-cross);">
+             <button class="btn btn-highlight btn-full" id="btn-start-scenario">Start Scenario Session</button>
+          </div>
         </div>
       </div>
 
       <!-- Combat Session Card -->
-      <div class="card" id="session-card">
+      <div class="card" id="session-card" style="display: none;">
         <div class="card-header">
           <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">⚔</div>
           <h3>Combat Session</h3>
@@ -110,8 +140,8 @@ export function renderCombatView(): string {
 
         <!-- Action Buttons -->
         <div style="margin-top: var(--spacing-cross); display: flex; gap: var(--spacing-same);">
-          <button class="btn btn-highlight btn-full" id="btn-start-session">Start Session</button>
-          <button class="btn btn-danger" id="btn-stop-session" style="display: none;">Stop</button>
+          <button class="btn btn-neutral btn-full" id="btn-pause-session">Pause</button>
+          <button class="btn btn-danger btn-full" id="btn-stop-session">Stop Session</button>
         </div>
       </div>
 

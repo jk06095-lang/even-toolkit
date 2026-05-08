@@ -24,7 +24,7 @@ import { defaultModelFetcher } from '@ricky0123/vad-web/dist/default-model-fetch
 
 ort.env.wasm.wasmPaths = '/';
 
-export type VADState = 'idle' | 'loading' | 'listening' | 'error';
+export type VADState = 'idle' | 'loading' | 'listening' | 'paused' | 'error';
 
 export interface VADConfig {
   /** Silence threshold in ms before triggering hint. Default: 3000 */
@@ -240,6 +240,37 @@ export class VADManager {
   }
 
   /**
+   * Pause VAD processing without fully stopping.
+   */
+  async pause(): Promise<void> {
+    this.clearSilenceTimer();
+    if (this.vad) {
+      console.log('[VAD] Pausing VAD instance...');
+      if ('pause' in this.vad) {
+        await (this.vad as any).pause();
+      }
+    }
+    this.setState('paused');
+  }
+
+  /**
+   * Resume VAD processing after being paused.
+   */
+  async resume(): Promise<void> {
+    if (this.vad) {
+      console.log('[VAD] Resuming VAD instance...');
+      if ('resume' in this.vad) {
+        await (this.vad as any).resume();
+      } else if ('start' in this.vad) {
+        await (this.vad as any).start(); // MicVAD uses start()
+      }
+    }
+    this._lastSpeechTime = Date.now();
+    this.startSilenceTimer();
+    this.setState('listening');
+  }
+
+  /**
    * Update the silence threshold (for Week progression).
    */
   updateThreshold(ms: number): void {
@@ -366,6 +397,14 @@ class BridgeVAD {
     this.unsub?.();
     this.processor.pause();
     await this.hud.setAudioCapture(false);
+  }
+
+  async pause(): Promise<void> {
+    this.processor.pause();
+  }
+
+  async resume(): Promise<void> {
+    this.processor.resume();
   }
 
   private async handlePcm(bytes: Uint8Array): Promise<void> {

@@ -22,6 +22,7 @@ export type SessionState =
   | 'silence_detected'
   | 'chunk_generating'
   | 'hud_flash'
+  | 'paused'
   | 'session_end';
 
 export interface WeekConfig {
@@ -400,6 +401,49 @@ export class SessionEngine {
 
     this.callbacks.onSessionLog(log);
     this.setState('session_end');
+  }
+
+  /**
+   * Pause the session temporarily.
+   */
+  async pause(): Promise<void> {
+    if (this._state !== 'listening' && this._state !== 'silence_detected' && this._state !== 'hud_flash') return;
+    
+    this.stopSilenceCountdown();
+    
+    if (this.speechRecognizer) {
+      this.speechRecognizer.stop();
+    }
+    
+    if (this.vad) {
+      await this.vad.pause();
+    }
+    
+    this.setState('paused');
+    if (this.hudRef) {
+      this.hudRef.showPaused();
+    }
+  }
+
+  /**
+   * Resume a paused session.
+   */
+  async resume(): Promise<void> {
+    if (this._state !== 'paused') return;
+    
+    if (this.vad) {
+      await this.vad.resume();
+    }
+    
+    if (this.speechRecognizer) {
+      this.speechRecognizer.start();
+    }
+    
+    this.setState('listening');
+    this.startSilenceCountdown();
+    if (this.hudRef) {
+      this.hudRef.showListening();
+    }
   }
 
   // ── Internal Handlers ──

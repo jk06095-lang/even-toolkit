@@ -378,8 +378,25 @@ export class HUDController {
       this._chatLines.push({ type: 'system', text: '★ PATTERN ACQUIRED' });
       this._actionBarState = `★ GREAT JOB`;
       await this.updateCombatChat();
+      
+      setTimeout(async () => {
+        if (this._actionBarState === `★ GREAT JOB`) {
+          this._actionBarState = 'LISTENING';
+          await this.updateCombatChat();
+        }
+      }, 2000);
     } else {
       await this.showText('\n  ★ KEEP GOING!');
+    }
+  }
+
+  async showPaused(): Promise<void> {
+    this._mode = 'combat';
+    if (this._combatInitialized) {
+      this._actionBarState = '‖ PAUSED';
+      await this.updateCombatChat();
+    } else {
+      await this.showText('\n  ‖ PAUSED');
     }
   }
 
