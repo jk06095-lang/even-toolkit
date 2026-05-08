@@ -10,6 +10,7 @@ import { generateChunk, evaluateSpeech, type ChunkResult } from './chunk-generat
 import type { ChunkCategory } from './fallback-chunks';
 import type { HUDController } from '../hud/hud-controller';
 import { SpeechRecognizer } from './speech-recognizer';
+import { TranscriptStore, type SessionTranscript } from './transcript-store';
 
 // ── Types ──
 
@@ -50,6 +51,8 @@ export interface SessionLog {
   selfResponseRate: number; // % of times user spoke without hint
   hintHistory: { chunk: string; source: string; timestamp: number }[];
   silenceDurations: number[];
+  /** Full transcript saved to cache — available for export */
+  transcript?: SessionTranscript;
 }
 
 export interface SessionCallbacks {
@@ -92,6 +95,7 @@ export class SessionEngine {
   private lastVolume = 0;
   private speechRecognizer: SpeechRecognizer | null = null;
   private lastLiveTranscript = '';
+  private transcriptStore: TranscriptStore | null = null;
 
   constructor(week: number, callbacks: SessionCallbacks) {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
@@ -150,6 +154,13 @@ export class SessionEngine {
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
 
+    // Initialize transcript cache
+    this.transcriptStore = new TranscriptStore(
+      this.weekConfig.week,
+      this._topic,
+      this._category,
+    );
+
     this.vad = new VADManager({
       silenceThresholdMs: this.weekConfig.silenceThresholdMs,
       hud,
@@ -193,6 +204,9 @@ export class SessionEngine {
               this.callbacks.onTranscript(result.transcript);
             }
 
+            // Record to cache
+            this.transcriptStore?.addSpeech(result.transcript, 'gemini_eval');
+
             // If Gemini returned a hint chunk (meaning speech was bad) and we are still listening
             if (result.chunk) {
               this.hintCount++;
@@ -202,6 +216,9 @@ export class SessionEngine {
                 source: result.source,
                 timestamp: Date.now(),
               });
+
+              // Record hint to cache
+              this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
               // Check if session was stopped during evaluation
               if ((this._state as any) === 'session_end') return;
@@ -282,6 +299,10 @@ export class SessionEngine {
       onFinalResult: (text) => {
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, true);
+        // Record finalized speech recognition to cache
+        if (text.trim()) {
+          this.transcriptStore?.addSpeech(text.trim(), 'live_final');
+        }
         // Update glasses bottom zone with confirmed text
         if (this.hudRef && text.trim()) {
           this.hudRef.showLiveTranscript(`✓ ${text.trim()}`);
@@ -351,6 +372,10 @@ export class SessionEngine {
       ? this.silenceDurations.reduce((a, b) => a + b, 0) / this.silenceDurations.length
       : 0;
 
+    // Finalize transcript cache
+    const transcript = this.transcriptStore?.finalize();
+    this.transcriptStore = null;
+
     const log: SessionLog = {
       startTime: this.sessionStartTime,
       endTime,
@@ -365,6 +390,7 @@ export class SessionEngine {
         : 0,
       hintHistory: this.hintHistory,
       silenceDurations: this.silenceDurations,
+      transcript,
     };
 
     this.callbacks.onSessionLog(log);
@@ -380,6 +406,9 @@ export class SessionEngine {
     this.silenceCount++;
     const silenceDur = this.vad?.silenceDurationMs ?? 0;
     this.silenceDurations.push(silenceDur);
+
+    // Record silence event to cache
+    this.transcriptStore?.addSilence(silenceDur);
 
     this.setState('silence_detected');
     this.callbacks.onSilenceStart();
@@ -419,6 +448,9 @@ export class SessionEngine {
           source: result.source,
           timestamp: Date.now(),
         });
+
+        // Record hint to cache
+        this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
         this.setState('hud_flash');
         this.callbacks.onChunkGenerated(result);

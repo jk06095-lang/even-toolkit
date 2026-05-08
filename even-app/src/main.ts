@@ -23,6 +23,8 @@ import { importDebrief, type StoredDebrief } from './debrief/json-parser';
 import { AmbientScheduler, type PendingItem } from './ambient/scheduler';
 import { EchoDisplay } from './ambient/echo-display';
 import { HUDController } from './hud/hud-controller';
+import { TranscriptStore } from './combat/transcript-store';
+import { downloadExportJSON } from './combat/transcript-export';
 
 // ── Global State ──
 
@@ -334,10 +336,7 @@ async function startSession(): Promise<void> {
           const now = new Date();
           timing.textContent = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         }
-        // Auto-hide after 8 seconds
-        setTimeout(() => {
-          if (display) display.style.display = 'none';
-        }, 8000);
+        // Keep visible throughout session — no auto-hide
       }
     },
     onLiveTranscript: (text, isFinal) => {
@@ -350,7 +349,8 @@ async function startSession(): Promise<void> {
         liveText.textContent = text;
 
         if (isFinal) {
-          // Move final text to the "Recognized" display
+          // Update the recognized display with final text
+          // (does NOT hide it — stays visible through session)
           const display = document.getElementById('transcript-display');
           const transcriptText = document.getElementById('transcript-text');
           const timing = document.getElementById('speech-timing');
@@ -635,6 +635,9 @@ function bindDebriefEvents(): void {
       errorEl.style.display = 'block';
     }
   });
+
+  // Render cached session export list
+  renderSessionExportList();
 }
 
 function showDebriefResult(stored: StoredDebrief): void {
@@ -653,6 +656,81 @@ function showDebriefResult(stored: StoredDebrief): void {
       .map((c) => `<li>${c.target} <span style="color: var(--color-text-muted)">| intervals: ${c.interval.join(', ')}min</span></li>`)
       .join('');
   }
+}
+
+/**
+ * Render the list of cached combat sessions available for export.
+ */
+function renderSessionExportList(): void {
+  const listEl = document.getElementById('session-export-list');
+  const emptyEl = document.getElementById('session-export-empty');
+  if (!listEl) return;
+
+  const summaries = TranscriptStore.getSummaries();
+
+  if (summaries.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listEl.innerHTML = summaries
+    .slice()
+    .reverse() // most recent first
+    .map((s) => {
+      const date = new Date(s.startTime);
+      const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      const durationSec = s.endTime ? Math.round((s.endTime - s.startTime) / 1000) : 0;
+      const durationStr = durationSec > 60 ? `${Math.floor(durationSec / 60)}m${durationSec % 60}s` : `${durationSec}s`;
+      return `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; margin-bottom: 6px; background: var(--color-surface-light); border-radius: var(--radius); border-left: 3px solid var(--phase2);">
+          <div style="flex: 1; min-width: 0;">
+            <div class="text-normal-body" style="color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">W${s.week} · ${s.topic}</div>
+            <div class="text-detail" style="color: var(--color-text-muted);">${dateStr} · ${durationStr} · 💬${s.speechCount} 💡${s.hintCount}</div>
+          </div>
+          <button class="btn" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-export-session="${s.sessionId}">Export</button>
+        </div>
+      `;
+    })
+    .join('');
+
+  // Bind export buttons
+  listEl.querySelectorAll('[data-export-session]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const sessionId = (btn as HTMLElement).dataset.exportSession;
+      if (!sessionId) return;
+
+      const statusEl = document.getElementById('session-export-status');
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = 'Generating 3-stage JSON...';
+        statusEl.style.background = 'var(--color-accent-alpha)';
+        statusEl.style.color = 'var(--color-accent)';
+      }
+
+      try {
+        const sessionData = TranscriptStore.getById(sessionId);
+        if (!sessionData) throw new Error('Session not found in cache');
+
+        await downloadExportJSON(sessionData);
+
+        if (statusEl) {
+          statusEl.textContent = '✓ Export downloaded successfully';
+          statusEl.style.background = 'var(--color-positive-alpha)';
+          statusEl.style.color = 'var(--color-positive)';
+        }
+      } catch (err) {
+        console.error('[Export] Failed:', err);
+        if (statusEl) {
+          statusEl.textContent = `✗ Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+          statusEl.style.background = 'var(--color-negative-alpha, rgba(239,68,68,0.1))';
+          statusEl.style.color = 'var(--color-negative)';
+        }
+      }
+    });
+  });
 }
 
 // ═══════════════════════════════════════════
