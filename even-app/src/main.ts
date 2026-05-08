@@ -48,23 +48,19 @@ function renderApp(): void {
   const app = document.getElementById('app')!;
   app.innerHTML = `
     <!-- Header -->
-    <header class="app-header">
-      <div class="logo">CHEATKEY</div>
-      <h1>Project ECHO</h1>
-      <div class="subtitle">The Agent Pipeline — 4-Week English Combat Training</div>
+    <header class="app-header" style="padding: 16px 0; display: flex; align-items: center; justify-content: center; gap: 16px;">
+      <h1 style="margin: 0; font-size: 22px;">Project ECHO</h1>
+      <!-- G2 Connection Badge -->
+      <div class="connection-badge" id="g2-badge" style="margin: 0;">
+        <span class="status-dot idle" id="g2-dot"></span>
+        <span id="g2-badge-text">G2 Glasses: Connecting...</span>
+      </div>
     </header>
 
-    <!-- G2 Connection -->
-    <div style="text-align: center; margin-bottom: 20px;">
-      <div class="connection-badge" id="g2-badge">
-        <span class="status-dot idle" id="g2-dot"></span>
-        G2 Glasses: Initializing Bridge...
-      </div>
-      <div id="g2-diagnostics" style="font-size: 11px; color: var(--color-text-muted); margin-top: 5px; display: none;">
-        Device: <span id="diag-status">none</span> | 
-        Startup: <span id="diag-startup">-</span> |
-        Wearing: <span id="diag-wearing">-</span>
-      </div>
+    <div id="g2-diagnostics" style="text-align: center; font-size: 11px; color: var(--color-text-muted); margin-bottom: 20px; display: none;">
+      Device: <span id="diag-status">none</span> | 
+      Startup: <span id="diag-startup">-</span> |
+      Wearing: <span id="diag-wearing">-</span>
     </div>
 
     <!-- Learning Flow Navigation -->
@@ -140,7 +136,7 @@ async function initHUD(): Promise<void> {
   const diagWearing = document.getElementById('diag-wearing');
   
   if (badge) {
-    badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: Connecting...`;
+    badge.innerHTML = `<span class="status-dot idle" id="g2-dot"></span><span id="g2-badge-text">G2 Glasses: Connecting...</span>`;
     badge.style.cursor = 'wait';
   }
 

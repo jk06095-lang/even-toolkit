@@ -348,9 +348,24 @@ export class HUDController {
   async flashChunk(chunk: string): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      this._chatLines.push({ type: 'tool', text: `Hint: ${chunk}` });
+      // Add depth spacing
+      this._chatLines.push({ type: 'text', text: '' });
+      const lineIdx = this._chatLines.length;
+      // Start slightly indented
+      this._chatLines.push({ type: 'tool', text: `  ▶ ${chunk}` });
+      this._chatLines.push({ type: 'text', text: '' });
+      
       this._actionBarState = `▶ HINT DELIVERED`;
       await this.updateCombatChat();
+      
+      // Depth focus animation: slide left to bring to foreground
+      setTimeout(() => {
+        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'tool') {
+          this._chatLines[lineIdx].text = `▶ ${chunk}`;
+          this.updateCombatChat();
+        }
+      }, 150);
+      
     } else {
       await this.showText(`\n  ▶ ${chunk}`);
     }
@@ -375,9 +390,30 @@ export class HUDController {
   async showGoodJob(): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      this._chatLines.push({ type: 'system', text: '★ PATTERN ACQUIRED' });
+      // Add depth spacing
+      this._chatLines.push({ type: 'text', text: '' });
+      const lineIdx = this._chatLines.length;
+      // Start far away (highly indented)
+      this._chatLines.push({ type: 'system', text: '    ★ PATTERN ACQUIRED ★' });
+      this._chatLines.push({ type: 'text', text: '' });
+      
       this._actionBarState = `★ GREAT JOB`;
       await this.updateCombatChat();
+      
+      // Depth popup animation: expand outwards to user's face
+      setTimeout(() => {
+        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
+          this._chatLines[lineIdx].text = '  ★ PATTERN ACQUIRED ★';
+          this.updateCombatChat();
+          
+          setTimeout(() => {
+            if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
+              this._chatLines[lineIdx].text = '★ PATTERN ACQUIRED ★';
+              this.updateCombatChat();
+            }
+          }, 100);
+        }
+      }, 100);
       
       setTimeout(async () => {
         if (this._actionBarState === `★ GREAT JOB`) {
