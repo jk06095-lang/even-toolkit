@@ -170,6 +170,9 @@ async function initHUD(): Promise<void> {
         echoDisplay = new EchoDisplay();
         echoDisplay.setHUD(hud);
       }
+
+      // Enter standby screen on glasses (1-time render)
+      hud?.enterStandby();
     } else {
       badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: ${status.connectType.toUpperCase()} (Retry)`;
       badge.onclick = () => {
@@ -484,6 +487,8 @@ async function startSession(): Promise<void> {
           label.style.color = 'var(--phase4)';
         }
       }
+      // Track mic readiness on HUD for standby screen
+      hud?.setMicReady(true);
     },
     onVolume: (volume: number) => {
       // Drive 16 waveform bars with real volume data
@@ -520,7 +525,8 @@ async function startSession(): Promise<void> {
   // UI updates
   toggleSessionUI(true);
 
-  // HUD
+  // HUD — exit standby, enter combat mode
+  hud?.exitStandby();
   hud?.showListening();
 
   try {
@@ -540,7 +546,10 @@ async function stopSession(): Promise<void> {
   }
   toggleSessionUI(false);
   handleSessionState('idle'); // Force UI to standby
-  hud?.clearDisplay();
+
+  // Return glasses to standby screen instead of blank
+  hud?.setSessionActive(false);
+  hud?.enterStandby();
 
   // Reset waveform bars
   for (let i = 0; i < 16; i++) {

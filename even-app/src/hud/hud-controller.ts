@@ -24,11 +24,15 @@ import {
   DeviceConnectType,
 } from '@evenrealities/even_hub_sdk';
 
+import { buildChatDisplay, type ChatLine } from '@toolkit/glasses/glass-chat-display';
+import { renderTextPageLines } from '@toolkit/glasses/types';
+import { renderTimerLines, renderTimerCompact } from '@toolkit/glasses/timer-display';
+
 // G2 display constants
 const W = 576;
 const H = 288;
 
-export type HUDMode = 'off' | 'calibration' | 'combat' | 'ambient' | 'debrief';
+export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
 
 export class HUDController {
   private bridge: EvenAppBridge | null = null;
@@ -41,6 +45,12 @@ export class HUDController {
   private audioPacketCount = 0;
   private lastVolumeBars = '';
   private statusListeners: Array<(status: any) => void> = [];
+
+  // ── Standby Screen State ──
+  private _batteryLevel: number | undefined = undefined;
+  private _micReady = false;
+  private _isStandby = false;
+  private _isSessionActive = false;
 
   get ready(): boolean { return this._ready; }
   get mode(): HUDMode { return this._mode; }
@@ -196,6 +206,11 @@ export class HUDController {
       console.log(`[HUD] Hardware Connection State: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
     }
     this._connected = isConnected;
+
+    // Cache battery level from status
+    if (status.batteryLevel !== undefined) {
+      this._batteryLevel = status.batteryLevel;
+    }
     
     // Notify app-level listeners (for main.ts UI)
     for (const cb of this.statusListeners) {
@@ -227,30 +242,46 @@ export class HUDController {
   }
 
   // ── Phase 2: Combat ──
-  //
-  // Glasses display layout:
-  // ┌──────────────────────────────────┐
-  // │  ████████████░░░░  3s remaining  │  ← Header: silence gauge OR hint
-  // │──────────────────────────────────│
-  // │  "I think the best place is..."  │  ← Body: live transcript
-  // └──────────────────────────────────┘
-  //
+  
   private _lastTranscript = '';
   private _combatInitialized = false;
+  private _chatLines: ChatLine[] = [];
+  private _currentTopic = 'TRAINING';
+  private _actionBarState = 'Ready';
 
   /**
-   * Initialize the two-zone combat layout on glasses.
-   * Must be called once before using quickUpdate-based methods.
+   * Set the current topic for the combat header.
    */
+  setCombatTopic(topic: string) {
+    this._currentTopic = topic.toUpperCase();
+  }
+
+  private async updateCombatChat(): Promise<void> {
+    if (!this._combatInitialized) return;
+    const displayData = buildChatDisplay({
+      title: this._currentTopic,
+      actionBar: this._actionBarState,
+      chatLines: this._chatLines,
+      scrollOffset: 0,
+      contentSlots: 7,
+      maxChars: 44,
+    });
+    const content = renderTextPageLines(displayData.lines);
+    // Container ID 2 is 'main' in showText() layout
+    await this.quickUpdate(2, 'main', content);
+  }
+
   async initCombatDisplay(): Promise<void> {
     this._mode = 'combat';
     this._combatInitialized = false;
     this._lastTranscript = '';
-    await this.showTwoZone(
-      '████████████████ Ready',
-      'Speak now...',
-    );
+    this._chatLines = [{ type: 'system', text: 'System ready. Start speaking...' }];
+    this._actionBarState = '████████████████';
+    
+    // Switch to single-text container layout for chat display
+    await this.showText('Initializing chat...');
     this._combatInitialized = true;
+    await this.updateCombatChat();
   }
 
   async showListening(): Promise<void> {
@@ -259,86 +290,79 @@ export class HUDController {
       await this.initCombatDisplay();
       return;
     }
-    // Update header: full gauge
-    await this.quickUpdate(2, 'hdr', '  ████████████████ Ready');
+    this._actionBarState = renderTimerCompact({ running: true, remaining: 0, total: 0 }).replace('--', 'LISTENING');
+    await this.updateCombatChat();
   }
 
-  /**
-   * Update the live transcript on the bottom zone of glasses.
-   * Called frequently — uses quickUpdate for flicker-free display.
-   */
   async showLiveTranscript(text: string): Promise<void> {
     if (!this._combatInitialized) return;
-    if (text === this._lastTranscript) return; // Skip duplicate updates
+    if (text === this._lastTranscript) return;
     this._lastTranscript = text;
-    // Truncate for glasses display width
-    const displayText = text.length > 40 ? '...' + text.slice(-37) : text;
-    await this.quickUpdate(3, 'body', `\n  "${displayText}"`);
+
+    // Update or add the transcript line
+    const lastLine = this._chatLines[this._chatLines.length - 1];
+    if (lastLine && lastLine.type === 'prompt') {
+      lastLine.text = text;
+    } else {
+      this._chatLines.push({ type: 'prompt', text });
+    }
+
+    // Keep history brief
+    if (this._chatLines.length > 20) this._chatLines.shift();
+    
+    await this.updateCombatChat();
   }
 
-  /**
-   * Show real-time volume visualization on glasses while user speaks.
-   * Uses textContainerUpgrade for flicker-free updates.
-   */
   async showSpeechActive(volume: number = 0): Promise<void> {
     this._mode = 'combat';
     const bars = this.volumeToBars(volume);
-    // Only update if bars changed to avoid flooding
     if (bars === this.lastVolumeBars) return;
     this.lastVolumeBars = bars;
-    // Update header with volume bars + "Speaking"
+    
     if (this._combatInitialized) {
-      await this.quickUpdate(2, 'hdr', `  ${bars} Speaking...`);
+      this._actionBarState = `${bars} SPEAKING`;
+      await this.updateCombatChat();
     }
   }
 
-  /**
-   * Show silence countdown gauge on glasses header.
-   * Bottom zone keeps showing the last recognized transcript.
-   */
   async showSilenceCountdown(secondsLeft: number, thresholdSeconds: number): Promise<void> {
     this._mode = 'combat';
     if (!this._combatInitialized) return;
-    const pct = Math.max(0, secondsLeft / thresholdSeconds);
-    const totalBlocks = 16;
-    const filled = Math.round(pct * totalBlocks);
-    const bar = '█'.repeat(filled) + '░'.repeat(totalBlocks - filled);
-    // Only update header — body keeps the transcript
-    await this.quickUpdate(2, 'hdr', `  ${bar} ${secondsLeft}s`);
+    
+    // Generate precise unicode timer bar for the action bar
+    const timerBar = renderTimerLines({ running: true, remaining: secondsLeft, total: thresholdSeconds }, 12)[1];
+    this._actionBarState = `${timerBar} ${secondsLeft}s`;
+    await this.updateCombatChat();
   }
 
   async showSilenceWarning(seconds: number): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      await this.quickUpdate(2, 'hdr', `  ░░░░░░░░░░░░░░░░ ${seconds}s`);
+      this._actionBarState = `! SILENCE: ${seconds}s`;
+      await this.updateCombatChat();
     } else {
-      await this.showTwoZone(`○ SILENCE: ${seconds}s`, '');
+      await this.showText(`\n\n  ○ SILENCE: ${seconds}s`);
     }
   }
 
-  /**
-   * Show hint in the header zone (replaces the gauge).
-   * Bottom zone keeps the last transcript.
-   */
   async flashChunk(chunk: string): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      // Replace gauge with hint in the header
-      await this.quickUpdate(2, 'hdr', `  ▶ ${chunk}`);
+      this._chatLines.push({ type: 'tool', text: `Hint: ${chunk}` });
+      this._actionBarState = `▶ HINT DELIVERED`;
+      await this.updateCombatChat();
     } else {
-      await this.showTwoZone(
-        `▶ ${chunk}`,
-        this._lastTranscript ? `"${this._lastTranscript.slice(0, 35)}"` : '',
-      );
+      await this.showText(`\n  ▶ ${chunk}`);
     }
   }
 
   async showSpeedUp(chunk: string): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      await this.quickUpdate(2, 'hdr', `  ▲ ${chunk}`);
+      this._chatLines.push({ type: 'error', text: `SPEED UP! ${chunk}` });
+      await this.updateCombatChat();
     } else {
-      await this.showTwoZone('▲ SPEED UP!', chunk);
+      await this.showText(`\n  ▲ SPEED UP!\n  ${chunk}`);
     }
   }
 
@@ -351,9 +375,11 @@ export class HUDController {
   async showGoodJob(): Promise<void> {
     this._mode = 'combat';
     if (this._combatInitialized) {
-      await this.quickUpdate(2, 'hdr', '  ★ KEEP GOING!');
+      this._chatLines.push({ type: 'system', text: '★ PATTERN ACQUIRED' });
+      this._actionBarState = `★ GREAT JOB`;
+      await this.updateCombatChat();
     } else {
-      await this.showTwoZone('★ KEEP GOING!', '');
+      await this.showText('\n  ★ KEEP GOING!');
     }
   }
 
@@ -403,11 +429,107 @@ export class HUDController {
     await this.showText(lines.join('\n'));
   }
 
+  // ── Standby Screen ──
+
+  /**
+   * Render the standby/idle screen on G2 glasses.
+   * Shows connection status, mic readiness, battery level, and app branding.
+   * Single render — no periodic refresh loop.
+   *
+   * Layout (576×288 4-bit greyscale):
+   * ┌──────────────────────────────────┐
+   * │                                  │
+   * │        ★ PROJECT ECHO            │
+   * │        Ready to Go               │
+   * │                                  │
+   * │  ● Connected  ♪ Mic OK  █▇ 78%  │
+   * └──────────────────────────────────┘
+   */
+  async showStandbyScreen(): Promise<void> {
+    this._mode = 'standby';
+    this._isStandby = true;
+
+    // Build status indicators
+    const connStr = this._connected ? '● Connected' : '○ Disconnected';
+    const micStr = this._micReady ? '♪ Mic OK' : '♪ Mic --';
+    const battStr = this._batteryLevel !== undefined
+      ? `${this.batteryIcon(this._batteryLevel)} ${this._batteryLevel}%`
+      : '';
+
+    // Build the status line (compact, single row)
+    const statusParts = [connStr, micStr];
+    if (battStr) statusParts.push(battStr);
+    const statusLine = statusParts.join('  ');
+
+    // Current time (HH:MM)
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    const lines = [
+      '',
+      '',
+      '',
+      '       ★ PROJECT ECHO',
+      '       Ready to Go',
+      '',
+      `  ${statusLine}`,
+      `  ${timeStr}`,
+    ];
+
+    await this.showText(lines.join('\n'));
+    console.log('[HUD] Standby screen displayed');
+  }
+
+  /**
+   * Enter standby mode — called when G2 is connected but no session is active.
+   * Single render, no loop.
+   */
+  async enterStandby(): Promise<void> {
+    if (this._isSessionActive) return; // Don't override active session
+    if (!this._ready || !this._startupDone) return;
+    await this.showStandbyScreen();
+  }
+
+  /**
+   * Exit standby mode — called when a session starts.
+   */
+  exitStandby(): void {
+    this._isStandby = false;
+    this._isSessionActive = true;
+  }
+
+  /**
+   * Mark session as ended — allows re-entering standby.
+   */
+  setSessionActive(active: boolean): void {
+    this._isSessionActive = active;
+  }
+
+  /**
+   * Set mic readiness flag (called when audio packets are received or mic is initialized).
+   */
+  setMicReady(ready: boolean): void {
+    this._micReady = ready;
+  }
+
+  /**
+   * Compact battery icon using G2-supported characters.
+   * Returns a small 2-char gauge based on percentage.
+   */
+  private batteryIcon(pct: number): string {
+    if (pct >= 80) return '█▇';
+    if (pct >= 60) return '█▅';
+    if (pct >= 40) return '▆▃';
+    if (pct >= 20) return '▄▁';
+    return '▂░';
+  }
+
   // ── Common ──
 
   async clearDisplay(): Promise<void> {
     await this.showText(' ');
     this._mode = 'off';
+    this._isStandby = false;
   }
 
   async showStatus(text: string): Promise<void> {
