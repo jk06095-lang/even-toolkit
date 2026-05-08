@@ -20,7 +20,7 @@ export function renderCombatView(): string {
 
   return `
     <div class="phase-view" id="phase2-view">
-      <div class="phase-indicator p2">● Phase 2 — Live Combat</div>
+      <div class="phase-indicator p2">● Active Training</div>
 
       <div class="card">
         <div class="card-header">

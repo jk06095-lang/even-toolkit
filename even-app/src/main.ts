@@ -65,12 +65,12 @@ function renderApp(): void {
       </div>
     </div>
 
-    <!-- Phase Navigation -->
+    <!-- Learning Flow Navigation -->
     <nav class="phase-nav" id="phase-nav">
-      <button class="phase-tab" data-phase="1">Calibrate</button>
-      <button class="phase-tab" data-phase="2">Combat</button>
-      <button class="phase-tab" data-phase="3">Debrief</button>
-      <button class="phase-tab" data-phase="4">Ambient</button>
+      <button class="phase-tab" data-phase="1">Voice Setup</button>
+      <button class="phase-tab" data-phase="2">Combat Training</button>
+      <button class="phase-tab" data-phase="3">Debrief & Export</button>
+      <button class="phase-tab" data-phase="4">Ambient Immersion</button>
     </nav>
 
     <!-- Phase Content -->
