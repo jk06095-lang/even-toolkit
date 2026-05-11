@@ -140,12 +140,16 @@ export class VADManager {
     try {
       console.log('[VAD] Initializing BridgeVAD — hardware mode');
       const bridgeVad = await BridgeVAD.new(this.config.hud, {
-        onFrameProcessed: (probs, frame) => {
+        onVolumeChange: (volume) => {
           if (this.config.onVolumeChange) {
-            this.config.onVolumeChange(calculateRMS(frame));
+            this.config.onVolumeChange(volume);
           }
-          // Forward PCM to speech recognizer for bridge transcription
+        },
+        onPCMFrame: (frame) => {
           this.config.onPCMFrame?.(frame);
+        },
+        onFrameProcessed: (probs, frame) => {
+          // VAD probabilities update (UI uses volume mostly, but VAD uses this internally)
         },
         onSpeechStart: () => {
           this._lastSpeechTime = Date.now();
@@ -330,6 +334,8 @@ interface BridgeVADCallbacks {
   onSpeechStart: () => void;
   onSpeechEnd: (audio: Float32Array) => void;
   onVADMisfire: () => void;
+  onVolumeChange?: (volume: number) => void;
+  onPCMFrame?: (frame: Float32Array) => void;
 }
 
 /**
@@ -450,6 +456,14 @@ class BridgeVAD {
     }
 
     const samples = pcm16ToFloat32(bytes);
+    
+    // Immediately calculate volume and forward PCM for real-time UI/transcription
+    if (this.callbacks.onVolumeChange) {
+      this.callbacks.onVolumeChange(calculateRMS(samples));
+    }
+    if (this.callbacks.onPCMFrame) {
+      this.callbacks.onPCMFrame(samples);
+    }
     
     for (let i = 0; i < samples.length; i++) {
       this.ringBuffer[this.bufferIdx++] = samples[i];
