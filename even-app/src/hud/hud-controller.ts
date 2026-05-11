@@ -22,11 +22,14 @@ import {
   CreateStartUpPageContainer,
   RebuildPageContainer,
   DeviceConnectType,
+  OsEventTypeList,
 } from '@evenrealities/even_hub_sdk';
 
 import { buildChatDisplay, type ChatLine } from '@toolkit/glasses/glass-chat-display';
 import { renderTextPageLines } from '@toolkit/glasses/types';
 import { renderTimerLines, renderTimerCompact } from '@toolkit/glasses/timer-display';
+import { buildScrollableList } from '@toolkit/glasses/glass-display-builders';
+import { mapGlassEvent } from '@toolkit/glasses/action-map';
 
 // G2 display constants
 const W = 576;
@@ -51,6 +54,12 @@ export class HUDController {
   private _micReady = false;
   private _isStandby = false;
   private _isSessionActive = false;
+
+  // ── HUD Interruption Menu State ──
+  private _isInterruptMenuVisible = false;
+  private _menuSelectedIndex = 0; // 0: Resume, 1: Stop
+  private _isConfirmingStop = false;
+  private _onActionCallback?: (action: 'stop' | 'resume') => void;
 
   get ready(): boolean { return this._ready; }
   get mode(): HUDMode { return this._mode; }
@@ -124,23 +133,18 @@ export class HUDController {
 
       // Audio & Event listener
       this.unsubscribeEvents = this.bridge.onEvenHubEvent((event: any) => {
-        // RAW LOGGING for debugging connection issues
-        if (this.audioPacketCount < 3 || !event?.audioEvent) {
-          console.log('[HUD] Incoming EvenHubEvent:', JSON.stringify(event).slice(0, 200));
-        }
-
+        // 1. Handle Audio
         const audioPcm = event?.audioEvent?.audioPcm;
         if (audioPcm && (audioPcm.length > 0 || Array.isArray(audioPcm))) {
           this.audioPacketCount++;
-          // Convert to Uint8Array if it arrived as a regular Array (JSON fallback)
           const pcmData = audioPcm instanceof Uint8Array ? audioPcm : new Uint8Array(audioPcm);
-          
-          if (this.audioPacketCount <= 5) {
-            console.log(`[HUD] Audio packet #${this.audioPacketCount}: ${pcmData.length} bytes`);
-          }
-          for (const cb of this.audioListeners) {
-            cb(pcmData);
-          }
+          for (const cb of this.audioListeners) cb(pcmData);
+        }
+
+        // 2. Handle Touch Gestures
+        const action = mapGlassEvent(event);
+        if (action) {
+          this.handleHUDAction(action);
         }
       });
 
@@ -295,6 +299,7 @@ export class HUDController {
   }
 
   async showLiveTranscript(text: string): Promise<void> {
+    if (this._isInterruptMenuVisible) return; // Don't overwrite menu
     if (!this._combatInitialized) return;
     if (text === this._lastTranscript) return;
     this._lastTranscript = text;
@@ -749,6 +754,110 @@ export class HUDController {
     } catch (err) {
       console.warn('[HUD] audioControl failed:', err);
     }
+  }
+
+  // ── Interruption Menu Handling ──
+
+  /** Register callback for HUD-triggered actions */
+  onAction(cb: (action: 'stop' | 'resume') => void) {
+    this._onActionCallback = cb;
+  }
+
+  /** Mark if a session is currently active (enables/disables menu access) */
+  setSessionActive(active: boolean) {
+    this._isSessionActive = active;
+    if (!active) {
+      this._isInterruptMenuVisible = false;
+      this._isConfirmingStop = false;
+    }
+  }
+
+  private handleHUDAction(action: any) {
+    // Only allow menu if session is active OR if specifically handling GO_BACK to close menu
+    if (!this._isSessionActive && !this._isInterruptMenuVisible) return;
+
+    switch (action.type) {
+      case 'GO_BACK':
+        this.toggleInterruptMenu();
+        break;
+      case 'HIGHLIGHT_MOVE':
+        if (this._isInterruptMenuVisible) {
+          this._menuSelectedIndex = action.direction === 'down' ? 1 : 0;
+          this.updateInterruptMenu();
+        }
+        break;
+      case 'SELECT_HIGHLIGHTED':
+        if (this._isInterruptMenuVisible) {
+          if (this._menuSelectedIndex === 0) {
+            // Option 1: Resume (or No/Go Back in confirmation mode)
+            this.hideInterruptMenu();
+            this._onActionCallback?.('resume');
+          } else {
+            // Option 2: Stop (or Yes/Stop in confirmation mode)
+            if (this._isConfirmingStop) {
+              this.hideInterruptMenu();
+              this._onActionCallback?.('stop');
+            } else {
+              this._isConfirmingStop = true;
+              this._menuSelectedIndex = 0; // Default to 'No' for safety
+              this.updateInterruptMenu();
+            }
+          }
+        }
+        break;
+    }
+  }
+
+  private async toggleInterruptMenu() {
+    if (this._isInterruptMenuVisible) {
+      await this.hideInterruptMenu();
+    } else {
+      await this.showInterruptMenu();
+    }
+  }
+
+  private async showInterruptMenu() {
+    this._isInterruptMenuVisible = true;
+    this._menuSelectedIndex = 0;
+    this._isConfirmingStop = false;
+    await this.updateInterruptMenu();
+  }
+
+  private async hideInterruptMenu() {
+    this._isInterruptMenuVisible = false;
+    this._isConfirmingStop = false;
+    // Restore previous view
+    if (this._mode === 'combat') {
+      await this.updateCombatChat();
+    } else {
+      await this.enterStandby();
+    }
+  }
+
+  private async updateInterruptMenu() {
+    const title = this._isConfirmingStop ? 'CONFIRM STOP?' : 'TRAINING PAUSED';
+    const items = this._isConfirmingStop 
+      ? ['[ NO, GO BACK ]', '[ YES, STOP ]']
+      : ['RESUME TRAINING', 'STOP SESSION'];
+    
+    const displayLines = buildScrollableList({
+      items,
+      highlightedIndex: this._menuSelectedIndex,
+      maxVisible: 5,
+      formatter: (item, idx) => {
+        const prefix = idx === this._menuSelectedIndex ? '▶ ' : '  ';
+        return `${prefix}${item}`;
+      },
+    });
+
+    const content = [
+      `  ★ ${title}`,
+      '  ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+      '',
+      ...displayLines.map(l => l.text),
+    ].join('\n');
+
+    await this.quickUpdate(2, 'main', content);
   }
 
   dispose(): void {

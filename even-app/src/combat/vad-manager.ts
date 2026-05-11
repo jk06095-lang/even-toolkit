@@ -109,6 +109,17 @@ export class VADManager {
       return;
     }
 
+    // Check for HTTPS/Secure Origin issues which block microphones on mobile
+    const isSecure = window.isSecureContext;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure && !isLocalhost) {
+      console.error('[VAD] Browser blocked microphone due to insecure origin (HTTP).');
+      this.config.onStateChange?.('error');
+      // We'll throw a specific message that main.ts can catch and show a UI warning for
+      throw new Error('SECURE_ORIGIN_REQUIRED');
+    }
+
     console.error('[VAD] All audio sources failed — no microphone available');
     this.setState('error');
   }
@@ -175,8 +186,9 @@ export class VADManager {
           baseAssetPath: '/',
           onnxWASMBasePath: '/',
           onFrameProcessed: (probs, frame) => {
+            const volume = calculateRMS(frame);
             if (this.config.onVolumeChange) {
-              this.config.onVolumeChange(calculateRMS(frame));
+              this.config.onVolumeChange(volume);
             }
           },
           onSpeechStart: () => {

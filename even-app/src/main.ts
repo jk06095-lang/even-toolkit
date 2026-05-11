@@ -97,6 +97,15 @@ function renderApp(): void {
 // ── Phase Switching ──
 
 function switchPhase(phase: number): void {
+  // If a training session is active, ask for confirmation before leaving
+  if (phase !== currentPhase && session && session.state !== 'idle') {
+    const confirmLeave = window.confirm('A training session is currently active. Are you sure you want to leave and stop the session?');
+    if (!confirmLeave) return;
+    
+    // User confirmed leaving, so stop the session first
+    stopSession();
+  }
+
   currentPhase = phase;
 
   // Update tabs
@@ -140,7 +149,29 @@ async function initHUD(): Promise<void> {
     badge.style.cursor = 'wait';
   }
 
-  if (!hud) hud = new HUDController();
+  if (!hud) {
+    hud = new HUDController();
+    
+    // Handle actions from the glasses touchpad
+    hud.onAction((action) => {
+      console.log('[App] Action from HUD:', action);
+      if (action === 'stop') {
+        stopSession();
+      } else if (action === 'resume') {
+        // Resume session if it was paused
+        if (session && session.state === 'paused') {
+          session.resume();
+          // Update UI button state if needed
+          const btnPause = document.getElementById('btn-pause-session') as HTMLButtonElement;
+          if (btnPause) {
+            btnPause.textContent = 'Pause';
+            btnPause.classList.remove('btn-highlight');
+            btnPause.classList.add('btn-neutral');
+          }
+        }
+      }
+    });
+  }
 
   // Listen for real-time status changes
   hud.onStatusChanged((status) => {
@@ -585,15 +616,19 @@ async function startSession(): Promise<void> {
   toggleSessionUI(true);
 
   // HUD — exit standby, enter combat mode
+  hud?.setSessionActive(true);
   hud?.exitStandby();
   hud?.showListening();
 
   try {
     await session.start(hud);
-
-
-  } catch (err) {
+  } catch (err: any) {
     console.error('[App] Failed to start session:', err);
+    if (err.message === 'SECURE_ORIGIN_REQUIRED') {
+      alert('🔒 SECURE ORIGIN REQUIRED\n\nTo use the microphone on a mobile device, you must:\n1. Use an HTTPS connection\n2. OR enable "Insecure origins treated as secure" in chrome://flags\n\nPlease add http://' + window.location.host + ' to the allowed list.');
+    } else {
+      alert('Failed to start microphone: ' + err.message);
+    }
     stopSession();
   }
 }

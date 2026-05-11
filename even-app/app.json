@@ -18,6 +18,10 @@
       "desc": "Required for secure Bluetooth connection with G2 hardware."
     },
     {
+      "name": "camera",
+      "desc": "Required for vision-assisted features and sensor stability."
+    },
+    {
       "name": "network",
       "desc": "Required for Gemini AI English coaching and local development assets.",
       "whitelist": [

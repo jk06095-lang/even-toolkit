@@ -59,7 +59,14 @@ export class SpeechRecognizer {
 
     if (!SpeechRecognitionAPI) {
       console.warn('[SpeechRecognizer] Web Speech API not supported');
-      this.callbacks.onError?.('Web Speech API not supported in this browser');
+      const isSecure = window.isSecureContext;
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      
+      if (!isSecure && !isLocalhost) {
+        this.callbacks.onError?.('SECURE_ORIGIN_REQUIRED');
+      } else {
+        this.callbacks.onError?.('Web Speech API not supported in this browser');
+      }
       return false;
     }
 
