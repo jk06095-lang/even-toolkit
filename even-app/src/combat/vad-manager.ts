@@ -169,20 +169,11 @@ export class VADManager {
       });
       
       await bridgeVad.start();
-
-      // Wait up to 5 seconds for first audio packet
-      const gotAudio = await bridgeVad.waitForFirstPacket(5000);
       
-      if (gotAudio) {
-        this.vad = bridgeVad;
-        console.log('[VAD] BridgeVAD: Audio confirmed from glasses mic!');
-        return true;
-      } else {
-        // No audio data — clean up and fallback
-        console.warn('[VAD] BridgeVAD: No audio data received within timeout');
-        await bridgeVad.stop();
-        return false;
-      }
+      // Trust the Bridge stream exactly like Calibration Mode does, no timeout fallback.
+      this.vad = bridgeVad;
+      console.log('[VAD] BridgeVAD: Hardware microphone stream initiated.');
+      return true;
     } catch (err) {
       console.error('[VAD] BridgeVAD initialization failed:', err);
       return false;
@@ -339,19 +330,14 @@ interface BridgeVADCallbacks {
 }
 
 /**
- * Manual VAD implementation for Bridge PCM stream.
- * Does not use browser AudioContext/getUserMedia.
+ * Lightweight Energy-based VAD for Bridge PCM stream.
+ * Mirrors the robust pure-JS capture used in Calibration mode.
  */
 class BridgeVAD {
-  private processor: FrameProcessor;
   private hud: HUDController;
   private callbacks: BridgeVADCallbacks;
   private unsub?: () => void;
   private active = false;
-
-  // Buffer to accumulate frames of exactly 1536 samples for Silero
-  private ringBuffer = new Float32Array(1536);
-  private bufferIdx = 0;
 
   // Audio data reception tracking
   private receivedData = false;
@@ -359,29 +345,22 @@ class BridgeVAD {
   private totalBytes = 0;
   private firstPacketResolve?: (value: boolean) => void;
 
-  static async new(hud: HUDController, callbacks: BridgeVADCallbacks): Promise<BridgeVAD> {
-    const modelURL = '/silero_vad_legacy.onnx';
-    
-    // 1. Load model
-    const model = await SileroLegacy.new(ort, () => defaultModelFetcher(modelURL));
-    
-    // 2. Create FrameProcessor
-    const processor = new FrameProcessor(model.process, model.reset_state, {
-      frameSamples: 1536,
-      positiveSpeechThreshold: 0.5,
-      negativeSpeechThreshold: 0.35,
-      redemptionFrames: 8,
-      preSpeechPadFrames: 1,
-      minSpeechFrames: 3,
-      submitUserSpeechOnPause: false,
-    });
+  // Energy VAD State
+  private isSpeechActive = false;
+  private speechFrames: Float32Array[] = [];
+  private silenceFrames = 0;
+  
+  // Tunable Thresholds
+  private speechThreshold = 0.015; // RMS threshold for speech
+  private minSilenceFrames = 15;   // ~0.5s of silence to finalize chunk
 
-    return new BridgeVAD(hud, processor, callbacks);
+  static async new(hud: HUDController, callbacks: BridgeVADCallbacks): Promise<BridgeVAD> {
+    // Skip ONNX model loading entirely to prevent initialization crashes on device.
+    return new BridgeVAD(hud, callbacks);
   }
 
-  constructor(hud: HUDController, processor: FrameProcessor, callbacks: BridgeVADCallbacks) {
+  constructor(hud: HUDController, callbacks: BridgeVADCallbacks) {
     this.hud = hud;
-    this.processor = processor;
     this.callbacks = callbacks;
   }
 
@@ -423,16 +402,18 @@ class BridgeVAD {
   async stop(): Promise<void> {
     this.active = false;
     this.unsub?.();
-    this.processor.pause();
     await this.hud.setAudioCapture(false);
   }
 
   async pause(): Promise<void> {
-    this.processor.pause();
+    // Energy VAD doesn't strictly need a pause, but we can reset state
+    this.isSpeechActive = false;
+    this.speechFrames = [];
   }
 
   async resume(): Promise<void> {
-    this.processor.resume();
+    this.isSpeechActive = false;
+    this.speechFrames = [];
   }
 
   private async handlePcm(bytes: Uint8Array): Promise<void> {
@@ -450,46 +431,51 @@ class BridgeVAD {
     this.packetCount++;
     this.totalBytes += bytes.length;
 
-    // Periodic diagnostics (every 100 packets)
-    if (this.packetCount % 100 === 0) {
-      console.log(`[VAD] BridgeVAD stats: ${this.packetCount} packets, ${(this.totalBytes / 1024).toFixed(1)} KB total`);
-    }
-
     const samples = pcm16ToFloat32(bytes);
+    const volume = calculateRMS(samples);
     
     // Immediately calculate volume and forward PCM for real-time UI/transcription
     if (this.callbacks.onVolumeChange) {
-      this.callbacks.onVolumeChange(calculateRMS(samples));
+      this.callbacks.onVolumeChange(volume);
     }
     if (this.callbacks.onPCMFrame) {
       this.callbacks.onPCMFrame(samples);
     }
-    
-    for (let i = 0; i < samples.length; i++) {
-      this.ringBuffer[this.bufferIdx++] = samples[i];
-      
-      if (this.bufferIdx >= 1536) {
-        // Frame complete — process it
-        const frame = new Float32Array(this.ringBuffer);
-        this.bufferIdx = 0;
 
-        const result = await this.processor.process(frame);
-        
-        if (result.probs) {
-          this.callbacks.onFrameProcessed(result.probs, frame);
-        }
+    // Energy VAD Logic
+    if (volume > this.speechThreshold) {
+      this.silenceFrames = 0;
+      if (!this.isSpeechActive) {
+        this.isSpeechActive = true;
+        this.speechFrames = [];
+        this.callbacks.onSpeechStart();
+      }
+      this.speechFrames.push(samples);
+      this.callbacks.onFrameProcessed({ isSpeech: 1.0 }, samples);
+    } else {
+      if (this.isSpeechActive) {
+        this.silenceFrames++;
+        this.speechFrames.push(samples); // Append trailing silence
 
-        switch (result.msg) {
-          case Message.SpeechStart:
-            this.callbacks.onSpeechStart();
-            break;
-          case Message.SpeechEnd:
-            if (result.audio) this.callbacks.onSpeechEnd(result.audio);
-            break;
-          case Message.VADMisfire:
-            this.callbacks.onVADMisfire();
-            break;
+        if (this.silenceFrames >= this.minSilenceFrames) {
+          // Finalize speech chunk
+          this.isSpeechActive = false;
+          
+          const totalLength = this.speechFrames.reduce((acc, f) => acc + f.length, 0);
+          const combined = new Float32Array(totalLength);
+          let offset = 0;
+          for (const f of this.speechFrames) {
+            combined.set(f, offset);
+            offset += f.length;
+          }
+          
+          this.callbacks.onSpeechEnd(combined);
+          this.speechFrames = [];
+        } else {
+          this.callbacks.onFrameProcessed({ isSpeech: 1.0 }, samples); // Still considered active
         }
+      } else {
+        this.callbacks.onFrameProcessed({ isSpeech: 0.0 }, samples);
       }
     }
   }
