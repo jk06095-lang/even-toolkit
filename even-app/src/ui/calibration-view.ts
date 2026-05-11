@@ -26,6 +26,16 @@ export function renderCalibrationView(): string {
           </div>
         </div>
 
+        <!-- Calibration Soundwave (shows mic activity) -->
+        <div class="soundwave idle" id="cal-soundwave" style="display: none; margin-bottom: var(--spacing-cross);">
+          <div class="soundwave-bars">
+            ${Array.from({ length: 8 }, (_, i) => `<div class="sw-bar" id="cal-sw-l${7 - i}"></div>`).join('')}
+            <div class="soundwave-mic">🎙</div>
+            ${Array.from({ length: 8 }, (_, i) => `<div class="sw-bar" id="cal-sw-r${i}"></div>`).join('')}
+          </div>
+          <div class="soundwave-status" id="cal-soundwave-status">Waiting for voice input...</div>
+        </div>
+
         <div id="cal-progress" style="display: none">
           <div class="silence-meter">
             <div class="fill" id="cal-progress-bar" style="width: 0%"></div>

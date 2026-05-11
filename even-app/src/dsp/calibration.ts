@@ -56,6 +56,7 @@ function createBridgeSource(hud: HUDController): BridgeAudioSource {
 export async function runCalibration(
   onProgress?: (pct: number) => void,
   hud?: HUDController,
+  onVolume?: (volume: number) => void,
 ): Promise<CalibrationResult> {
   // Use Bridge mode if HUD is connected
   const bridgeSource = (hud && hud.connected) ? createBridgeSource(hud) : undefined;
@@ -66,7 +67,7 @@ export async function runCalibration(
     console.log('[Calibration] Using browser/computer microphone');
   }
 
-  const pitch = await calibratePitch(onProgress, bridgeSource);
+  const pitch = await calibratePitch(onProgress, bridgeSource, onVolume);
   const filter = computeFilterConfig(pitch.f0, pitch.range);
 
   const result: CalibrationResult = {

@@ -246,9 +246,31 @@ export class SessionEngine {
                 }
               }, this.weekConfig.hintFlashDurationMs);
             }
+          } else {
+            // Gemini evaluation returned null — still record that speech was detected
+            this.transcriptStore?.addSpeech('[speech detected]', 'speech_api');
           }
         } finally {
           this.isGenerating = false;
+        }
+      },
+
+      // Forward raw PCM frames to SpeechRecognizer (Bridge mode only)
+      onPCMFrame: (frame: Float32Array) => {
+        if (this.speechRecognizer?.mode === 'bridge') {
+          this.speechRecognizer.feedPCM(frame);
+        }
+      },
+
+      // Notify SpeechRecognizer of speech segment boundaries (Bridge mode)
+      onBridgeSpeechStart: () => {
+        if (this.speechRecognizer?.mode === 'bridge') {
+          this.speechRecognizer.notifySpeechStart();
+        }
+      },
+      onBridgeSpeechEnd: () => {
+        if (this.speechRecognizer?.mode === 'bridge') {
+          this.speechRecognizer.notifySpeechEnd();
         }
       },
 
@@ -256,7 +278,9 @@ export class SessionEngine {
         if (vadState === 'error') {
           console.error('[Session] VAD error — check microphone permissions');
         }
+        if (vadState === 'listening') {
           console.log('[Session] VAD is now listening');
+        }
       },
     });
 
@@ -282,15 +306,13 @@ export class SessionEngine {
   }
 
   /**
-   * Start the Web Speech API recognizer for real-time text.
-   * This is a best-effort feature — works in Chrome/Edge browsers,
-   * may not work in WebView environments.
+   * Start speech recognizer for real-time text.
+   * - Bridge mode: Uses PCM from G2 glasses → Gemini transcription
+   * - Browser mode: Uses Web Speech API on phone/computer mic
+   * Includes retry logic (max 3 attempts, 2s apart).
    */
-  private startSpeechRecognizer(): void {
-    if (!SpeechRecognizer.isSupported()) {
-      console.log('[Session] Web Speech API not available — real-time transcript disabled');
-      return;
-    }
+  private startSpeechRecognizer(retryCount = 0): void {
+    const isBridge = this.vad?.audioSource === 'bridge';
 
     this.speechRecognizer = new SpeechRecognizer({
       onInterimResult: (text) => {
@@ -322,12 +344,34 @@ export class SessionEngine {
       },
       onError: (err) => {
         console.warn('[Session] Speech recognizer error:', err);
+        // Retry logic for transient errors
+        if (retryCount < 3 && err !== 'SECURE_ORIGIN_REQUIRED') {
+          console.log(`[Session] Will retry speech recognizer in 2s (attempt ${retryCount + 1}/3)`);
+          setTimeout(() => {
+            if (this._state === 'listening' || this._state === 'silence_detected') {
+              this.startSpeechRecognizer(retryCount + 1);
+            }
+          }, 2000);
+        }
       },
     });
 
-    const started = this.speechRecognizer.start();
-    if (started) {
-      console.log('[Session] ✓ Real-time speech recognition active');
+    if (isBridge) {
+      // Bridge mode: PCM from glasses → Gemini transcription
+      const started = this.speechRecognizer.startBridge();
+      if (started) {
+        console.log('[Session] ✓ Bridge speech recognition active (PCM → Gemini)');
+      }
+    } else {
+      // Browser mode: Web Speech API
+      if (!SpeechRecognizer.isSupported()) {
+        console.log('[Session] Web Speech API not available — real-time transcript disabled');
+        return;
+      }
+      const started = this.speechRecognizer.start();
+      if (started) {
+        console.log('[Session] ✓ Browser speech recognition active (Web Speech API)');
+      }
     }
   }
 

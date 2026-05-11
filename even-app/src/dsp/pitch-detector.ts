@@ -107,9 +107,10 @@ export interface BridgeAudioSource {
 export async function calibratePitch(
   onProgress?: (pct: number) => void,
   bridgeSource?: BridgeAudioSource,
+  onVolume?: (volume: number) => void,
 ): Promise<PitchResult> {
   if (bridgeSource) {
-    return calibratePitchFromBridge(bridgeSource, onProgress);
+    return calibratePitchFromBridge(bridgeSource, onProgress, onVolume);
   }
 
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -133,6 +134,15 @@ export async function calibratePitch(
       onProgress?.(Math.min(1, elapsed / SAMPLE_DURATION_MS));
 
       analyser.getFloatTimeDomainData(buffer);
+
+      // Calculate RMS volume for soundwave visualization
+      if (onVolume) {
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) sum += buffer[i]! * buffer[i]!;
+        const rms = Math.sqrt(sum / buffer.length);
+        onVolume(Math.min(1, Math.max(0, rms * 10)));
+      }
+
       const pitch = detectPitch(buffer, audioCtx.sampleRate);
       if (pitch !== null && pitch >= MIN_F0 && pitch <= MAX_F0) {
         f0Samples.push(pitch);
@@ -175,6 +185,7 @@ export async function calibratePitch(
 async function calibratePitchFromBridge(
   source: BridgeAudioSource,
   onProgress?: (pct: number) => void,
+  onVolume?: (volume: number) => void,
 ): Promise<PitchResult> {
   const BRIDGE_SAMPLE_RATE = 16000; // G2 mic is 16kHz PCM
   const f0Samples: number[] = [];
@@ -203,6 +214,14 @@ async function calibratePitchFromBridge(
 
       const elapsed = Date.now() - startTime;
       onProgress?.(Math.min(1, elapsed / SAMPLE_DURATION_MS));
+
+      // Calculate RMS for soundwave visualization
+      if (onVolume && frame.length > 0) {
+        let sum = 0;
+        for (let i = 0; i < frame.length; i++) sum += frame[i]! * frame[i]!;
+        const rms = Math.sqrt(sum / frame.length);
+        onVolume(Math.min(1, Math.max(0, rms * 10)));
+      }
     });
 
     await source.start();

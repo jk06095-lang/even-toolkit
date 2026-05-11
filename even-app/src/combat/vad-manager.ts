@@ -39,6 +39,12 @@ export interface VADConfig {
   onStateChange?: (state: VADState) => void;
   /** Real-time volume callback (RMS, 0.0 to 1.0) */
   onVolumeChange?: (volume: number) => void;
+  /** Raw PCM frame callback for bridge transcription */
+  onPCMFrame?: (frame: Float32Array) => void;
+  /** Bridge speech start (for forwarding to recognizer) */
+  onBridgeSpeechStart?: () => void;
+  /** Bridge speech end (for forwarding to recognizer) */
+  onBridgeSpeechEnd?: () => void;
   /** G2 HUD Controller for hardware mode */
   hud?: HUDController;
 }
@@ -138,16 +144,20 @@ export class VADManager {
           if (this.config.onVolumeChange) {
             this.config.onVolumeChange(calculateRMS(frame));
           }
+          // Forward PCM to speech recognizer for bridge transcription
+          this.config.onPCMFrame?.(frame);
         },
         onSpeechStart: () => {
           this._lastSpeechTime = Date.now();
           this.clearSilenceTimer();
           this.config.onSpeechDetected();
+          this.config.onBridgeSpeechStart?.();
         },
         onSpeechEnd: (audio) => {
           this._lastSpeechTime = Date.now();
           this.startSilenceTimer();
           this.config.onSpeechEnd(audio);
+          this.config.onBridgeSpeechEnd?.();
         },
         onVADMisfire: () => {
           this.startSilenceTimer();

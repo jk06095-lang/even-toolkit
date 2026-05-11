@@ -289,6 +289,123 @@ body {
   100% { height: 20px; }
 }
 
+/* ── Soundwave Visualizer (Unified Mic Feedback) ── */
+.soundwave {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  margin-bottom: var(--spacing-same);
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+.soundwave.active {
+  box-shadow: 0 0 16px rgba(75, 185, 86, 0.15), 0 0 4px rgba(75, 185, 86, 0.08);
+}
+
+/* -- Header row: status dot + label + audio source -- */
+.soundwave-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  justify-content: center;
+}
+.soundwave-header .text-detail {
+  color: var(--color-text-dim);
+}
+
+/* -- Main bar area: left bars + mic icon + right bars -- */
+.soundwave-bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  height: 48px;
+  width: 100%;
+  padding: 0 8px;
+}
+
+/* Center mic icon */
+.soundwave-mic {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-surface-light);
+  transition: background 0.3s ease, transform 0.2s ease;
+  z-index: 1;
+  margin: 0 4px;
+}
+.soundwave.active .soundwave-mic {
+  background: var(--color-positive-alpha);
+  transform: scale(1.05);
+}
+
+/* Individual bar */
+.sw-bar {
+  width: 3px;
+  min-height: 3px;
+  height: 3px;
+  border-radius: 1.5px;
+  background: var(--color-text-muted);
+  transition: height 0.08s ease-out, background 0.2s ease;
+  flex-shrink: 0;
+  margin: 0 1px;
+}
+
+/* Idle breathing animation — staggered per bar */
+.soundwave.idle .sw-bar {
+  animation: sw-breathe 2.4s ease-in-out infinite;
+}
+.soundwave.idle .sw-bar:nth-child(1),
+.soundwave.idle .sw-bar:nth-child(16) { animation-delay: 0s; }
+.soundwave.idle .sw-bar:nth-child(2),
+.soundwave.idle .sw-bar:nth-child(15) { animation-delay: 0.15s; }
+.soundwave.idle .sw-bar:nth-child(3),
+.soundwave.idle .sw-bar:nth-child(14) { animation-delay: 0.3s; }
+.soundwave.idle .sw-bar:nth-child(4),
+.soundwave.idle .sw-bar:nth-child(13) { animation-delay: 0.45s; }
+.soundwave.idle .sw-bar:nth-child(5),
+.soundwave.idle .sw-bar:nth-child(12) { animation-delay: 0.6s; }
+.soundwave.idle .sw-bar:nth-child(6),
+.soundwave.idle .sw-bar:nth-child(11) { animation-delay: 0.75s; }
+.soundwave.idle .sw-bar:nth-child(7),
+.soundwave.idle .sw-bar:nth-child(10) { animation-delay: 0.9s; }
+.soundwave.idle .sw-bar:nth-child(8),
+.soundwave.idle .sw-bar:nth-child(9) { animation-delay: 1.05s; }
+
+@keyframes sw-breathe {
+  0%, 100% { height: 3px; opacity: 0.4; }
+  50% { height: 10px; opacity: 0.7; }
+}
+
+/* Active state removes animation, lets JS drive height directly */
+.soundwave.active .sw-bar {
+  animation: none;
+  opacity: 1;
+}
+
+/* Status text */
+.soundwave-status {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: -0.11px;
+  color: var(--color-text-muted);
+  transition: color 0.2s ease;
+}
+.soundwave.active .soundwave-status {
+  color: var(--color-positive);
+}
+
 /* ── Progress Bar (matching even-toolkit Progress) ── */
 .silence-meter {
   width: 100%;

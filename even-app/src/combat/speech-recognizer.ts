@@ -1,14 +1,26 @@
 /**
- * Speech Recognizer — Real-time speech-to-text using Web Speech API.
+ * Speech Recognizer — Real-time speech-to-text.
  *
- * Runs in parallel with VAD to provide:
- * - Instant interim transcription (< 100ms latency)
- * - Final transcription on sentence boundaries
- * - Language: English (en-US)
+ * Two modes:
+ * 1. BROWSER MODE (Web Speech API) — Uses phone/computer microphone directly.
+ *    Provides instant interim transcription.
+ * 2. BRIDGE MODE (PCM → Gemini) — Receives raw PCM from G2 glasses mic,
+ *    accumulates audio segments, and sends to Gemini for transcription.
+ *    Provides near-real-time transcription when speech segments end.
  *
- * This does NOT replace the VAD or Gemini evaluation pipeline.
- * It only provides real-time visual feedback for what the user is saying.
+ * Language: English (en-US)
  */
+
+import { GoogleGenAI } from '@google/genai';
+import { float32ToWav } from '@toolkit/stt/audio/pcm-utils';
+
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
+
+let sharedAI: GoogleGenAI | null = null;
+function getAI(): GoogleGenAI {
+  if (!sharedAI) sharedAI = new GoogleGenAI({ apiKey: API_KEY });
+  return sharedAI;
+}
 
 export interface SpeechRecognizerCallbacks {
   /** Fired continuously as user speaks — partial/interim text */
@@ -23,11 +35,20 @@ export interface SpeechRecognizerCallbacks {
   onError?: (error: string) => void;
 }
 
+export type RecognizerMode = 'browser' | 'bridge';
+
 export class SpeechRecognizer {
   private recognition: any = null;
   private callbacks: SpeechRecognizerCallbacks;
   private _active = false;
+  private _mode: RecognizerMode = 'browser';
   private restartTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  // Bridge mode state
+  private pcmBuffer: Float32Array[] = [];
+  private pcmBufferLength = 0;
+  private isSpeaking = false;
+  private bridgeTranscribing = false;
 
   constructor(callbacks: SpeechRecognizerCallbacks) {
     this.callbacks = callbacks;
@@ -35,6 +56,10 @@ export class SpeechRecognizer {
 
   get active(): boolean {
     return this._active;
+  }
+
+  get mode(): RecognizerMode {
+    return this._mode;
   }
 
   /**
@@ -48,9 +73,153 @@ export class SpeechRecognizer {
   }
 
   /**
-   * Start continuous speech recognition.
+   * Start in browser mode (Web Speech API).
    */
   start(): boolean {
+    this._mode = 'browser';
+    return this.startBrowserMode();
+  }
+
+  /**
+   * Start in bridge mode (PCM → Gemini transcription).
+   * Call feedPCM() to feed audio data from the G2 glasses mic.
+   */
+  startBridge(): boolean {
+    this._mode = 'bridge';
+    this._active = true;
+    this.pcmBuffer = [];
+    this.pcmBufferLength = 0;
+    this.isSpeaking = false;
+    this.bridgeTranscribing = false;
+
+    if (!API_KEY) {
+      console.warn('[SpeechRecognizer] No Gemini API key — bridge transcription disabled');
+      this.callbacks.onError?.('No API key for bridge transcription');
+      return false;
+    }
+
+    console.log('[SpeechRecognizer] Started in BRIDGE mode (PCM → Gemini)');
+    return true;
+  }
+
+  /**
+   * Feed raw PCM audio data from G2 glasses mic (Bridge mode only).
+   * Audio is accumulated and transcribed when speech segments are detected.
+   */
+  feedPCM(samples: Float32Array): void {
+    if (!this._active || this._mode !== 'bridge') return;
+
+    this.pcmBuffer.push(new Float32Array(samples));
+    this.pcmBufferLength += samples.length;
+
+    // Show interim "listening" indicator when receiving audio
+    if (!this.isSpeaking && this.pcmBufferLength > 0) {
+      // Detect if there's actually audio energy
+      let energy = 0;
+      for (let i = 0; i < samples.length; i++) {
+        energy += samples[i] * samples[i];
+      }
+      const rms = Math.sqrt(energy / samples.length);
+      if (rms > 0.01) {
+        this.isSpeaking = true;
+        this.callbacks.onSpeechStart();
+      }
+    }
+  }
+
+  /**
+   * Notify that VAD detected speech start (Bridge mode).
+   * Clears the buffer to start fresh for this speech segment.
+   */
+  notifySpeechStart(): void {
+    if (this._mode !== 'bridge') return;
+    this.pcmBuffer = [];
+    this.pcmBufferLength = 0;
+    this.isSpeaking = true;
+    this.callbacks.onInterimResult('🎤 ...');
+  }
+
+  /**
+   * Notify that VAD detected speech end (Bridge mode).
+   * Triggers Gemini transcription of the accumulated audio.
+   */
+  async notifySpeechEnd(): Promise<void> {
+    if (this._mode !== 'bridge') return;
+    this.isSpeaking = false;
+    this.callbacks.onSpeechEnd();
+
+    // Gather accumulated audio
+    if (this.pcmBufferLength < 1600) {
+      // Less than 0.1s of audio at 16kHz — too short to transcribe
+      this.pcmBuffer = [];
+      this.pcmBufferLength = 0;
+      return;
+    }
+
+    // Merge buffer into single Float32Array
+    const merged = new Float32Array(this.pcmBufferLength);
+    let offset = 0;
+    for (const chunk of this.pcmBuffer) {
+      merged.set(chunk, offset);
+      offset += chunk.length;
+    }
+    this.pcmBuffer = [];
+    this.pcmBufferLength = 0;
+
+    // Send to Gemini for transcription
+    await this.transcribeWithGemini(merged);
+  }
+
+  /**
+   * Transcribe audio via Gemini API.
+   */
+  private async transcribeWithGemini(audio: Float32Array): Promise<void> {
+    if (this.bridgeTranscribing) return; // Don't overlap
+    if (audio.length < 16000 * 0.3) return; // Less than 0.3s
+
+    this.bridgeTranscribing = true;
+
+    try {
+      const wavBlob = float32ToWav(audio, 16000);
+      const base64 = await blobToBase64(wavBlob);
+
+      const genai = getAI();
+      const response = await genai.models.generateContent({
+        model: 'gemini-3.1-flash-lite-preview',
+        contents: [
+          { text: 'Transcribe the following English speech audio. Return ONLY the transcript text, nothing else.' },
+          { inlineData: { mimeType: 'audio/wav', data: base64 } },
+        ],
+        config: {
+          maxOutputTokens: 100,
+          temperature: 0.1,
+        },
+      });
+
+      const text = response.text?.trim() ?? '';
+      if (text && text.length > 1) {
+        // Filter out meta-commentary from Gemini
+        const clean = text
+          .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+
+        if (clean.length > 1) {
+          this.callbacks.onFinalResult(clean);
+          console.log(`[SpeechRecognizer] Bridge transcript: "${clean}"`);
+        }
+      }
+    } catch (err) {
+      console.warn('[SpeechRecognizer] Gemini transcription failed:', err);
+    } finally {
+      this.bridgeTranscribing = false;
+    }
+  }
+
+  /**
+   * Start browser-based speech recognition (Web Speech API).
+   */
+  private startBrowserMode(): boolean {
     if (this._active) return true;
 
     const SpeechRecognitionAPI =
@@ -61,7 +230,7 @@ export class SpeechRecognizer {
       console.warn('[SpeechRecognizer] Web Speech API not supported');
       const isSecure = window.isSecureContext;
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      
+
       if (!isSecure && !isLocalhost) {
         this.callbacks.onError?.('SECURE_ORIGIN_REQUIRED');
       } else {
@@ -77,7 +246,7 @@ export class SpeechRecognizer {
     this.recognition.maxAlternatives = 1;
 
     this.recognition.onstart = () => {
-      console.log('[SpeechRecognizer] Started');
+      console.log('[SpeechRecognizer] Started (browser mode)');
       this._active = true;
     };
 
@@ -150,7 +319,7 @@ export class SpeechRecognizer {
   }
 
   /**
-   * Stop speech recognition.
+   * Stop speech recognition (all modes).
    */
   stop(): void {
     this._active = false;
@@ -169,6 +338,26 @@ export class SpeechRecognizer {
       this.recognition = null;
     }
 
+    // Clear bridge state
+    this.pcmBuffer = [];
+    this.pcmBufferLength = 0;
+    this.isSpeaking = false;
+
     console.log('[SpeechRecognizer] Stopped');
   }
+}
+
+// ── Helpers ──
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64!);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }

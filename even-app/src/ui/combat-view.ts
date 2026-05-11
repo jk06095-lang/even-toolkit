@@ -11,11 +11,12 @@ import { WEEK_CONFIGS } from '../combat/session-engine';
 export function renderCombatView(): string {
   const weekOptions = Object.values(WEEK_CONFIGS)
     .map((w) => `<button class="week-btn" data-week="${w.week}">W${w.week}</button>`)
-    .join('');
-
-  // Generate 16 waveform bars for smoother visualization
-  const waveBars = Array.from({ length: 16 }, (_, i) =>
-    `<div class="waveform-bar" id="wb-${i}" style="width: 3px; height: 4px; background: var(--color-positive); border-radius: 2px; transition: height 0.08s ease;"></div>`
+    .join('');  // Generate 8 bars for each side (symmetric around center mic)
+  const leftBars = Array.from({ length: 8 }, (_, i) =>
+    `<div class="sw-bar" id="sw-l${7 - i}"></div>`
+  ).join('');
+  const rightBars = Array.from({ length: 8 }, (_, i) =>
+    `<div class="sw-bar" id="sw-r${i}"></div>`
   ).join('');
 
   return `
@@ -86,17 +87,19 @@ export function renderCombatView(): string {
           <span class="badge badge-neutral" id="session-status">Standby</span>
         </div>
 
-        <!-- Real-time Waveform Visualizer -->
-        <div id="waveform-panel" style="display: none; background: var(--color-surface); border-radius: var(--radius); padding: 12px; margin-bottom: var(--spacing-same); text-align: center;">
-          <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 6px;">
+        <!-- Soundwave Visualizer (unified mic feedback) -->
+        <div class="soundwave idle" id="soundwave-panel" style="display: none;">
+          <div class="soundwave-header">
             <span class="status-dot listening" id="vad-dot" style="width: 8px; height: 8px;"></span>
-            <span class="text-detail" id="vad-label" style="color: var(--color-text-dim);">VAD Inactive</span>
+            <span class="text-detail" id="vad-label">VAD Inactive</span>
             <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;">—</span>
           </div>
-          <div id="waveform-container" style="display: flex; align-items: center; justify-content: center; gap: 2px; height: 40px; padding: 4px 0;" title="Mic Volume">
-            ${waveBars}
+          <div class="soundwave-bars">
+            ${leftBars}
+            <div class="soundwave-mic" id="sw-mic">🎙</div>
+            ${rightBars}
           </div>
-          <div class="text-detail" id="waveform-status" style="color: var(--color-text-muted); margin-top: 4px;">Waiting for audio...</div>
+          <div class="soundwave-status" id="soundwave-status">Waiting for audio...</div>
         </div>
 
         <!-- Live Transcript -->

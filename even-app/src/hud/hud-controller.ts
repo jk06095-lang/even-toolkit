@@ -48,6 +48,7 @@ export class HUDController {
   private audioPacketCount = 0;
   private lastVolumeBars = '';
   private statusListeners: Array<(status: any) => void> = [];
+  private statusPollingTimer: any = null;
 
   // ── Standby Screen State ──
   private _batteryLevel: number | undefined = undefined;
@@ -148,6 +149,9 @@ export class HUDController {
         }
       });
 
+      // 2.5. Start Status Polling (Sync every 5 seconds)
+      this.startStatusPolling();
+
       // 3. Create startup page
       // CRITICAL: Must call createStartUpPageContainer first!
       // Layout optimization: 2 containers (ID 1: Overlay, ID 2: Content) is more robust.
@@ -211,14 +215,46 @@ export class HUDController {
     }
     this._connected = isConnected;
 
-    // Cache battery level from status
+    // Cache battery level
     if (status.batteryLevel !== undefined) {
       this._batteryLevel = status.batteryLevel;
+    }
+
+    // Robust Wear Status Detection
+    // We check multiple possible field names because firmware/SDK variants might differ
+    const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
+    const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
+    
+    if (isWearing) {
+      console.log('[HUD] Device IS being worn');
     }
     
     // Notify app-level listeners (for main.ts UI)
     for (const cb of this.statusListeners) {
       cb(status);
+    }
+  }
+
+  private startStatusPolling() {
+    if (this.statusPollingTimer) return;
+    console.log('[HUD] Starting status polling loop (5s)');
+    this.statusPollingTimer = setInterval(async () => {
+      if (!this.bridge || !this._ready) return;
+      try {
+        const info = await this.bridge.getDeviceInfo();
+        if (info?.status) {
+          this.handleDeviceStatus(info.status);
+        }
+      } catch (e) {
+        // Silently fail polling
+      }
+    }, 5000);
+  }
+
+  private stopStatusPolling() {
+    if (this.statusPollingTimer) {
+      clearInterval(this.statusPollingTimer);
+      this.statusPollingTimer = null;
     }
   }
 
@@ -557,13 +593,6 @@ export class HUDController {
   }
 
   /**
-   * Mark session as ended — allows re-entering standby.
-   */
-  setSessionActive(active: boolean): void {
-    this._isSessionActive = active;
-  }
-
-  /**
    * Set mic readiness flag (called when audio packets are received or mic is initialized).
    */
   setMicReady(ready: boolean): void {
@@ -778,6 +807,7 @@ export class HUDController {
 
     switch (action.type) {
       case 'GO_BACK':
+      case 'DOUBLE_CLICK': // Double-tap also toggles menu
         this.toggleInterruptMenu();
         break;
       case 'HIGHLIGHT_MOVE':
@@ -864,6 +894,7 @@ export class HUDController {
     // Unsubscribe from events
     this.unsubscribeEvents?.();
     this.unsubscribeEvents = undefined;
+    this.stopStatusPolling();
     // Try to shut down the page container gracefully
     if (this.bridge && this._ready) {
       this.bridge.shutDownPageContainer(0).catch(() => {});

@@ -180,16 +180,24 @@ async function initHUD(): Promise<void> {
     if (diag) diag.style.display = 'block';
     if (diagStatus) diagStatus.textContent = status.connectType;
     if (diagWearing) {
-      const isWearing = status.isWearing ?? status.wearing ?? status.is_wearing;
-      if (isWearing === undefined) diagWearing.textContent = 'UNKNOWN';
+      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
+      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
+      
+      if (rawWearing === undefined) diagWearing.textContent = 'UNKNOWN';
       else diagWearing.textContent = isWearing ? 'YES' : 'NO';
+
+      // Log raw value for debugging if it's NO but user is wearing
+      if (!isWearing) {
+        console.log('[DEBUG] Wear status is false. Raw value:', rawWearing, 'Type:', typeof rawWearing);
+      }
     }
 
     const isConnected = status.connectType === 'connected';
     badge.classList.toggle('connected', isConnected);
     
     if (isConnected) {
-      const isWearing = status.isWearing ?? status.wearing ?? status.is_wearing;
+      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
+      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
       const wearStr = isWearing ? ' (Wearing)' : ' (Not Wearing)';
       const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
       badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;
@@ -247,16 +255,64 @@ function bindCalibrationEvents(): void {
     status.textContent = 'Sampling';
     status.className = 'badge badge-positive';
 
+    // Show calibration soundwave
+    const calSW = document.getElementById('cal-soundwave');
+    if (calSW) {
+      calSW.style.display = 'flex';
+      calSW.classList.add('idle');
+      calSW.classList.remove('active');
+    }
+
     // HUD feedback
     hud?.showCalibration('Voice Sampling', 'Say: "Test, one two three"');
+
+    // Soundwave volume driver for calibration
+    const driveCalibrSW = (volume: number) => {
+      const panel = document.getElementById('cal-soundwave');
+      if (panel) {
+        if (volume > 0.05) {
+          panel.classList.add('active');
+          panel.classList.remove('idle');
+        } else {
+          panel.classList.remove('active');
+          panel.classList.add('idle');
+        }
+      }
+      for (let i = 0; i < 8; i++) {
+        const lBar = document.getElementById(`cal-sw-l${i}`);
+        const rBar = document.getElementById(`cal-sw-r${i}`);
+        if (lBar && rBar) {
+          const centerWeight = 1 - (Math.abs(i - 3.5) / 8) * 0.6;
+          const barVolume = Math.max(0, volume * centerWeight);
+          const jitter = 1 + (Math.random() - 0.5) * 0.25;
+          const height = Math.max(3, Math.min(42, barVolume * 55 * jitter));
+          lBar.style.height = `${height}px`;
+          rBar.style.height = `${height}px`;
+          const color = volume > 0.6 ? 'var(--phase1)' 
+            : volume > 0.25 ? 'var(--color-positive)'
+            : 'var(--color-text-muted)';
+          lBar.style.background = color;
+          rBar.style.background = color;
+        }
+      }
+      const swStatus = document.getElementById('cal-soundwave-status');
+      if (swStatus) {
+        swStatus.textContent = volume > 0.1 ? '● Voice detected' : 'Waiting for voice input...';
+      }
+    };
 
     try {
       calibration = await runCalibration((pct) => {
         progressBar.style.width = `${Math.round(pct * 100)}%`;
-      }, hud ?? undefined);
+      }, hud ?? undefined, driveCalibrSW);
 
       showCalibrationResult(calibration);
       status.textContent = 'Done';
+
+      // Hide soundwave after calibration
+      if (calSW) {
+        calSW.style.display = 'none';
+      }
 
       hud?.showCalibration(
         'Calibration Complete',
@@ -266,6 +322,8 @@ function bindCalibrationEvents(): void {
       status.textContent = 'Error';
       status.className = 'badge badge-negative';
       console.error('Calibration failed:', err);
+      // Hide soundwave on error too
+      if (calSW) calSW.style.display = 'none';
     }
 
     btnCalibrate.disabled = false;
@@ -464,6 +522,33 @@ function selectWeek(week: number): void {
 }
 
 async function startSession(): Promise<void> {
+  // ── Mic Permission Pre-Check ──
+  try {
+    // Check permission state if API available
+    if (navigator.permissions) {
+      const permResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+      if (permResult.state === 'denied') {
+        alert('🎤 Microphone access denied.\n\nPlease enable microphone permission in your browser/app settings and try again.');
+        return;
+      }
+    }
+    // Quick getUserMedia test to ensure mic is accessible (releases immediately)
+    const testStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+    if (testStream) {
+      testStream.getTracks().forEach(t => t.stop());
+      console.log('[App] Microphone permission confirmed');
+    } else {
+      const isSecure = window.isSecureContext;
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (!isSecure && !isLocalhost) {
+        alert('🔒 HTTPS Required\n\nMicrophone access requires a secure origin.\nAdd http://' + window.location.host + ' to chrome://flags insecure origins allowlist.');
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('[App] Mic permission pre-check skipped:', e);
+  }
+
   // Use selected scenario or fall back to general
   const scenario = selectedScenario;
   const category = scenario ? toLegacyCategory(scenario.id) as ChunkCategory : 'general';
@@ -476,9 +561,13 @@ async function startSession(): Promise<void> {
     showExpressionTracker(scenario.keyExpressions);
   }
 
-  // Show waveform panel
-  const wavePanel = document.getElementById('waveform-panel');
-  if (wavePanel) wavePanel.style.display = 'block';
+  // Show soundwave panel
+  const swPanel = document.getElementById('soundwave-panel');
+  if (swPanel) {
+    swPanel.style.display = 'flex';
+    swPanel.classList.remove('active');
+    swPanel.classList.add('idle');
+  }
 
   // Hide topic selector area during session
   const topicArea = document.getElementById('topic-selector-area');
@@ -581,26 +670,40 @@ async function startSession(): Promise<void> {
       hud?.setMicReady(true);
     },
     onVolume: (volume: number) => {
-      // Drive 16 waveform bars with real volume data
-      for (let i = 0; i < 16; i++) {
-        const bar = document.getElementById(`wb-${i}`);
-        if (bar) {
-          // Create wave pattern: center bars taller, edges shorter
-          const centerDist = Math.abs(i - 7.5) / 8;
-          const barVolume = Math.max(0, volume * (1 - centerDist * 0.5));
-          // Add slight randomness for organic feel
-          const jitter = 1 + (Math.random() - 0.5) * 0.3;
-          const height = Math.max(3, Math.min(36, barVolume * 50 * jitter));
-          bar.style.height = `${height}px`;
-          // Color based on volume
-          bar.style.background = volume > 0.3 ? 'var(--color-positive)' : 'var(--color-text-muted)';
+      // Drive symmetric soundwave bars (8 left + 8 right)
+      const swPanel = document.getElementById('soundwave-panel');
+      if (swPanel) {
+        if (volume > 0.05) {
+          swPanel.classList.add('active');
+          swPanel.classList.remove('idle');
+        } else {
+          swPanel.classList.remove('active');
+          swPanel.classList.add('idle');
         }
       }
-      // Update waveform status text
-      const wfStatus = document.getElementById('waveform-status');
-      if (wfStatus) {
-        wfStatus.textContent = volume > 0.1 ? '● Audio detected' : 'Waiting for audio...';
-        wfStatus.style.color = volume > 0.1 ? 'var(--color-positive)' : 'var(--color-text-muted)';
+      for (let i = 0; i < 8; i++) {
+        const lBar = document.getElementById(`sw-l${i}`);
+        const rBar = document.getElementById(`sw-r${i}`);
+        if (lBar && rBar) {
+          // Center bars taller, edge bars shorter
+          const centerWeight = 1 - (Math.abs(i - 3.5) / 8) * 0.6;
+          const barVolume = Math.max(0, volume * centerWeight);
+          const jitter = 1 + (Math.random() - 0.5) * 0.25;
+          const height = Math.max(3, Math.min(42, barVolume * 55 * jitter));
+          lBar.style.height = `${height}px`;
+          rBar.style.height = `${height}px`;
+          // Color based on volume intensity
+          const color = volume > 0.6 ? 'var(--phase2)'
+            : volume > 0.25 ? 'var(--color-positive)'
+            : 'var(--color-text-muted)';
+          lBar.style.background = color;
+          rBar.style.background = color;
+        }
+      }
+      // Update soundwave status text
+      const swStatus = document.getElementById('soundwave-status');
+      if (swStatus) {
+        swStatus.textContent = volume > 0.1 ? '● Audio detected' : 'Waiting for audio...';
       }
     },
   });
@@ -645,18 +748,21 @@ async function stopSession(): Promise<void> {
   hud?.setSessionActive(false);
   hud?.enterStandby();
 
-  // Reset waveform bars
-  for (let i = 0; i < 16; i++) {
-    const bar = document.getElementById(`wb-${i}`);
-    if (bar) {
-      bar.style.height = '4px';
-      bar.style.background = 'var(--color-positive)';
-    }
+  // Reset soundwave bars
+  for (let i = 0; i < 8; i++) {
+    const lBar = document.getElementById(`sw-l${i}`);
+    const rBar = document.getElementById(`sw-r${i}`);
+    if (lBar) { lBar.style.height = '3px'; lBar.style.background = 'var(--color-text-muted)'; }
+    if (rBar) { rBar.style.height = '3px'; rBar.style.background = 'var(--color-text-muted)'; }
   }
 
-  // Hide waveform panel
-  const wavePanel = document.getElementById('waveform-panel');
-  if (wavePanel) wavePanel.style.display = 'none';
+  // Hide soundwave panel
+  const swPanel = document.getElementById('soundwave-panel');
+  if (swPanel) {
+    swPanel.style.display = 'none';
+    swPanel.classList.remove('active');
+    swPanel.classList.add('idle');
+  }
 
   // Show mode selector area again and reset selection
   const modeSelector = document.getElementById('mode-selector-card');
@@ -725,14 +831,18 @@ function handleSessionState(state: SessionState): void {
   const vadLabel = document.getElementById('vad-label');
   const chunkDisplay = document.getElementById('chunk-display');
 
-  // Waveform idle animation for 16 bars
+  // Soundwave idle animation for state changes
   const isListening = state === 'listening';
-  if (!isListening) {
-    for (let i = 0; i < 16; i++) {
-      const bar = document.getElementById(`wb-${i}`);
-      if (bar) {
-        bar.style.height = state === 'loading_vad' ? '6px' : '4px';
-      }
+  const swPanel = document.getElementById('soundwave-panel');
+  if (swPanel) {
+    if (isListening) {
+      // Active state — JS drives bars
+    } else if (state === 'loading_vad') {
+      swPanel.classList.remove('active');
+      swPanel.classList.add('idle');
+    } else if (state === 'idle' || state === 'session_end') {
+      swPanel.classList.remove('active');
+      swPanel.classList.add('idle');
     }
   }
 
