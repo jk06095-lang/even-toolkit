@@ -192,7 +192,7 @@ async function initHUD(): Promise<void> {
       }
     }
 
-    const isConnected = status.connectType === 'connected';
+    const isConnected = status.connectType !== undefined ? status.connectType === 'connected' : (hud?.connected ?? false);
     badge.classList.toggle('connected', isConnected);
     
     if (isConnected) {
@@ -522,33 +522,6 @@ function selectWeek(week: number): void {
 }
 
 async function startSession(): Promise<void> {
-  // ── Mic Permission Pre-Check ──
-  try {
-    // Check permission state if API available
-    if (navigator.permissions) {
-      const permResult = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      if (permResult.state === 'denied') {
-        alert('🎤 Microphone access denied.\n\nPlease enable microphone permission in your browser/app settings and try again.');
-        return;
-      }
-    }
-    // Quick getUserMedia test to ensure mic is accessible (releases immediately)
-    const testStream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
-    if (testStream) {
-      testStream.getTracks().forEach(t => t.stop());
-      console.log('[App] Microphone permission confirmed');
-    } else {
-      const isSecure = window.isSecureContext;
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (!isSecure && !isLocalhost) {
-        alert('🔒 HTTPS Required\n\nMicrophone access requires a secure origin.\nAdd http://' + window.location.host + ' to chrome://flags insecure origins allowlist.');
-        return;
-      }
-    }
-  } catch (e) {
-    console.warn('[App] Mic permission pre-check skipped:', e);
-  }
-
   // Use selected scenario or fall back to general
   const scenario = selectedScenario;
   const category = scenario ? toLegacyCategory(scenario.id) as ChunkCategory : 'general';

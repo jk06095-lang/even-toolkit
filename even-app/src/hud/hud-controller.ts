@@ -210,11 +210,13 @@ export class HUDController {
     // Log the entire status object for field-name debugging
     console.log('[HUD] Full Device Status Object:', JSON.stringify(status));
     
-    const isConnected = status.connectType === DeviceConnectType.Connected;
-    if (isConnected !== this._connected) {
-      console.log(`[HUD] Hardware Connection State: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
+    if (status.connectType !== undefined) {
+      const isConnected = status.connectType === DeviceConnectType.Connected;
+      if (isConnected !== this._connected) {
+        console.log(`[HUD] Hardware Connection State: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
+      }
+      this._connected = isConnected;
     }
-    this._connected = isConnected;
 
     // Cache battery level
     if (status.batteryLevel !== undefined) {
