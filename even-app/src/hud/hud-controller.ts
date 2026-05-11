@@ -117,8 +117,9 @@ export class HUDController {
       try {
         const info = await this.bridge.getDeviceInfo();
         console.log('[HUD] Initial Device Info:', info);
-        if (info?.status) {
-          this.handleDeviceStatus(info.status);
+        if (info) {
+          // Support both nested 'status' object and flat SDK responses
+          this.handleDeviceStatus(info.status || info);
         }
       } catch (e) {
         console.warn('[HUD] getDeviceInfo failed during init (expected if not paired):', e);
@@ -222,8 +223,8 @@ export class HUDController {
 
     // Robust Wear Status Detection
     // We check multiple possible field names because firmware/SDK variants might differ
-    const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
-    const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
+    const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
+    const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
     
     if (isWearing) {
       console.log('[HUD] Device IS being worn');
@@ -242,8 +243,8 @@ export class HUDController {
       if (!this.bridge || !this._ready) return;
       try {
         const info = await this.bridge.getDeviceInfo();
-        if (info?.status) {
-          this.handleDeviceStatus(info.status);
+        if (info) {
+          this.handleDeviceStatus(info.status || info);
         }
       } catch (e) {
         // Silently fail polling

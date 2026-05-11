@@ -180,8 +180,8 @@ async function initHUD(): Promise<void> {
     if (diag) diag.style.display = 'block';
     if (diagStatus) diagStatus.textContent = status.connectType;
     if (diagWearing) {
-      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
-      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
+      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
+      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
       
       if (rawWearing === undefined) diagWearing.textContent = 'UNKNOWN';
       else diagWearing.textContent = isWearing ? 'YES' : 'NO';
@@ -196,8 +196,8 @@ async function initHUD(): Promise<void> {
     badge.classList.toggle('connected', isConnected);
     
     if (isConnected) {
-      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus;
-      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === 'true';
+      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
+      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
       const wearStr = isWearing ? ' (Wearing)' : ' (Not Wearing)';
       const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
       badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;

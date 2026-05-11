@@ -21,14 +21,7 @@
       "name": "camera",
       "desc": "Required for vision-assisted features and sensor stability."
     },
-    {
-      "name": "activity-recognition",
-      "desc": "Required for detecting wearable motion and posture."
-    },
-    {
-      "name": "proximity",
-      "desc": "Required for high-accuracy wear status detection from G2 sensors."
-    },
+
     {
       "name": "network",
       "desc": "Required for Gemini AI English coaching and local development assets.",
