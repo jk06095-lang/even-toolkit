@@ -211,7 +211,7 @@ export class HUDController {
     console.log('[HUD] Full Device Status Object:', JSON.stringify(status));
     
     if (status.connectType !== undefined) {
-      const isConnected = status.connectType === DeviceConnectType.Connected;
+      const isConnected = status.connectType === DeviceConnectType.Connected || status.connectType === 'connected';
       if (isConnected !== this._connected) {
         console.log(`[HUD] Hardware Connection State: ${isConnected ? 'CONNECTED' : 'DISCONNECTED'}`);
       }

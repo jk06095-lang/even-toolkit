@@ -78,7 +78,7 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
   try {
     const genai = getAI();
     const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3.1-flash-lite',
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
@@ -97,7 +97,7 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
         // Try one more time with explicit instruction
         try {
           const retryResponse = await genai.models.generateContent({
-            model: 'gemini-3.1-flash-lite-preview',
+            model: 'gemini-3.1-flash-lite',
             contents: userPrompt + `\nDO NOT use any of these phrases: ${req.usedHints.join(', ')}`,
             config: {
               systemInstruction: systemPrompt,
@@ -245,7 +245,7 @@ When in doubt, set hint to null. The user is practicing — let them try!`;
   try {
     const genai = getAI();
     const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3.1-flash-lite',
       contents: [
         { text: `Topic: ${req.topic}\nEvaluate the speech:` },
         { inlineData: { mimeType: 'audio/wav', data: base64 } }

@@ -185,7 +185,7 @@ Be specific and actionable in your recommendations.`;
   try {
     const genai = getAI();
     const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite-preview',
+      model: 'gemini-3.1-flash-lite',
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,

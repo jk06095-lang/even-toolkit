@@ -192,7 +192,9 @@ async function initHUD(): Promise<void> {
       }
     }
 
-    const isConnected = status.connectType !== undefined ? status.connectType === 'connected' : (hud?.connected ?? false);
+    const isConnected = status.connectType !== undefined 
+      ? (status.connectType === 'connected' || status.connectType === 1) 
+      : (hud?.connected ?? false);
     badge.classList.toggle('connected', isConnected);
     
     if (isConnected) {

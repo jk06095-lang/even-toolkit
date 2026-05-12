@@ -480,7 +480,11 @@ export class SessionEngine {
     }
     
     if (this.speechRecognizer) {
-      this.speechRecognizer.start();
+      if (this.vad?.audioSource === 'bridge') {
+        this.speechRecognizer.startBridge();
+      } else {
+        this.speechRecognizer.start();
+      }
     }
     
     this.setState('listening');
@@ -571,6 +575,9 @@ export class SessionEngine {
   }
 
   private handleSpeechDetected(): void {
+    // Ignore speech if paused or ended
+    if (this._state === 'paused' || (this._state as any) === 'session_end') return;
+
     this.speechCount++;
     this.callbacks.onSpeechDetected();
 

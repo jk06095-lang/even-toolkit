@@ -185,7 +185,7 @@ export class SpeechRecognizer {
 
       const genai = getAI();
       const response = await genai.models.generateContent({
-        model: 'gemini-3.1-flash-lite-preview',
+        model: 'gemini-3.1-flash-lite',
         contents: [
           { text: 'Transcribe the following English speech audio. Return ONLY the transcript text, nothing else.' },
           { inlineData: { mimeType: 'audio/wav', data: base64 } },

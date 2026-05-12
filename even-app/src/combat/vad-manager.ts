@@ -95,8 +95,8 @@ export class VADManager {
     const hasHUD = !!this.config.hud;
     const isHUDConnected = hasHUD && this.config.hud!.connected;
     
-    if (hasHUD && isHUDConnected) {
-      console.log('[VAD] G2 hardware detected & connected — trying Bridge mode');
+    if (hasHUD) {
+      console.log('[VAD] HUD controller present — attempting Bridge mode');
       const bridgeSuccess = await this.tryBridgeMode();
       if (bridgeSuccess) {
         this.finishStart('bridge');
@@ -152,18 +152,21 @@ export class VADManager {
           // VAD probabilities update (UI uses volume mostly, but VAD uses this internally)
         },
         onSpeechStart: () => {
+          if (this._state === 'paused') return;
           this._lastSpeechTime = Date.now();
           this.clearSilenceTimer();
           this.config.onSpeechDetected();
           this.config.onBridgeSpeechStart?.();
         },
         onSpeechEnd: (audio) => {
+          if (this._state === 'paused') return;
           this._lastSpeechTime = Date.now();
           this.startSilenceTimer();
           this.config.onSpeechEnd(audio);
           this.config.onBridgeSpeechEnd?.();
         },
         onVADMisfire: () => {
+          if (this._state === 'paused') return;
           this.startSilenceTimer();
         }
       });
@@ -197,16 +200,19 @@ export class VADManager {
             }
           },
           onSpeechStart: () => {
+            if (this._state === 'paused') return;
             this._lastSpeechTime = Date.now();
             this.clearSilenceTimer();
             this.config.onSpeechDetected();
           },
           onSpeechEnd: (audio: Float32Array) => {
+            if (this._state === 'paused') return;
             this._lastSpeechTime = Date.now();
             this.startSilenceTimer();
             this.config.onSpeechEnd(audio);
           },
           onVADMisfire: () => {
+            if (this._state === 'paused') return;
             this.startSilenceTimer();
           },
         }),
@@ -338,6 +344,7 @@ class BridgeVAD {
   private callbacks: BridgeVADCallbacks;
   private unsub?: () => void;
   private active = false;
+  private paused = false;
 
   // Audio data reception tracking
   private receivedData = false;
@@ -406,12 +413,13 @@ class BridgeVAD {
   }
 
   async pause(): Promise<void> {
-    // Energy VAD doesn't strictly need a pause, but we can reset state
+    this.paused = true;
     this.isSpeechActive = false;
     this.speechFrames = [];
   }
 
   async resume(): Promise<void> {
+    this.paused = false;
     this.isSpeechActive = false;
     this.speechFrames = [];
   }
@@ -436,11 +444,13 @@ class BridgeVAD {
     
     // Immediately calculate volume and forward PCM for real-time UI/transcription
     if (this.callbacks.onVolumeChange) {
-      this.callbacks.onVolumeChange(volume);
+      this.callbacks.onVolumeChange(this.paused ? 0 : volume);
     }
-    if (this.callbacks.onPCMFrame) {
+    if (this.callbacks.onPCMFrame && !this.paused) {
       this.callbacks.onPCMFrame(samples);
     }
+
+    if (this.paused) return;
 
     // Energy VAD Logic
     if (volume > this.speechThreshold) {
