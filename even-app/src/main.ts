@@ -61,6 +61,10 @@ function renderApp(): void {
       Device: <span id="diag-status">none</span> | 
       Startup: <span id="diag-startup">-</span> |
       Wearing: <span id="diag-wearing">-</span>
+      <!-- DEBUG CONSOLE: Removable after development -->
+      <div id="raw-status-log" style="margin-top: 8px; font-family: monospace; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; font-size: 10px; word-break: break-all; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; max-height: 100px; overflow-y: auto;">
+        Waiting for raw status...
+      </div>
     </div>
 
     <!-- Learning Flow Navigation -->
@@ -179,27 +183,44 @@ async function initHUD(): Promise<void> {
     
     if (diag) diag.style.display = 'block';
     if (diagStatus) diagStatus.textContent = status.connectType;
-    if (diagWearing) {
-      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
-      
-      if (rawWearing === undefined) diagWearing.textContent = 'UNKNOWN';
-      else diagWearing.textContent = isWearing ? 'YES' : 'NO';
-
-      // Log raw value for debugging if it's NO but user is wearing
-      if (!isWearing) {
-        console.log('[DEBUG] Wear status is false. Raw value:', rawWearing, 'Type:', typeof rawWearing);
-      }
-    }
-
     const isConnected = status.connectType !== undefined 
       ? (status.connectType === 'connected' || status.connectType === 1) 
       : (hud?.connected ?? false);
     badge.classList.toggle('connected', isConnected);
+
+    if (diagWearing) {
+      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
+      let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
+      
+      // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
+      if (isConnected) isWearing = true;
+      
+      if (rawWearing === undefined && !isConnected) diagWearing.textContent = 'UNKNOWN';
+      else diagWearing.textContent = isWearing ? 'YES' : 'NO';
+
+      // Log raw value for debugging if it's NO but user is wearing
+      if (!isWearing && isConnected) {
+        console.log('[DEBUG] Wear status is false. Raw value:', rawWearing, 'Type:', typeof rawWearing);
+      }
+    }
+
+    // Display raw status on screen for prototyping/debugging
+    const rawStatusLog = document.getElementById('raw-status-log');
+    if (rawStatusLog) {
+      try {
+        rawStatusLog.textContent = 'Raw Status: ' + JSON.stringify(status);
+      } catch (e) {
+        rawStatusLog.textContent = 'Raw Status: [Object could not be stringified]';
+      }
+    }
     
     if (isConnected) {
       const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-      const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
+      let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
+      
+      // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
+      isWearing = true;
+      
       const wearStr = isWearing ? ' (Wearing)' : ' (Not Wearing)';
       const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
       badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;

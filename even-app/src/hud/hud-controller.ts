@@ -226,7 +226,12 @@ export class HUDController {
     // Robust Wear Status Detection
     // We check multiple possible field names because firmware/SDK variants might differ
     const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-    const isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
+    let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
+    
+    // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
+    if (this._connected) {
+      isWearing = true;
+    }
     
     if (isWearing) {
       console.log('[HUD] Device IS being worn');
@@ -412,6 +417,35 @@ export class HUDController {
       
     } else {
       await this.showText(`\n  ▶ ${chunk}`);
+    }
+  }
+
+  async showGrammarFeedback(correction: string): Promise<void> {
+    this._mode = 'combat';
+    if (this._combatInitialized) {
+      this._chatLines.push({ type: 'text', text: '' });
+      const lineIdx = this._chatLines.length;
+      this._chatLines.push({ type: 'system', text: `  ▲ ${correction}` });
+      this._chatLines.push({ type: 'text', text: '' });
+      
+      this._actionBarState = `GRAMMAR ALERT`;
+      await this.updateCombatChat();
+      
+      setTimeout(() => {
+        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
+          this._chatLines[lineIdx].text = `▲ ${correction}`;
+          this.updateCombatChat();
+        }
+      }, 150);
+      
+      setTimeout(async () => {
+        if (this._actionBarState === `GRAMMAR ALERT`) {
+          this._actionBarState = 'LISTENING';
+          await this.updateCombatChat();
+        }
+      }, 3000);
+    } else {
+      await this.showText(`\n  ▲ ${correction}`);
     }
   }
 

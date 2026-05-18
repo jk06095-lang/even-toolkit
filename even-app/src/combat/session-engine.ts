@@ -6,7 +6,7 @@
  */
 
 import { VADManager } from './vad-manager';
-import { generateChunk, evaluateSpeech, type ChunkResult } from './chunk-generator';
+import { generateChunk, evaluateSpeech, evaluateGrammar, type ChunkResult } from './chunk-generator';
 import type { ChunkCategory } from './fallback-chunks';
 import type { HUDController } from '../hud/hud-controller';
 import { SpeechRecognizer } from './speech-recognizer';
@@ -327,13 +327,22 @@ export class SessionEngine {
       onFinalResult: (text) => {
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, true);
+        const trimmed = text.trim();
         // Record finalized speech recognition to cache
-        if (text.trim()) {
-          this.transcriptStore?.addSpeech(text.trim(), 'live_final');
+        if (trimmed) {
+          this.transcriptStore?.addSpeech(trimmed, 'live_final');
         }
         // Update glasses bottom zone with confirmed text
-        if (this.hudRef && text.trim()) {
-          this.hudRef.showLiveTranscript(`✓ ${text.trim()}`);
+        if (this.hudRef && trimmed) {
+          this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
+          
+          // Trigger grammar evaluation asynchronously
+          (async () => {
+            const correction = await evaluateGrammar(trimmed, this._topic);
+            if (correction && this.hudRef && this._state === 'listening') {
+              this.hudRef.showGrammarFeedback(correction);
+            }
+          })();
         }
       },
       onSpeechStart: () => {

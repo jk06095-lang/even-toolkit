@@ -306,3 +306,58 @@ When in doubt, set hint to null. The user is practicing — let them try!`;
     return null;
   }
 }
+
+/**
+ * Evaluate the final transcript for grammar and sentence structure.
+ * Returns a short correction string if errors are found, or null if fine.
+ */
+export async function evaluateGrammar(transcript: string, topic: string): Promise<string | null> {
+  if (!transcript || transcript.trim().length < 5) return null; // Too short to evaluate
+
+  const systemPrompt = `You are an expert English grammar coach embedded in AR glasses.
+The user is practicing an English conversation.
+Evaluate the given transcript for grammatical errors, awkward sentence structures, or unnatural phrasing.
+
+RULES:
+- If the English is natural and grammatically correct, return EXACTLY: null
+- If there is an error, return a SHORT, DIRECT correction (maximum 5 words). 
+- Start the correction with "Try:" or "Use:".
+- Do not explain why it's wrong.
+- Do not use quotes.
+
+Examples:
+User: "I go to there yesterday" -> "Try: I went there yesterday"
+User: "I am agree with you" -> "Try: I agree with you"
+User: "That sounds good" -> "null"`;
+
+  try {
+    const genai = getAI();
+    const response = await genai.models.generateContent({
+      model: 'gemini-3.1-flash-lite',
+      contents: [
+        { text: `Topic: ${topic}\nTranscript: "${transcript}"\nProvide correction or null:` }
+      ],
+      config: {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: 30,
+        temperature: 0.1,
+      },
+    });
+
+    const text = response.text?.trim() ?? '';
+    if (!text || text.toLowerCase() === 'null') {
+      return null;
+    }
+    
+    // Clean up
+    let correction = cleanChunk(text);
+    if (!correction.toLowerCase().startsWith('try:') && !correction.toLowerCase().startsWith('use:')) {
+      correction = 'Try: ' + correction;
+    }
+    return correction;
+
+  } catch (err) {
+    console.warn('[ChunkGen] Grammar evaluation failed:', err);
+    return null;
+  }
+}
