@@ -345,15 +345,16 @@ export class HUDController {
   async showLiveTranscript(text: string): Promise<void> {
     if (this._isInterruptMenuVisible) return; // Don't overwrite menu
     if (!this._combatInitialized) return;
-    if (text === this._lastTranscript) return;
-    this._lastTranscript = text;
+    const sanitized = this.sanitizeTextForG2(text);
+    if (sanitized === this._lastTranscript) return;
+    this._lastTranscript = sanitized;
 
     // Update or add the transcript line
     const lastLine = this._chatLines[this._chatLines.length - 1];
     if (lastLine && lastLine.type === 'prompt') {
-      lastLine.text = text;
+      lastLine.text = sanitized;
     } else {
-      this._chatLines.push({ type: 'prompt', text });
+      this._chatLines.push({ type: 'prompt', text: sanitized });
     }
 
     // Keep history brief
@@ -663,11 +664,59 @@ export class HUDController {
   // ── Internal: SDK Display Commands ──
 
   /**
+   * Helper to strip emojis and unsupported characters to prevent G2 rendering errors.
+   */
+  private sanitizeTextForG2(text: string): string {
+    if (!text) return '';
+    // 1. Specific replacements for common emojis/unsupported chars used in the app
+    let cleaned = text
+      .replace(/🎤/g, '●')
+      .replace(/✓/g, '●')
+      .replace(/👋/g, '')
+      .replace(/☕/g, '')
+      .replace(/🛒/g, '')
+      .replace(/🏥/g, '')
+      .replace(/📱/g, '')
+      .replace(/🏋️/g, '')
+      .replace(/🏨/g, '')
+      .replace(/✈️/g, '')
+      .replace(/🗺️/g, '')
+      .replace(/🍽️/g, '')
+      .replace(/🚶/g, '')
+      .replace(/📊/g, '')
+      .replace(/📧/g, '')
+      .replace(/🤝/g, '')
+      .replace(/🎉/g, '')
+      .replace(/💬/g, '')
+      .replace(/🎬/g, '')
+      .replace(/📚/g, '')
+      .replace(/✏️/g, '')
+      .replace(/👥/g, '')
+      .replace(/🎓/g, '');
+
+    // 2. Generic regex for other common emojis ( Dingbats, Emoticons, Transport, etc. )
+    const EMOJI_RE = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{E0020}-\u{E007F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2702}-\u{27B0}\u{231A}-\u{231B}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}\u{25AA}-\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}\u{2614}-\u{2615}\u{2648}-\u{2653}\u{267F}\u{2693}\u{26A1}\u{26AA}-\u{26AB}\u{26BD}-\u{26BE}\u{26C4}-\u{26C5}\u{26CE}\u{26D4}\u{26EA}\u{26F2}-\u{26F3}\u{26F5}\u{26FA}\u{26FD}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2B1B}-\u{2B1C}\u{2B50}\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}]/gu;
+    cleaned = cleaned.replace(EMOJI_RE, '');
+
+    // Allow list: space, basic printable ASCII, CJK, select G2 UI chars
+    const ALLOWED_CHARS = /[\n\r\t\x20-\x7E\u00A0-\u00FF\u2010-\u2027\u2030-\u205E\u2190-\u21FF\u2500-\u25FF\u2605\u2606\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/;
+
+    let finalCleaned = '';
+    for (const char of cleaned) {
+      if (ALLOWED_CHARS.test(char)) {
+        finalCleaned += char;
+      }
+    }
+    return finalCleaned;
+  }
+
+  /**
    * Full-screen single text container.
    * One event-capture overlay + one content container.
    */
   private async showText(content: string): Promise<void> {
     if (!this.bridge || !this._ready || !this._startupDone) return;
+    const sanitized = this.sanitizeTextForG2(content);
     try {
       await this.bridge.rebuildPageContainer(
         new RebuildPageContainer({
@@ -696,7 +745,7 @@ export class HUDController {
               borderWidth: 0,
               borderColor: 0,
               paddingLength: 4,
-              content,
+              content: sanitized,
               isEventCapture: 0,
             }),
           ],
@@ -715,6 +764,8 @@ export class HUDController {
   private async showTwoZone(header: string, body: string): Promise<void> {
     if (!this.bridge || !this._ready || !this._startupDone) return;
     const headerH = 56;
+    const sanitizedHeader = this.sanitizeTextForG2(header);
+    const sanitizedBody = this.sanitizeTextForG2(body);
     try {
       await this.bridge.rebuildPageContainer(
         new RebuildPageContainer({
@@ -746,7 +797,7 @@ export class HUDController {
               borderColor: 5,
               borderRadius: 0,
               paddingLength: 4,
-              content: `  ${header}`,
+              content: `  ${sanitizedHeader}`,
               isEventCapture: 0,
             }),
             // Body
@@ -760,7 +811,7 @@ export class HUDController {
               borderWidth: 0,
               borderColor: 0,
               paddingLength: 4,
-              content: body ? `\n  ${body}` : '',
+              content: sanitizedBody ? `\n  ${sanitizedBody}` : '',
               isEventCapture: 0,
             }),
           ],
@@ -777,6 +828,7 @@ export class HUDController {
    */
   async quickUpdate(containerId: number, containerName: string, content: string): Promise<void> {
     if (!this.bridge || !this._ready) return;
+    const sanitized = this.sanitizeTextForG2(content);
     try {
       await this.bridge.textContainerUpgrade(
         new TextContainerUpgrade({
@@ -784,7 +836,7 @@ export class HUDController {
           containerName: containerName,
           contentOffset: 0,
           contentLength: 2000,
-          content,
+          content: sanitized,
         }),
       );
     } catch { /* ignore */ }

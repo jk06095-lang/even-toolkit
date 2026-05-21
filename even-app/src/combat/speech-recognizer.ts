@@ -22,6 +22,35 @@ function getAI(): GoogleGenAI {
   return sharedAI;
 }
 
+async function callGeminiWithFallback(
+  contents: any,
+  config: any,
+  models: string[] = ['gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
+): Promise<any> {
+  const genai = getAI();
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      console.log(`[SpeechRecognizer Gemini] Attempting call with model: ${model}`);
+      const response = await genai.models.generateContent({
+        model,
+        contents,
+        config,
+      });
+      console.log(`[SpeechRecognizer Gemini] Success with model: ${model}`);
+      return response;
+    } catch (err: any) {
+      console.warn(`[SpeechRecognizer Gemini] Model ${model} failed:`, err.message || err);
+      lastError = err;
+      // Fallback on transient/quota errors
+      continue;
+    }
+  }
+
+  throw lastError || new Error('All models failed');
+}
+
 export interface SpeechRecognizerCallbacks {
   /** Fired continuously as user speaks — partial/interim text */
   onInterimResult: (text: string) => void;
@@ -49,6 +78,8 @@ export class SpeechRecognizer {
   private pcmBufferLength = 0;
   private isSpeaking = false;
   private bridgeTranscribing = false;
+  private lastInterimSampleCount = 0;
+  private interimTranscribing = false;
 
   constructor(callbacks: SpeechRecognizerCallbacks) {
     this.callbacks = callbacks;
@@ -125,6 +156,25 @@ export class SpeechRecognizer {
         this.callbacks.onSpeechStart();
       }
     }
+
+    // Check if we should trigger an interim transcription in Bridge Mode
+    // 16000 samples = 1 second of audio. Let's do it every 24000 samples (1.5 seconds)
+    const samplesSinceLast = this.pcmBufferLength - this.lastInterimSampleCount;
+    if (this.isSpeaking && !this.interimTranscribing && samplesSinceLast >= 24000) {
+      this.lastInterimSampleCount = this.pcmBufferLength;
+      
+      // Clone current buffer
+      const currentLength = this.pcmBufferLength;
+      const merged = new Float32Array(currentLength);
+      let offset = 0;
+      for (const chunk of this.pcmBuffer) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+        if (offset >= currentLength) break;
+      }
+      
+      this.transcribeInterim(merged);
+    }
   }
 
   /**
@@ -136,13 +186,11 @@ export class SpeechRecognizer {
     this.pcmBuffer = [];
     this.pcmBufferLength = 0;
     this.isSpeaking = true;
+    this.lastInterimSampleCount = 0;
+    this.interimTranscribing = false;
     this.callbacks.onInterimResult('🎤 ...');
   }
 
-  /**
-   * Notify that VAD detected speech end (Bridge mode).
-   * Triggers Gemini transcription of the accumulated audio.
-   */
   async notifySpeechEnd(): Promise<void> {
     if (this._mode !== 'bridge') return;
     this.isSpeaking = false;
@@ -183,18 +231,16 @@ export class SpeechRecognizer {
       const wavBlob = float32ToWav(audio, 16000);
       const base64 = await blobToBase64(wavBlob);
 
-      const genai = getAI();
-      const response = await genai.models.generateContent({
-        model: 'gemini-3.1-flash-lite',
-        contents: [
+      const response = await callGeminiWithFallback(
+        [
           { text: 'Transcribe the following English speech audio. Return ONLY the transcript text, nothing else.' },
           { inlineData: { mimeType: 'audio/wav', data: base64 } },
         ],
-        config: {
+        {
           maxOutputTokens: 100,
           temperature: 0.1,
-        },
-      });
+        }
+      );
 
       const text = response.text?.trim() ?? '';
       if (text && text.length > 1) {
@@ -213,6 +259,50 @@ export class SpeechRecognizer {
       console.warn('[SpeechRecognizer] Gemini transcription failed:', err);
     } finally {
       this.bridgeTranscribing = false;
+    }
+  }
+
+  /**
+   * Run background interim transcription (Bridge mode only).
+   */
+  private async transcribeInterim(audio: Float32Array): Promise<void> {
+    if (audio.length < 16000 * 0.5) return; // Need at least 0.5s of audio
+
+    this.interimTranscribing = true;
+
+    try {
+      const wavBlob = float32ToWav(audio, 16000);
+      const base64 = await blobToBase64(wavBlob);
+
+      const response = await callGeminiWithFallback(
+        [
+          { text: 'Transcribe the following spoken English audio so far. Return ONLY the transcribed text, nothing else. If there is no speech, return an empty string.' },
+          { inlineData: { mimeType: 'audio/wav', data: base64 } },
+        ],
+        {
+          maxOutputTokens: 100,
+          temperature: 0.1,
+        }
+      );
+
+      const text = response.text?.trim() ?? '';
+      if (text && text.length > 1) {
+        // Filter out meta-commentary from Gemini
+        const clean = text
+          .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+
+        if (clean.length > 1 && this.isSpeaking) {
+          // Fire onInterimResult with trailing dots to indicate it is in progress
+          this.callbacks.onInterimResult(clean + '...');
+          console.log(`[SpeechRecognizer] Bridge interim transcript: "${clean}"`);
+        }
+      }
+    } catch (err) {
+      console.warn('[SpeechRecognizer] Gemini interim transcription failed:', err);
+    } finally {
+      this.interimTranscribing = false;
     }
   }
 

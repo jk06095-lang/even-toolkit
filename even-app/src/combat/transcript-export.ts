@@ -25,6 +25,35 @@ function getAI(): GoogleGenAI {
   return ai;
 }
 
+async function callGeminiWithFallback(
+  contents: any,
+  config: any,
+  models: string[] = ['gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
+): Promise<any> {
+  const genai = getAI();
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      console.log(`[Export Gemini] Attempting call with model: ${model}`);
+      const response = await genai.models.generateContent({
+        model,
+        contents,
+        config,
+      });
+      console.log(`[Export Gemini] Success with model: ${model}`);
+      return response;
+    } catch (err: any) {
+      console.warn(`[Export Gemini] Model ${model} failed:`, err.message || err);
+      lastError = err;
+      // Fallback on rate limit / availability issues
+      continue;
+    }
+  }
+
+  throw lastError || new Error('All models failed');
+}
+
 // ── Export Types (strict, never changes) ──
 
 export interface ExportStage1 {
@@ -36,7 +65,7 @@ export interface ExportStage1 {
   category: string;
   entries: Array<{
     t: number;
-    type: 'user_speech' | 'hint_given' | 'silence_event';
+    type: 'user_speech' | 'hint_given' | 'silence_event' | 'hint_used' | 'hint_missed' | 'hint_simplified';
     text: string;
     source?: string;
   }>;
@@ -183,11 +212,9 @@ All fields must be filled. The gem_instruction field must be written in Korean (
 Be specific and actionable in your recommendations.`;
 
   try {
-    const genai = getAI();
-    const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: userPrompt,
-      config: {
+    const response = await callGeminiWithFallback(
+      userPrompt,
+      {
         systemInstruction: systemPrompt,
         maxOutputTokens: 500,
         temperature: 0.3,
@@ -226,8 +253,8 @@ Be specific and actionable in your recommendations.`;
             'gem_instruction',
           ],
         } as any,
-      },
-    });
+      }
+    );
 
     const text = response.text?.trim() ?? '';
     if (!text) return fallback;

@@ -84,10 +84,9 @@ body {
 }
 
 #app {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: var(--spacing-margin);
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Typography (FK Grotesk 8 Styles) ── */
@@ -738,3 +737,30 @@ body {
 .flex-col { flex-direction: column; }
 .items-center { align-items: center; }
 .justify-between { justify-content: space-between; }
+
+/* ── Chunk Flash Display ── */
+#chunk-display {
+  background: var(--color-surface);
+  border: 2px solid var(--phase2);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-top: var(--spacing-cross);
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(255, 69, 58, 0.15);
+  animation: pulse-border 2s infinite;
+}
+
+.chunk-flash {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  color: var(--color-text);
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+
+@keyframes pulse-border {
+  0% { border-color: var(--phase2); box-shadow: 0 4px 12px rgba(255, 69, 58, 0.15); }
+  50% { border-color: var(--color-border); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); }
+  100% { border-color: var(--phase2); box-shadow: 0 4px 12px rgba(255, 69, 58, 0.15); }
+}

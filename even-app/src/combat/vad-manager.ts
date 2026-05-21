@@ -47,15 +47,18 @@ export interface VADConfig {
   onBridgeSpeechEnd?: () => void;
   /** G2 HUD Controller for hardware mode */
   hud?: HUDController;
+  /** Preferred audio source: bridge or browser */
+  preferredSource?: 'bridge' | 'browser';
 }
 
 export class VADManager {
-  private vad: MicVAD | BridgeVAD | null = null;
   private config: VADConfig;
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private vad: MicVAD | BridgeVAD | null = null;
   private _state: VADState = 'idle';
-  private _lastSpeechTime = 0;
   private _audioSource: 'bridge' | 'browser' | 'none' = 'none';
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private _lastSpeechTime = 0;
+  private isCalibrated = false;
 
   constructor(config: VADConfig) {
     this.config = config;
@@ -93,10 +96,11 @@ export class VADManager {
 
     // Check if we should try Bridge Mode first (Glasses Hardware)
     const hasHUD = !!this.config.hud;
-    const isHUDConnected = hasHUD && this.config.hud!.connected;
+    const isConnected = hasHUD && this.config.hud!.connected;
+    const preferBridge = this.config.preferredSource !== 'browser';
     
-    if (hasHUD) {
-      console.log('[VAD] HUD controller present — attempting Bridge mode');
+    if (isConnected && preferBridge) {
+      console.log('[VAD] HUD connected & bridge preferred — attempting Bridge mode');
       const bridgeSuccess = await this.tryBridgeMode();
       if (bridgeSuccess) {
         this.finishStart('bridge');
@@ -104,7 +108,7 @@ export class VADManager {
       }
       console.warn('[VAD] Bridge mode failed to stream audio — falling back to browser microphone');
     } else {
-      const reason = !hasHUD ? 'no HUD controller' : 'glasses not Bluetooth connected';
+      const reason = !hasHUD ? 'no HUD controller' : (!isConnected ? 'glasses not Bluetooth connected' : 'browser mic preferred');
       console.log(`[VAD] Skipping Bridge mode (${reason}) — using browser microphone`);
     }
 
@@ -173,7 +177,15 @@ export class VADManager {
       
       await bridgeVad.start();
       
-      // Trust the Bridge stream exactly like Calibration Mode does, no timeout fallback.
+      // Wait up to 2 seconds for the first audio packet
+      console.log('[VAD] BridgeVAD: Waiting up to 2s for audio data stream...');
+      const dataFlowing = await bridgeVad.waitForFirstPacket(2000);
+      if (!dataFlowing) {
+        console.warn('[VAD] BridgeVAD: No audio data flowing from glasses, stopping bridge VAD');
+        await bridgeVad.stop();
+        return false;
+      }
+      
       this.vad = bridgeVad;
       console.log('[VAD] BridgeVAD: Hardware microphone stream initiated.');
       return true;

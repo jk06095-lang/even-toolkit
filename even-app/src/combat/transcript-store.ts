@@ -18,13 +18,23 @@ export interface TranscriptEntry {
   /** Epoch timestamp */
   t: number;
   /** Event type */
-  type: 'user_speech' | 'hint_given' | 'silence_event';
+  type: 'user_speech' | 'hint_given' | 'silence_event' | 'hint_used' | 'hint_missed' | 'hint_simplified';
   /** The actual text (utterance or hint) */
   text: string;
   /** Origin of the text */
   source?: 'speech_api' | 'gemini_eval' | 'fallback' | 'live_final';
   /** Whether this is a finalized recognition result */
   isFinal?: boolean;
+}
+
+export interface HintUsageStats {
+  total: number;
+  used: number;
+  missed: number;
+  simplified: number;
+  successRate: number;         // 0-100
+  difficultyProgression: number[];  // difficulty level at each hint
+  recommendedNextDifficulty: number;
 }
 
 export interface SessionTranscript {
@@ -42,6 +52,8 @@ export interface SessionTranscript {
   category: string;
   /** All recorded entries */
   entries: TranscriptEntry[];
+  /** Hint usage statistics (populated at session end) */
+  hintUsageStats?: HintUsageStats;
 }
 
 // ── Constants ──
@@ -125,6 +137,50 @@ export class TranscriptStore {
       type: 'silence_event',
       text: `${Math.round(durationMs)}ms`,
     });
+    this.flush();
+  }
+
+  /**
+   * Record that a hint was used by the user.
+   */
+  addHintUsed(hintText: string, userResponse: string): void {
+    this.session.entries.push({
+      t: Date.now(),
+      type: 'hint_used',
+      text: `✅ ${hintText} | User: "${userResponse}"`,
+    });
+    this.flush();
+  }
+
+  /**
+   * Record that a hint was missed by the user.
+   */
+  addHintMissed(hintText: string): void {
+    this.session.entries.push({
+      t: Date.now(),
+      type: 'hint_missed',
+      text: `❌ ${hintText}`,
+    });
+    this.flush();
+  }
+
+  /**
+   * Record that a hint was simplified for the user.
+   */
+  addHintSimplified(originalHint: string, simplifiedHint: string): void {
+    this.session.entries.push({
+      t: Date.now(),
+      type: 'hint_simplified',
+      text: `🔄 ${originalHint} → ${simplifiedHint}`,
+    });
+    this.flush();
+  }
+
+  /**
+   * Set hint usage stats (called at session end).
+   */
+  setHintUsageStats(stats: HintUsageStats): void {
+    this.session.hintUsageStats = stats;
     this.flush();
   }
 

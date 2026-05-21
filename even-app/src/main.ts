@@ -41,6 +41,7 @@ let selectedScenario: TopicScenario | null = null;
 let expressionUsage: Map<string, boolean> = new Map();
 let currentActiveHint: string | null = null;
 let currentMode: 'general' | 'scenario' | null = null;
+let preferredAudioSource: 'bridge' | 'browser' = (localStorage.getItem('preferredAudioSource') as 'bridge' | 'browser') || 'bridge';
 
 // ── App Shell ──
 
@@ -48,8 +49,11 @@ function renderApp(): void {
   const app = document.getElementById('app')!;
   app.innerHTML = `
     <!-- Header -->
-    <header class="app-header" style="padding: 16px 0; display: flex; align-items: center; justify-content: center; gap: 16px;">
-      <h1 style="margin: 0; font-size: 22px;">Project ECHO</h1>
+    <header style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; background: var(--color-surface); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 10;">
+      <div>
+        <h1 style="margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 500; letter-spacing: -0.6px; color: var(--color-text);">Project ECHO</h1>
+        <p style="margin: 4px 0 0; font-size: 13px; color: var(--color-text-dim);">24/7 Immersion English Education</p>
+      </div>
       <!-- G2 Connection Badge -->
       <div class="connection-badge" id="g2-badge" style="margin: 0;">
         <span class="status-dot idle" id="g2-dot"></span>
@@ -57,26 +61,18 @@ function renderApp(): void {
       </div>
     </header>
 
-    <div id="g2-diagnostics" style="text-align: center; font-size: 11px; color: var(--color-text-muted); margin-bottom: 20px; display: none;">
-      Device: <span id="diag-status">none</span> | 
-      Startup: <span id="diag-startup">-</span> |
-      Wearing: <span id="diag-wearing">-</span>
-      <!-- DEBUG CONSOLE: Removable after development -->
-      <div id="raw-status-log" style="margin-top: 8px; font-family: monospace; background: rgba(0,0,0,0.2); padding: 4px; border-radius: 4px; font-size: 10px; word-break: break-all; text-align: left; max-width: 400px; margin-left: auto; margin-right: auto; max-height: 100px; overflow-y: auto;">
-        Waiting for raw status...
-      </div>
+    <div style="padding: 24px 20px; max-width: 600px; margin: 0 auto; width: 100%;">
+      <!-- Learning Flow Navigation -->
+      <nav class="phase-nav" id="phase-nav">
+        <button class="phase-tab" data-phase="1">Phase 1: Calibration</button>
+        <button class="phase-tab" data-phase="2">Phase 2: Combat</button>
+        <button class="phase-tab" data-phase="3">Phase 3: Debrief</button>
+        <button class="phase-tab" data-phase="4">Phase 4: Ambient</button>
+      </nav>
+
+      <!-- Phase Content -->
+      <main id="phase-content"></main>
     </div>
-
-    <!-- Learning Flow Navigation -->
-    <nav class="phase-nav" id="phase-nav">
-      <button class="phase-tab" data-phase="1">Voice Setup</button>
-      <button class="phase-tab" data-phase="2">Combat Training</button>
-      <button class="phase-tab" data-phase="3">Debrief & Export</button>
-      <button class="phase-tab" data-phase="4">Ambient Immersion</button>
-    </nav>
-
-    <!-- Phase Content -->
-    <main id="phase-content"></main>
   `;
 
   // Bind phase nav
@@ -143,10 +139,6 @@ function switchPhase(phase: number): void {
 
 async function initHUD(): Promise<void> {
   const badge = document.getElementById('g2-badge');
-  const diag = document.getElementById('g2-diagnostics');
-  const diagStatus = document.getElementById('diag-status');
-  const diagStartup = document.getElementById('diag-startup');
-  const diagWearing = document.getElementById('diag-wearing');
   
   if (badge) {
     badge.innerHTML = `<span class="status-dot idle" id="g2-dot"></span><span id="g2-badge-text">G2 Glasses: Connecting...</span>`;
@@ -181,38 +173,10 @@ async function initHUD(): Promise<void> {
   hud.onStatusChanged((status) => {
     if (!badge) return;
     
-    if (diag) diag.style.display = 'block';
-    if (diagStatus) diagStatus.textContent = status.connectType;
     const isConnected = status.connectType !== undefined 
       ? (status.connectType === 'connected' || status.connectType === 1) 
       : (hud?.connected ?? false);
     badge.classList.toggle('connected', isConnected);
-
-    if (diagWearing) {
-      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-      let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
-      
-      // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
-      if (isConnected) isWearing = true;
-      
-      if (rawWearing === undefined && !isConnected) diagWearing.textContent = 'UNKNOWN';
-      else diagWearing.textContent = isWearing ? 'YES' : 'NO';
-
-      // Log raw value for debugging if it's NO but user is wearing
-      if (!isWearing && isConnected) {
-        console.log('[DEBUG] Wear status is false. Raw value:', rawWearing, 'Type:', typeof rawWearing);
-      }
-    }
-
-    // Display raw status on screen for prototyping/debugging
-    const rawStatusLog = document.getElementById('raw-status-log');
-    if (rawStatusLog) {
-      try {
-        rawStatusLog.textContent = 'Raw Status: ' + JSON.stringify(status);
-      } catch (e) {
-        rawStatusLog.textContent = 'Raw Status: [Object could not be stringified]';
-      }
-    }
     
     if (isConnected) {
       const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
@@ -243,13 +207,9 @@ async function initHUD(): Promise<void> {
   });
 
   try {
-    const success = await hud.init();
-    // We get the startup result via the internal logs usually, 
-    // but here we can try to reflect it if we exposed it.
-    // For now, let's just show bridge found.
-    if (diagStartup) diagStartup.textContent = 'OK';
+    await hud.init();
   } catch (err) {
-    if (diagStartup) diagStartup.textContent = 'FAIL';
+    console.warn('[App] Bridge initialization failed:', err);
   }
 }
 
@@ -450,47 +410,109 @@ function bindCombatEvents(): void {
       btnPause.classList.add('btn-highlight');
     }
   });
+
+  // Initialize toggle button text on render
+  const toggleBtnSpan = document.querySelector('#btn-toggle-audio-source span');
+  if (toggleBtnSpan) {
+    toggleBtnSpan.textContent = preferredAudioSource === 'bridge' ? '🔄 G2 Mic' : '🔄 Phone Mic';
+  }
+
+  // Bind the toggle button click
+  document.getElementById('btn-toggle-audio-source')?.addEventListener('click', async () => {
+    const isSessionActive = session && session.state !== 'idle';
+    
+    // Toggle preferred source
+    const newSource = preferredAudioSource === 'bridge' ? 'browser' : 'bridge';
+    preferredAudioSource = newSource;
+    localStorage.setItem('preferredAudioSource', newSource);
+    
+    console.log('[Main] Switched preferred mic source to:', newSource);
+    
+    // Update button label
+    const span = document.querySelector('#btn-toggle-audio-source span');
+    if (span) {
+      span.textContent = newSource === 'bridge' ? '🔄 G2 Mic' : '🔄 Phone Mic';
+    }
+
+    if (isSessionActive) {
+      // Visually indicate reconnecting
+      const label = document.getElementById('audio-source-label');
+      if (label) {
+        label.textContent = '🔄 Reconnecting...';
+        label.style.color = 'var(--color-text-dim)';
+      }
+      
+      // Restart session
+      await stopSession();
+      setTimeout(async () => {
+        await startSession();
+      }, 500);
+    } else {
+      // If standby, update label directly
+      const label = document.getElementById('audio-source-label');
+      if (label) {
+        label.style.display = 'inline-block';
+        if (newSource === 'bridge') {
+          label.textContent = '🔊 G2 Mic (Pref)';
+          label.style.color = 'var(--color-positive)';
+        } else {
+          label.textContent = '🎤 Phone Mic (Pref)';
+          label.style.color = 'var(--phase4)';
+        }
+      }
+    }
+  });
 }
 
 function initTopicSelector(): void {
   const area = document.getElementById('topic-selector-area');
   if (!area) return;
 
-  if (selectedScenario) {
-    area.innerHTML = '';
-    showSelectedTopicCard(selectedScenario);
-    return;
-  }
-
   area.innerHTML = renderTopicSelector();
 
-  // Bind category tabs
-  const tabs = document.querySelectorAll('.topic-cat-tab');
-  const firstCat = getCategories()[0] ?? 'daily';
+  if (selectedScenario) {
+    document.getElementById('topic-selector')!.style.display = 'none';
+    fillTopicDetail(selectedScenario);
+  } else {
+    // Bind category tabs
+    const tabs = document.querySelectorAll('.topic-cat-tab');
+    const firstCat = getCategories()[0] ?? 'daily';
 
-  tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      const cat = (tab as HTMLElement).dataset.cat as TopicCategory;
-      tabs.forEach((t) => t.classList.remove('active'));
-      tab.classList.add('active');
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const cat = (tab as HTMLElement).dataset.cat as TopicCategory;
+        tabs.forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        const grid = document.getElementById('topic-scenario-grid');
+        if (grid) {
+          grid.innerHTML = renderScenarioGrid(cat, selectedScenario?.id);
+          bindScenarioCards();
+        }
+      });
+    });
+
+    // Show first category
+    const firstTab = tabs[0] as HTMLElement | undefined;
+    if (firstTab) {
+      firstTab.classList.add('active');
       const grid = document.getElementById('topic-scenario-grid');
       if (grid) {
-        grid.innerHTML = renderScenarioGrid(cat, selectedScenario?.id);
+        grid.innerHTML = renderScenarioGrid(firstCat as TopicCategory);
         bindScenarioCards();
       }
-    });
-  });
-
-  // Show first category
-  const firstTab = tabs[0] as HTMLElement | undefined;
-  if (firstTab) {
-    firstTab.classList.add('active');
-    const grid = document.getElementById('topic-scenario-grid');
-    if (grid) {
-      grid.innerHTML = renderScenarioGrid(firstCat as TopicCategory);
-      bindScenarioCards();
     }
   }
+
+  // Bind the newly rendered buttons
+  document.getElementById('btn-change-topic')?.addEventListener('click', () => {
+    selectedScenario = null;
+    initTopicSelector();
+  });
+
+  document.getElementById('btn-start-scenario')?.addEventListener('click', () => {
+    if (!selectedScenario) return;
+    startSession();
+  });
 }
 
 function bindScenarioCards(): void {
@@ -501,26 +523,12 @@ function bindScenarioCards(): void {
       const scenario = getScenarioById(id);
       if (!scenario) return;
       selectedScenario = scenario;
+      
+      // Hide the selector grid and show detail card
+      document.getElementById('topic-selector')!.style.display = 'none';
       fillTopicDetail(scenario);
-
-      // Highlight selected card
-      document.querySelectorAll('.topic-scenario-card').forEach((c) => {
-        (c as HTMLElement).style.borderColor = 'var(--color-border)';
-        (c as HTMLElement).style.borderWidth = '1px';
-      });
-      (card as HTMLElement).style.borderColor = 'var(--phase2)';
-      (card as HTMLElement).style.borderWidth = '2px';
     });
   });
-}
-
-function showSelectedTopicCard(scenario: TopicScenario): void {
-  const card = document.getElementById('selected-topic-card');
-  if (!card) return;
-  card.style.display = 'block';
-  setElText('selected-topic-emoji', scenario.emoji);
-  setElText('selected-topic-label', scenario.label);
-  setElText('selected-topic-situation', scenario.situation);
 }
 
 function selectWeek(week: number): void {
@@ -702,7 +710,45 @@ async function startSession(): Promise<void> {
         swStatus.textContent = volume > 0.1 ? '● Audio detected' : 'Waiting for audio...';
       }
     },
-  });
+    onHintUsageResult: (result) => {
+      const liveContainer = document.getElementById('live-transcript-container');
+      const liveText = document.getElementById('live-transcript-text');
+
+      if (result.status === 'used') {
+        // Flash green feedback
+        if (liveContainer && liveText) {
+          liveContainer.style.display = 'block';
+          liveContainer.style.borderLeftColor = 'var(--color-positive)';
+          liveText.textContent = `✅ Great! You used: "${result.hint}"`;
+          setTimeout(() => {
+            liveContainer.style.borderLeftColor = 'var(--color-accent)';
+          }, 2000);
+        }
+        console.log(`[Main] Hint used: "${result.hint}"`);
+      } else if (result.status === 'simplified') {
+        // Flash orange feedback
+        if (liveContainer && liveText) {
+          liveContainer.style.display = 'block';
+          liveContainer.style.borderLeftColor = 'var(--phase4)';
+          liveText.textContent = `🔄 Easier: "${result.simplifiedTo}"`;
+          setTimeout(() => {
+            liveContainer.style.borderLeftColor = 'var(--color-accent)';
+          }, 2000);
+        }
+        console.log(`[Main] Hint simplified: "${result.hint}" → "${result.simplifiedTo}"`);
+      } else if (result.status === 'missed') {
+        console.log(`[Main] Hint missed: "${result.hint}"`);
+      }
+    },
+    onSessionAnalysis: (analysis) => {
+      console.log('[Main] Session Analysis:', analysis);
+      console.log(`[Main] Hints: ${analysis.hintsUsed}/${analysis.totalHints} used (${analysis.successRate}%)`);
+      console.log(`[Main] Recommended next difficulty: ${analysis.recommendedNextDifficulty}`);
+      if (analysis.topMissedExpressions.length > 0) {
+        console.log(`[Main] Top missed: ${analysis.topMissedExpressions.join(', ')}`);
+      }
+    },
+  }, preferredAudioSource);
 
   session.setTopic(
     topicLabel,
@@ -716,6 +762,9 @@ async function startSession(): Promise<void> {
 
   // HUD — exit standby, enter combat mode
   hud?.setSessionActive(true);
+  if (hud) {
+    hud.setCombatTopic(topicLabel);
+  }
   hud?.exitStandby();
   hud?.showListening();
 

@@ -61,22 +61,6 @@ export function renderCombatView(): string {
       <!-- Scenario Practice View -->
       <div id="scenario-practice-area" style="display: none;">
         <div id="topic-selector-area"></div>
-        
-        <div class="card" id="selected-topic-card" style="display: none;">
-          <div style="display: flex; align-items: center; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <span id="selected-topic-emoji" style="font-size: 24px;"></span>
-              <div>
-                <div class="text-normal-body" id="selected-topic-label" style="color: var(--color-text); font-weight: 600;"></div>
-                <div class="text-detail" id="selected-topic-situation" style="color: var(--color-text-muted);"></div>
-              </div>
-            </div>
-            <button class="btn" id="btn-change-topic" style="padding: 4px 10px; font-size: 11px; min-width: auto;">Change</button>
-          </div>
-          <div style="margin-top: var(--spacing-cross);">
-             <button class="btn btn-highlight btn-full" id="btn-start-scenario">Start Scenario Session</button>
-          </div>
-        </div>
       </div>
 
       <!-- Combat Session Card -->
@@ -89,10 +73,15 @@ export function renderCombatView(): string {
 
         <!-- Soundwave Visualizer (unified mic feedback) -->
         <div class="soundwave idle" id="soundwave-panel" style="display: none;">
-          <div class="soundwave-header">
-            <span class="status-dot listening" id="vad-dot" style="width: 8px; height: 8px;"></span>
-            <span class="text-detail" id="vad-label">VAD Inactive</span>
-            <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;">—</span>
+          <div class="soundwave-header" style="justify-content: space-between; width: 100%;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="status-dot listening" id="vad-dot" style="width: 8px; height: 8px; margin-right: 0;"></span>
+              <span class="text-detail" id="vad-label">VAD Inactive</span>
+              <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;">—</span>
+            </div>
+            <button id="btn-toggle-audio-source" style="font-family: var(--font-display); font-size: 11px; padding: 2px 8px; height: 22px; border-radius: 11px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); background: var(--color-surface-light); color: var(--color-text-dim); cursor: pointer; transition: all 0.15s ease;">
+              <span>🔄 Switch Mic</span>
+            </button>
           </div>
           <div class="soundwave-bars">
             ${leftBars}

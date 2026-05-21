@@ -20,6 +20,35 @@ function getAI(): GoogleGenAI {
   return ai;
 }
 
+async function callGeminiWithFallback(
+  contents: any,
+  config: any,
+  models: string[] = ['gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
+): Promise<any> {
+  const genai = getAI();
+  let lastError = null;
+
+  for (const model of models) {
+    try {
+      console.log(`[Gemini] Attempting call with model: ${model}`);
+      const response = await genai.models.generateContent({
+        model,
+        contents,
+        config,
+      });
+      console.log(`[Gemini] Success with model: ${model}`);
+      return response;
+    } catch (err: any) {
+      console.warn(`[Gemini] Model ${model} failed:`, err.message || err);
+      lastError = err;
+      // Fallback on transient or availability errors
+      continue;
+    }
+  }
+
+  throw lastError || new Error('All models failed');
+}
+
 export interface ChunkRequest {
   /** Current session topic / scenario */
   topic: string;
@@ -33,6 +62,12 @@ export interface ChunkRequest {
   usedHints?: string[];
   /** Scenario-specific coaching context from topic registry */
   scenarioContext?: string;
+  /** Recent conversation context from TranscriptAnalyzer */
+  conversationContext?: string;
+  /** Adaptive difficulty override (1-4), overrides week if provided */
+  adaptiveDifficulty?: number;
+  /** If user missed a hint, this is the missed hint text for simplification context */
+  missedHint?: string;
 }
 
 export interface ChunkResult {
@@ -55,8 +90,11 @@ export interface SpeechEvaluationResult {
 export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
   const start = Date.now();
 
+  // Use adaptive difficulty if provided, otherwise use week
+  const effectiveDifficulty = req.adaptiveDifficulty ?? req.week;
+
   // Week 4: random blackout — 40% chance of returning nothing
-  if (req.week === 4 && Math.random() < 0.4) {
+  if (effectiveDifficulty === 4 && Math.random() < 0.4) {
     return {
       chunk: '',
       source: 'gemini',
@@ -76,16 +114,14 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
   const userPrompt = buildUserPrompt(req);
 
   try {
-    const genai = getAI();
-    const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: userPrompt,
-      config: {
+    const response = await callGeminiWithFallback(
+      userPrompt,
+      {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 30,
+        maxOutputTokens: 50,
         temperature: 0.7,
-      },
-    });
+      }
+    );
 
     const text = response.text?.trim() ?? '';
     let chunk = cleanChunk(text);
@@ -96,15 +132,14 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
       if (req.usedHints.some(h => h.toLowerCase() === lower)) {
         // Try one more time with explicit instruction
         try {
-          const retryResponse = await genai.models.generateContent({
-            model: 'gemini-3.1-flash-lite',
-            contents: userPrompt + `\nDO NOT use any of these phrases: ${req.usedHints.join(', ')}`,
-            config: {
+          const retryResponse = await callGeminiWithFallback(
+            userPrompt + `\nDO NOT use any of these phrases: ${req.usedHints.join(', ')}`,
+            {
               systemInstruction: systemPrompt,
-              maxOutputTokens: 30,
+              maxOutputTokens: 50,
               temperature: 0.9, // Higher temp for variety
-            },
-          });
+            }
+          );
           const retryText = retryResponse.text?.trim() ?? '';
           const retryChunk = cleanChunk(retryText);
           if (retryChunk && !req.usedHints.some(h => h.toLowerCase() === retryChunk.toLowerCase())) {
@@ -135,29 +170,29 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
 }
 
 function buildSystemPrompt(week: number): string {
-  const base = `You are a stealth English coach embedded in smart glasses. 
+  const base = `You are an English conversation coach embedded in AR glasses. 
 The user is having a live English conversation and just went silent — they're stuck.
-You must respond with ONLY a short English chunk (3-5 words max). 
-No explanation, no translation, no punctuation except what's natural in speech.
-Just the chunk. Nothing else.`;
+You must respond with ONLY a short, helpful English phrase or a fill-in-the-blank sentence that they can use to continue the conversation.
+Do NOT provide explanations or translations. Just the recommended phrase.
+Format examples: "I was wondering if ___", "What do you think about ___?", "Could you help me with ___?"`;
 
   switch (week) {
     case 1:
       return `${base}
-Week 1 mode: Give a COMPLETE starter phrase they can parrot immediately.
-Examples: "I'd recommend", "What I mean is", "The thing about"`;
+Week 1 mode: Give a COMPLETE starter phrase with a fill-in-the-blank.
+Examples: "I'd like to order ___", "Could you tell me where ___ is?"`;
     case 2:
       return `${base}
-Week 2 mode: Give a TEMPLATE connector, not a complete thought.
-Examples: "Not only A but", "In terms of", "What stands out is"`;
+Week 2 mode: Give a TEMPLATE connector or transition.
+Examples: "On the other hand, ___", "In my experience, ___"`;
     case 3:
       return `${base}
-Week 3 mode: Give only 2-3 KEYWORDS, no structure. Make them think.
-Examples: "authentic vibe", "worth visiting", "local favorite"`;
+Week 3 mode: Give 2-3 KEYWORDS to jog their memory.
+Examples: "recommend / popular", "reservation / available"`;
     case 4:
       return `${base}
-Week 4 mode: Give the shortest possible nudge — 1-2 words max.
-Examples: "basically", "moreover", "honestly"`;
+Week 4 mode: Give a 1-word nudge.
+Examples: "basically", "actually"`;
     default:
       return base;
   }
@@ -170,8 +205,14 @@ function buildUserPrompt(req: ChunkRequest): string {
   if (req.scenarioContext) {
     prompt += `\nScenario context: ${req.scenarioContext}`;
   }
+  if (req.conversationContext) {
+    prompt += `\nRecent conversation:\n${req.conversationContext}`;
+  }
   if (req.lastUtterance) {
     prompt += `\nThe user last said: "${req.lastUtterance}"`;
+  }
+  if (req.missedHint) {
+    prompt += `\nThe user was given "${req.missedHint}" but couldn't use it. Give a SIMPLER, easier alternative expression.`;
   }
   if (req.usedHints?.length) {
     prompt += `\nPreviously given hints (DO NOT repeat): ${req.usedHints.slice(-5).join(', ')}`;
@@ -243,14 +284,12 @@ HINT RULES — BE VERY PERMISSIVE:
 When in doubt, set hint to null. The user is practicing — let them try!`;
 
   try {
-    const genai = getAI();
-    const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: [
+    const response = await callGeminiWithFallback(
+      [
         { text: `Topic: ${req.topic}\nEvaluate the speech:` },
         { inlineData: { mimeType: 'audio/wav', data: base64 } }
       ],
-      config: {
+      {
         systemInstruction: systemPrompt,
         maxOutputTokens: 100,
         temperature: 0.2,
@@ -263,8 +302,8 @@ When in doubt, set hint to null. The user is practicing — let them try!`;
           },
           required: ["transcript"]
         } as any,
-      },
-    });
+      }
+    );
 
     const text = response.text?.trim() ?? '';
     if (!text) return null;
@@ -331,18 +370,16 @@ User: "I am agree with you" -> "Try: I agree with you"
 User: "That sounds good" -> "null"`;
 
   try {
-    const genai = getAI();
-    const response = await genai.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
-      contents: [
+    const response = await callGeminiWithFallback(
+      [
         { text: `Topic: ${topic}\nTranscript: "${transcript}"\nProvide correction or null:` }
       ],
-      config: {
+      {
         systemInstruction: systemPrompt,
-        maxOutputTokens: 30,
+        maxOutputTokens: 50,
         temperature: 0.1,
-      },
-    });
+      }
+    );
 
     const text = response.text?.trim() ?? '';
     if (!text || text.toLowerCase() === 'null') {
@@ -358,6 +395,38 @@ User: "That sounds good" -> "null"`;
 
   } catch (err) {
     console.warn('[ChunkGen] Grammar evaluation failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Simplify a hint expression that the user couldn't use.
+ * Returns a simpler, easier-to-use alternative.
+ */
+export async function simplifyHint(hint: string, topic: string): Promise<string | null> {
+  if (!API_KEY) return null;
+
+  const systemPrompt = `You are an English conversation coach. The user was given a hint expression but couldn't use it because it was too difficult.
+Simplify the expression to make it easier. Keep the same meaning but use simpler words and shorter phrasing.
+Return ONLY the simplified expression, nothing else. Maximum 5 words.`;
+
+  try {
+    const response = await callGeminiWithFallback(
+      [
+        { text: `Topic: ${topic}\nOriginal hint: "${hint}"\nSimplify:` }
+      ],
+      {
+        systemInstruction: systemPrompt,
+        maxOutputTokens: 30,
+        temperature: 0.3,
+      }
+    );
+
+    const text = response.text?.trim() ?? '';
+    if (!text || text.length < 2) return null;
+    return cleanChunk(text);
+  } catch (err) {
+    console.warn('[ChunkGen] Simplification failed:', err);
     return null;
   }
 }

@@ -6,11 +6,12 @@
  */
 
 import { VADManager } from './vad-manager';
-import { generateChunk, evaluateSpeech, evaluateGrammar, type ChunkResult } from './chunk-generator';
+import { generateChunk, evaluateSpeech, evaluateGrammar, simplifyHint, type ChunkResult } from './chunk-generator';
 import type { ChunkCategory } from './fallback-chunks';
 import type { HUDController } from '../hud/hud-controller';
-import { SpeechRecognizer } from './speech-recognizer';
+import { HybridRecognizer } from './hybrid-recognizer';
 import { TranscriptStore, type SessionTranscript } from './transcript-store';
+import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
 
 // ── Types ──
 
@@ -64,10 +65,14 @@ export interface SessionCallbacks {
   onSessionLog: (log: SessionLog) => void;
   onTranscript?: (transcript: string) => void;
   onVolume?: (volume: number) => void;
-  /** Real-time interim text from SpeechRecognizer (Web Speech API) */
+  /** Real-time interim text from HybridRecognizer */
   onLiveTranscript?: (text: string, isFinal: boolean) => void;
   /** Notifies which audio source is active */
   onAudioSource?: (source: string) => void;
+  /** Fired when hint usage is resolved (used, missed, or simplified) */
+  onHintUsageResult?: (result: { hint: string; status: 'used' | 'missed' | 'simplified'; simplifiedTo?: string }) => void;
+  /** Fired at session end with full analysis */
+  onSessionAnalysis?: (analysis: SessionAnalysis) => void;
 }
 
 // ── Engine ──
@@ -96,13 +101,18 @@ export class SessionEngine {
   private hudRef: HUDController | null = null;
   private silenceCountdownInterval: ReturnType<typeof setInterval> | null = null;
   private lastVolume = 0;
-  private speechRecognizer: SpeechRecognizer | null = null;
+  private speechRecognizer: HybridRecognizer | null = null;
   private lastLiveTranscript = '';
   private transcriptStore: TranscriptStore | null = null;
+  private analyzer: TranscriptAnalyzer | null = null;
+  private lastTranscriptActivityTime = 0;
+  private showingCountdown = false;
+  private preferredAudioSource: 'bridge' | 'browser' = 'bridge';
 
-  constructor(week: number, callbacks: SessionCallbacks) {
+  constructor(week: number, callbacks: SessionCallbacks, preferredAudioSource: 'bridge' | 'browser' = 'bridge') {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
     this.callbacks = callbacks;
+    this.preferredAudioSource = preferredAudioSource;
   }
 
   /** Whether VAD is running in simulation (keyboard) mode */
@@ -166,9 +176,13 @@ export class SessionEngine {
       this._scenarioId || this._category,
     );
 
+    // Initialize transcript analyzer for hint tracking
+    this.analyzer = new TranscriptAnalyzer(this.weekConfig.week);
+
     this.vad = new VADManager({
       silenceThresholdMs: this.weekConfig.silenceThresholdMs,
       hud,
+      preferredSource: this.preferredAudioSource,
 
       onSilenceThreshold: () => {
         this.handleSilenceThreshold();
@@ -213,6 +227,33 @@ export class SessionEngine {
             // Record to cache
             this.transcriptStore?.addSpeech(result.transcript, 'gemini_eval');
 
+            // If the audio source is 'bridge', reuse this transcript as the final recognized speech if not already finalized
+            if (this.vad?.audioSource === 'bridge') {
+              const alreadyFinalized = this.lastLiveTranscript && !this.lastLiveTranscript.startsWith('🎤');
+              if (!alreadyFinalized) {
+                this.lastLiveTranscript = result.transcript;
+                this.callbacks.onLiveTranscript?.(result.transcript, true);
+                const trimmed = result.transcript.trim();
+                if (trimmed) {
+                  this.transcriptStore?.addSpeech(trimmed, 'live_final');
+                  this.resetTranscriptActivity();
+                  if (this.hudRef) {
+                    this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
+                    
+                    // Trigger grammar evaluation asynchronously
+                    (async () => {
+                      const correction = await evaluateGrammar(trimmed, this._topic);
+                      if (correction && this.hudRef && this._state === 'listening') {
+                        this.hudRef.showGrammarFeedback(correction);
+                      }
+                    })();
+                  }
+                }
+              } else {
+                console.log('[Session] Bridge transcript already finalized by fast speech recognizer.');
+              }
+            }
+
             // If Gemini returned a hint chunk (meaning speech was bad) and we are still listening
             if (result.chunk) {
               this.hintCount++;
@@ -240,7 +281,7 @@ export class SessionEngine {
               setTimeout(() => {
                 if (this._state === 'hud_flash') {
                   this.setState('listening');
-                  this.vad?.simulateSilenceRestart();
+                  this.resetTranscriptActivity();
                   // Restore gauge on glasses
                   this.hudRef?.showListening();
                 }
@@ -255,21 +296,21 @@ export class SessionEngine {
         }
       },
 
-      // Forward raw PCM frames to SpeechRecognizer (Bridge mode only)
+      // Forward raw PCM frames to HybridRecognizer (Bridge/Hybrid mode)
       onPCMFrame: (frame: Float32Array) => {
-        if (this.speechRecognizer?.mode === 'bridge') {
+        if (this.speechRecognizer && this.speechRecognizer.mode !== 'browser') {
           this.speechRecognizer.feedPCM(frame);
         }
       },
 
-      // Notify SpeechRecognizer of speech segment boundaries (Bridge mode)
+      // Notify HybridRecognizer of speech segment boundaries (Bridge/Hybrid mode)
       onBridgeSpeechStart: () => {
-        if (this.speechRecognizer?.mode === 'bridge') {
+        if (this.speechRecognizer && this.speechRecognizer.mode !== 'browser') {
           this.speechRecognizer.notifySpeechStart();
         }
       },
       onBridgeSpeechEnd: () => {
-        if (this.speechRecognizer?.mode === 'bridge') {
+        if (this.speechRecognizer && this.speechRecognizer.mode !== 'browser') {
           this.speechRecognizer.notifySpeechEnd();
         }
       },
@@ -299,6 +340,7 @@ export class SessionEngine {
     }
 
     this.setState('listening');
+    this.resetTranscriptActivity();
     this.startSilenceCountdown();
 
     // Start real-time speech recognition (Web Speech API) if available
@@ -306,18 +348,24 @@ export class SessionEngine {
   }
 
   /**
-   * Start speech recognizer for real-time text.
-   * - Bridge mode: Uses PCM from G2 glasses → Gemini transcription
+   * Start hybrid speech recognizer for real-time text.
+   * - Bridge mode: Uses Hybrid (Web Speech API + PCM buffer)
    * - Browser mode: Uses Web Speech API on phone/computer mic
    * Includes retry logic (max 3 attempts, 2s apart).
    */
   private startSpeechRecognizer(retryCount = 0): void {
     const isBridge = this.vad?.audioSource === 'bridge';
 
-    this.speechRecognizer = new SpeechRecognizer({
+    this.speechRecognizer = new HybridRecognizer({
       onInterimResult: (text) => {
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, false);
+        
+        // Reset silence timer on interim transcript activity
+        if (text && text.trim().length > 0) {
+          this.resetTranscriptActivity();
+        }
+
         // Show live text on glasses bottom zone + volume bars on top
         if (this.hudRef) {
           this.hudRef.showLiveTranscript(text);
@@ -328,22 +376,48 @@ export class SessionEngine {
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, true);
         const trimmed = text.trim();
-        // Record finalized speech recognition to cache
-        if (trimmed) {
-          this.transcriptStore?.addSpeech(trimmed, 'live_final');
-        }
+        if (!trimmed) return;
+
+        // Reset silence timer on final transcript
+        this.resetTranscriptActivity();
+
+        // Record finalized speech recognition to cache and analyzer
+        this.transcriptStore?.addSpeech(trimmed, 'live_final');
+        this.analyzer?.addUtterance(trimmed, true);
+
         // Update glasses bottom zone with confirmed text
-        if (this.hudRef && trimmed) {
+        if (this.hudRef) {
           this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
-          
-          // Trigger grammar evaluation asynchronously
-          (async () => {
-            const correction = await evaluateGrammar(trimmed, this._topic);
-            if (correction && this.hudRef && this._state === 'listening') {
-              this.hudRef.showGrammarFeedback(correction);
-            }
-          })();
         }
+
+        // Check if user used the active hint
+        if (this.analyzer?.getActiveHint()) {
+          const checkResult = this.analyzer.checkHintUsage(trimmed);
+          const activeHint = this.analyzer.getActiveHint()!;
+
+          if (checkResult.used) {
+            // User successfully used the recommended expression!
+            this.analyzer.resolveActiveHint('used', trimmed);
+            this.transcriptStore?.addHintUsed(activeHint.text, trimmed);
+            this.callbacks.onHintUsageResult?.({
+              hint: activeHint.text,
+              status: 'used',
+            });
+            if (this.hudRef) {
+              this.hudRef.showGoodJob();
+            }
+            console.log(`[Session] ✓ Hint used: "${activeHint.text}" in "${trimmed}"`);
+          }
+          // If not used, we don't mark as missed yet — wait for silence threshold
+        }
+
+        // Trigger grammar evaluation asynchronously
+        (async () => {
+          const correction = await evaluateGrammar(trimmed, this._topic);
+          if (correction && this.hudRef && this._state === 'listening') {
+            this.hudRef.showGrammarFeedback(correction);
+          }
+        })();
       },
       onSpeechStart: () => {
         // Additional speech detection feedback
@@ -366,14 +440,14 @@ export class SessionEngine {
     });
 
     if (isBridge) {
-      // Bridge mode: PCM from glasses → Gemini transcription
-      const started = this.speechRecognizer.startBridge();
+      // Hybrid mode: Web Speech API for fast text + PCM buffer for evaluateSpeech
+      const started = this.speechRecognizer.startHybrid();
       if (started) {
-        console.log('[Session] ✓ Bridge speech recognition active (PCM → Gemini)');
+        console.log(`[Session] ✓ Hybrid speech recognition active (mode: ${this.speechRecognizer.mode})`);
       }
     } else {
-      // Browser mode: Web Speech API
-      if (!SpeechRecognizer.isSupported()) {
+      // Browser mode: Web Speech API only
+      if (!HybridRecognizer.isWebSpeechSupported()) {
         console.log('[Session] Web Speech API not available — real-time transcript disabled');
         return;
       }
@@ -384,20 +458,30 @@ export class SessionEngine {
     }
   }
 
+  private resetTranscriptActivity(): void {
+    this.lastTranscriptActivityTime = Date.now();
+    this.vad?.simulateSilenceRestart();
+  }
+
   /**
    * Start silence countdown interval that updates HUD every second.
    */
   private startSilenceCountdown(): void {
     this.stopSilenceCountdown();
+    this.showingCountdown = false;
     this.silenceCountdownInterval = setInterval(() => {
       if (this._state !== 'listening' || !this.vad || !this.hudRef) return;
-      const silenceMs = this.vad.silenceDurationMs;
+      const silenceMs = Date.now() - this.lastTranscriptActivityTime;
       const thresholdMs = this.weekConfig.silenceThresholdMs;
       const secondsLeft = Math.max(0, Math.ceil((thresholdMs - silenceMs) / 1000));
       const thresholdSeconds = Math.ceil(thresholdMs / 1000);
       // Only show countdown when > 30% into silence
       if (silenceMs > thresholdMs * 0.3) {
         this.hudRef.showSilenceCountdown(secondsLeft, thresholdSeconds);
+        this.showingCountdown = true;
+      } else if (this.showingCountdown) {
+        this.hudRef.showListening();
+        this.showingCountdown = false;
       }
     }, 1000);
   }
@@ -431,6 +515,29 @@ export class SessionEngine {
       ? this.silenceDurations.reduce((a, b) => a + b, 0) / this.silenceDurations.length
       : 0;
 
+    // Resolve any pending active hint as missed
+    if (this.analyzer?.getActiveHint()) {
+      const activeHint = this.analyzer.getActiveHint()!;
+      this.analyzer.resolveActiveHint('missed');
+      this.transcriptStore?.addHintMissed(activeHint.text);
+    }
+
+    // Get session analysis from TranscriptAnalyzer
+    const sessionAnalysis = this.analyzer?.getSessionAnalysis() ?? null;
+
+    // Store hint usage stats in transcript store
+    if (sessionAnalysis && this.transcriptStore) {
+      this.transcriptStore.setHintUsageStats({
+        total: sessionAnalysis.totalHints,
+        used: sessionAnalysis.hintsUsed,
+        missed: sessionAnalysis.hintsMissed,
+        simplified: sessionAnalysis.hintsSimplified,
+        successRate: sessionAnalysis.successRate,
+        difficultyProgression: sessionAnalysis.difficultyProgression,
+        recommendedNextDifficulty: sessionAnalysis.recommendedNextDifficulty,
+      });
+    }
+
     // Finalize transcript cache
     const transcript = this.transcriptStore?.finalize();
     this.transcriptStore = null;
@@ -453,6 +560,13 @@ export class SessionEngine {
     };
 
     this.callbacks.onSessionLog(log);
+
+    // Fire session analysis callback
+    if (sessionAnalysis) {
+      this.callbacks.onSessionAnalysis?.(sessionAnalysis);
+    }
+
+    this.analyzer = null;
     this.setState('session_end');
   }
 
@@ -490,7 +604,7 @@ export class SessionEngine {
     
     if (this.speechRecognizer) {
       if (this.vad?.audioSource === 'bridge') {
-        this.speechRecognizer.startBridge();
+        this.speechRecognizer.startHybrid();
       } else {
         this.speechRecognizer.start();
       }
@@ -509,19 +623,77 @@ export class SessionEngine {
     if (this.isGenerating) return;
     if (this._state !== 'listening') return;
 
+    // Double check silence duration based on last transcript activity
+    const silenceDur = Date.now() - this.lastTranscriptActivityTime;
+    if (silenceDur < this.weekConfig.silenceThresholdMs - 200) {
+      console.log(`[Session] Ignored VAD silence threshold. Actual silence since transcript: ${silenceDur}ms`);
+      return;
+    }
+
     this.silenceCount++;
-    const silenceDur = this.vad?.silenceDurationMs ?? 0;
     this.silenceDurations.push(silenceDur);
 
     // Record silence event to cache
     this.transcriptStore?.addSilence(silenceDur);
+
+    // Check if user missed the active hint (silence = they didn't use it)
+    if (this.analyzer?.getActiveHint()) {
+      const activeHint = this.analyzer.getActiveHint()!;
+      this.analyzer.resolveActiveHint('missed');
+      this.transcriptStore?.addHintMissed(activeHint.text);
+
+      // Try to simplify the missed hint
+      this.isGenerating = true;
+      this.setState('chunk_generating');
+
+      try {
+        const simplified = await simplifyHint(activeHint.text, this._topic);
+        if ((this._state as any) === 'session_end') return;
+
+        if (simplified && simplified !== activeHint.text) {
+          // Show simplified hint
+          this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
+          this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1));
+
+          this.hintCount++;
+          this.usedHintChunks.push(simplified);
+          this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: Date.now() });
+          this.transcriptStore?.addHint(simplified, 'gemini_eval');
+
+          this.callbacks.onHintUsageResult?.({
+            hint: activeHint.text,
+            status: 'simplified',
+            simplifiedTo: simplified,
+          });
+
+          this.setState('hud_flash');
+          this.callbacks.onChunkGenerated({ chunk: simplified, source: 'gemini', latencyMs: 0 });
+
+          setTimeout(() => {
+            if (this._state === 'hud_flash') {
+              this.setState('listening');
+              this.resetTranscriptActivity();
+              this.hudRef?.showListening();
+            }
+          }, this.weekConfig.hintFlashDurationMs);
+        } else {
+          // Simplification failed — generate a new contextual hint
+          await this.generateContextualHint();
+        }
+      } catch {
+        this.setState('listening');
+        this.resetTranscriptActivity();
+      } finally {
+        this.isGenerating = false;
+      }
+      return;
+    }
 
     this.setState('silence_detected');
     this.callbacks.onSilenceStart();
 
     // Week 4 blackout check
     if (Math.random() < this.weekConfig.blackoutProbability) {
-      // Blackout — no hint shown
       setTimeout(() => {
         if (this._state === 'silence_detected') {
           this.setState('listening');
@@ -530,11 +702,21 @@ export class SessionEngine {
       return;
     }
 
-    // Generate chunk
+    // Generate a contextual hint using TranscriptAnalyzer data
+    await this.generateContextualHint();
+  }
+
+  /**
+   * Generate a hint using conversation context and adaptive difficulty.
+   */
+  private async generateContextualHint(): Promise<void> {
     this.isGenerating = true;
     this.setState('chunk_generating');
 
     try {
+      const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
+      const conversationContext = this.analyzer?.getConversationContext() ?? undefined;
+
       const result = await generateChunk({
         topic: this._topic,
         week: this.weekConfig.week,
@@ -542,9 +724,10 @@ export class SessionEngine {
         lastUtterance: this.lastLiveTranscript || undefined,
         usedHints: this.usedHintChunks,
         scenarioContext: this._scenarioContext || undefined,
+        conversationContext,
+        adaptiveDifficulty,
       });
 
-      // Check if session was stopped during API call
       if ((this._state as any) === 'session_end') return;
 
       if (result.chunk) {
@@ -556,28 +739,27 @@ export class SessionEngine {
           timestamp: Date.now(),
         });
 
-        // Record hint to cache
+        // Register with TranscriptAnalyzer for tracking
+        this.analyzer?.setActiveHint(result.chunk, adaptiveDifficulty);
+
         this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
         this.setState('hud_flash');
         this.callbacks.onChunkGenerated(result);
 
-        // Auto-clear after flash duration, then restart silence cycle
         setTimeout(() => {
           if (this._state === 'hud_flash') {
             this.setState('listening');
-            // Restart silence timer so the cycle continues
-            this.vad?.simulateSilenceRestart();
-            // Restore gauge on glasses
+            this.resetTranscriptActivity();
             this.hudRef?.showListening();
           }
         }, this.weekConfig.hintFlashDurationMs);
       } else {
-        // Empty chunk (Week 4 blackout from API)
         this.setState('listening');
       }
     } catch {
       this.setState('listening');
+      this.resetTranscriptActivity();
     } finally {
       this.isGenerating = false;
     }
