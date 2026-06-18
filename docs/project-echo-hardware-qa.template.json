@@ -185,5 +185,18 @@
     "latencyMetadataVisible": null,
     "noRawTranscriptInLogs": null,
     "debugLogRef": "TBD"
+  },
+  "voiceRuntime": {
+    "voiceRuntimeOnDemand": null,
+    "initialChunksUnderLimit": null,
+    "distHtmlDoesNotPreloadVoiceRuntime": null,
+    "g2MicStartWorks": null,
+    "phoneMicStartWorks": null,
+    "pauseResumeWorks": null,
+    "endPracticeCleanupWorks": null,
+    "audioSourceSwitchWorks": null,
+    "noSilentPhoneFallback": null,
+    "bundleReportRef": "TBD",
+    "deviceEvidenceRef": "TBD"
   }
 }

@@ -1,7 +1,7 @@
 # Hardware QA
 
 Use [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json)
-as the required physical G2 evidence manifest for issues #2, #3, #4, and #6.
+as the required physical G2 evidence manifest for issues #2, #3, #4, #6, and #12.
 The draft template is shape-checked by `npm run validate:hardware-template`
 inside `npm run verify:all`. Final hardware QA must pass:
 
@@ -161,6 +161,23 @@ Automated coverage added on 2026-06-19:
 Still requires real G2 validation:
 
 - Confirm READY, LISTENING, CUE, PAUSED, and the pause menu render without overlap on the physical glasses or Even Hub simulator.
+
+## Voice runtime lazy-load QA
+
+Run this after any change to `@ricky0123/vad-web`, `onnxruntime-web`, VAD
+initialization, or audio source switching.
+
+- Build the app and run `cd even-app && npm run bundle:report`.
+- Confirm the report marks `voice-runtime-*` and ONNX/WASM runtime assets as `on demand`.
+- Confirm `dist/index.html` does not preload a `voice-runtime-*` chunk.
+- Confirm the largest initial JS chunk remains under the Vite warning threshold.
+- Start a physical G2 Mic session and confirm G2 audio/VAD starts without opening Phone Mic.
+- Select Phone Mic explicitly and confirm the voice runtime loads only after that user action.
+- Pause and resume the session; confirm no duplicate VAD/runtime initialization occurs.
+- Select `END PRACTICE`; confirm audio capture stops and `READY` returns.
+- Switch audio sources through the phone UI and confirm no silent phone fallback occurs.
+- Record `bundleReportRef` and `deviceEvidenceRef` under `voiceRuntime` in
+  [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json).
 
 ## Metrics to capture
 

@@ -223,11 +223,33 @@ function validateDelayedProxy(manifestObject) {
   validateText(manifestObject.delayedProxy, 'debugLogRef', 'delayedProxy');
 }
 
+function validateVoiceRuntime(manifestObject) {
+  if (!validateObject(manifestObject.voiceRuntime, 'voiceRuntime')) return;
+
+  for (const key of [
+    'voiceRuntimeOnDemand',
+    'initialChunksUnderLimit',
+    'distHtmlDoesNotPreloadVoiceRuntime',
+    'g2MicStartWorks',
+    'phoneMicStartWorks',
+    'pauseResumeWorks',
+    'endPracticeCleanupWorks',
+    'audioSourceSwitchWorks',
+    'noSilentPhoneFallback',
+  ]) {
+    validateExpected(manifestObject.voiceRuntime, key, true, 'voiceRuntime');
+  }
+
+  validateText(manifestObject.voiceRuntime, 'bundleReportRef', 'voiceRuntime');
+  validateText(manifestObject.voiceRuntime, 'deviceEvidenceRef', 'voiceRuntime');
+}
+
 validateManifestRoot(manifest);
 validateLifecycle(manifest);
 validateHud(manifest);
 validateAssist(manifest);
 validateDelayedProxy(manifest);
+validateVoiceRuntime(manifest);
 
 const maxDisplayedFindings = verbose ? Number.POSITIVE_INFINITY : 25;
 

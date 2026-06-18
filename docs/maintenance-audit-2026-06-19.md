@@ -74,6 +74,12 @@ Follow-up `a01285d` added the report command. A later #12 pass moved
 `bundle:report` now marks `voice-runtime-*` and the ONNX/WASM runtime as
 `on demand`, with the largest initial JS chunk at about 160 kB.
 
+The remaining #12 acceptance criteria are now part of the physical hardware QA
+evidence gate. `docs/project-echo-hardware-qa.completed.json` must include the
+`voiceRuntime` section proving the runtime stays on demand and that G2 Mic,
+Phone Mic, pause/resume, End Practice cleanup, and audio source switching still
+work on device after lazy-loading.
+
 ## Verification
 
 - Root `npm audit --json`: 0 vulnerabilities.
