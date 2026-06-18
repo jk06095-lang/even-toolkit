@@ -75,7 +75,8 @@ Manifest:
    provider hostnames, SDK imports, and development IPs.
 9. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact. Copy `docs/key-rotation-evidence.template.md` to
-   `docs/key-rotation-evidence.md` and record the rotation evidence there.
+   `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
+   `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
 10. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 

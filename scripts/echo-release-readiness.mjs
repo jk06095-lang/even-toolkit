@@ -135,40 +135,25 @@ function checkReadmeLinks() {
   return true;
 }
 
-function checkKeyRotationEvidence() {
+async function checkKeyRotationEvidence() {
   const evidencePath = path.resolve(repoRoot, 'docs/key-rotation-evidence.md');
   if (!existsSync(evidencePath)) {
     addCheck(
       'provider key rotation evidence',
       'blocked',
-      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, and production log review notes.',
+      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, production smoke, artifact scan, and log review notes.',
       '#1',
     );
     return false;
   }
 
-  const text = readFileSync(evidencePath, 'utf8');
-  const required = ['rotation date', 'rotated provider keys', 'production log review'];
-  const missing = required.filter((needle) => !text.toLowerCase().includes(needle));
-  if (missing.length > 0) {
-    addCheck('provider key rotation evidence', 'blocked', `Missing sections: ${missing.join(', ')}`, '#1');
+  const result = await runNpm(['run', 'validate:key-rotation-evidence', '--', 'docs/key-rotation-evidence.md']);
+  if (result.code !== 0) {
+    addCheck('provider key rotation evidence', 'blocked', firstUsefulLine(result.output), '#1');
     return false;
   }
 
-  const unfinishedFields = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => /^-\s+[^:]+:\s*$/.test(line))
-    .map((line) => line.replace(/^-\s+/, '').replace(/:\s*$/, ''));
-
-  if (unfinishedFields.length > 0) {
-    const preview = unfinishedFields.slice(0, 5).join(', ');
-    const suffix = unfinishedFields.length > 5 ? `, and ${unfinishedFields.length - 5} more` : '';
-    addCheck('provider key rotation evidence', 'blocked', `Unfilled evidence fields: ${preview}${suffix}`, '#1');
-    return false;
-  }
-
-  addCheck('provider key rotation evidence', 'passed', 'docs/key-rotation-evidence.md has required rotation evidence sections.', '#1');
+  addCheck('provider key rotation evidence', 'passed', 'docs/key-rotation-evidence.md passed production evidence validation.', '#1');
   return true;
 }
 
@@ -228,7 +213,7 @@ await validateFinalManifest({
 
 checkManifestSummaries();
 await checkProxySmoke();
-checkKeyRotationEvidence();
+await checkKeyRotationEvidence();
 checkReadmeLinks();
 
 printReport();

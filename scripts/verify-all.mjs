@@ -15,6 +15,10 @@ const steps = [
     args: ['run', 'validate:hardware-template'],
   },
   {
+    label: 'Project ECHO key-rotation template',
+    args: ['run', 'validate:key-rotation-template'],
+  },
+  {
     label: 'ECHO API proxy verify',
     args: ['--prefix', 'echo-api-proxy', 'run', 'verify'],
   },
