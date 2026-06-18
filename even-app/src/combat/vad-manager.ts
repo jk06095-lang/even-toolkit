@@ -12,18 +12,18 @@
  * - The app does not silently fall back from G2 to Phone Mic.
  */
 
-import { MicVAD, FrameProcessor, Message } from '@ricky0123/vad-web';
-import * as ort from 'onnxruntime-web';
 import { HUDController } from '../hud/hud-controller';
 import type { VadCalibration } from '../dsp/calibration';
 
-// These are needed for manual VAD loading
-import { SileroLegacy } from '@ricky0123/vad-web/dist/models';
-import { defaultModelFetcher } from '@ricky0123/vad-web/dist/default-model-fetcher';
-
-ort.env.wasm.wasmPaths = '/';
-
 export type VADState = 'idle' | 'loading' | 'listening' | 'paused' | 'error';
+
+interface BrowserMicVAD {
+  start(): void | Promise<void>;
+  pause?(): void | Promise<void>;
+  resume?(): void | Promise<void>;
+  stop?(): void | Promise<void>;
+  destroy?(): void | Promise<void>;
+}
 
 export interface VADConfig {
   /** Silence threshold in ms before triggering hint. Default: 3000 */
@@ -54,7 +54,7 @@ export interface VADConfig {
 
 export class VADManager {
   private config: VADConfig;
-  private vad: MicVAD | BridgeVAD | null = null;
+  private vad: BrowserMicVAD | BridgeVAD | null = null;
   private _state: VADState = 'idle';
   private _audioSource: 'bridge' | 'browser' | 'none' = 'none';
   private silenceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -212,6 +212,12 @@ export class VADManager {
   private async tryMicMode(): Promise<boolean> {
     try {
       console.log('[VAD] Initializing MicVAD — browser microphone');
+      const [{ MicVAD }, ort] = await Promise.all([
+        import('@ricky0123/vad-web'),
+        import('onnxruntime-web'),
+      ]);
+      ort.env.wasm.wasmPaths = '/';
+
       const micVad = await Promise.race([
         MicVAD.new({
           baseAssetPath: '/',
@@ -270,10 +276,11 @@ export class VADManager {
     if (this.vad) {
       console.log('[VAD] Stopping VAD instance...');
       try {
-        if ('destroy' in this.vad) {
-          await this.vad.destroy();
-        } else if ('stop' in this.vad) {
-          await this.vad.stop();
+        const activeVad: BrowserMicVAD = this.vad;
+        if (typeof activeVad.destroy === 'function') {
+          await activeVad.destroy();
+        } else if (typeof activeVad.stop === 'function') {
+          await activeVad.stop();
         }
       } catch (e) {
         console.warn('[VAD] Error stopping VAD:', e);

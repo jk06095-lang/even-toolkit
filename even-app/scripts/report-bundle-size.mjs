@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const appRoot = process.cwd();
 const assetsDir = path.resolve(appRoot, 'dist', 'assets');
+const indexHtmlPath = path.resolve(appRoot, 'dist', 'index.html');
 
 function formatKb(bytes) {
   return `${(bytes / 1024).toFixed(2)} kB`;
@@ -19,7 +20,14 @@ function assetKind(fileName) {
   return ext.replace(/^\./, '') || 'asset';
 }
 
+async function readInitialAssetNames() {
+  const indexHtml = await readFile(indexHtmlPath, 'utf8');
+  const matches = indexHtml.matchAll(/(?:src|href)="\/assets\/([^"]+)"/g);
+  return new Set([...matches].map((match) => match[1]));
+}
+
 async function readAssetRows() {
+  const initialAssetNames = await readInitialAssetNames();
   const entries = await readdir(assetsDir);
   const rows = [];
 
@@ -38,6 +46,7 @@ async function readAssetRows() {
       kind,
       bytes: info.size,
       gzipBytes,
+      isInitial: initialAssetNames.has(name),
     });
   }
 
@@ -47,6 +56,8 @@ async function readAssetRows() {
 function printMarkdown(rows) {
   const jsRows = rows.filter((row) => row.kind === 'js');
   const largestJs = jsRows[0] ?? null;
+  const initialJsRows = jsRows.filter((row) => row.isInitial);
+  const largestInitialJs = initialJsRows[0] ?? null;
   const totalBytes = rows.reduce((sum, row) => sum + row.bytes, 0);
   const totalGzipBytes = rows.reduce((sum, row) => sum + (row.gzipBytes ?? 0), 0);
 
@@ -58,11 +69,15 @@ function printMarkdown(rows) {
   if (largestJs) {
     console.info(`- Largest JS chunk: \`${largestJs.name}\` (${formatKb(largestJs.bytes)}, gzip ${formatKb(largestJs.gzipBytes ?? 0)})`);
   }
+  if (largestInitialJs) {
+    console.info(`- Largest initial JS chunk: \`${largestInitialJs.name}\` (${formatKb(largestInitialJs.bytes)}, gzip ${formatKb(largestInitialJs.gzipBytes ?? 0)})`);
+  }
   console.info('');
-  console.info('| Asset | Kind | Size | Gzip |');
-  console.info('| --- | --- | ---: | ---: |');
+  console.info('| Asset | Kind | Load | Size | Gzip |');
+  console.info('| --- | --- | --- | ---: | ---: |');
   for (const row of rows) {
-    console.info(`| \`${row.name}\` | ${row.kind} | ${formatKb(row.bytes)} | ${row.gzipBytes === null ? 'n/a' : formatKb(row.gzipBytes)} |`);
+    const load = row.isInitial ? 'initial' : 'on demand';
+    console.info(`| \`${row.name}\` | ${row.kind} | ${load} | ${formatKb(row.bytes)} | ${row.gzipBytes === null ? 'n/a' : formatKb(row.gzipBytes)} |`);
   }
 }
 

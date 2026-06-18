@@ -29,6 +29,15 @@ describe('release safety checks', () => {
     expect(sourceText).not.toContain('VITE_GEMINI_API_KEY');
   });
 
+  it('loads the heavy voice runtime only from the explicit Phone Mic path', () => {
+    const vadManagerSource = readFileSync(path.join(appRoot, 'src', 'combat', 'vad-manager.ts'), 'utf8');
+
+    expect(vadManagerSource).not.toMatch(/^import\s+.*@ricky0123\/vad-web/m);
+    expect(vadManagerSource).not.toMatch(/^import\s+.*onnxruntime-web/m);
+    expect(vadManagerSource).toContain("import('@ricky0123/vad-web')");
+    expect(vadManagerSource).toContain("import('onnxruntime-web')");
+  });
+
   it('uses a single minimal app manifest synchronized with package.json', () => {
     const packageJson = readJson<{ version: string }>(path.join(appRoot, 'package.json'));
     const appJson = readJson<{

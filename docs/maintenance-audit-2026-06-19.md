@@ -65,7 +65,14 @@ separate performance task after device QA. Follow-up tracking: GitHub issue
 #12.
 
 Use `cd even-app && npm run bundle:report` after a production build to capture
-before/after chunk evidence for #12.
+before/after chunk evidence for #12. The report distinguishes initial chunks
+from on-demand chunks so the voice runtime can remain large without being
+preloaded on app startup.
+
+Follow-up `a01285d` added the report command. A later #12 pass moved
+`@ricky0123/vad-web` and `onnxruntime-web` behind the explicit Phone Mic path;
+`bundle:report` now marks `voice-runtime-*` and the ONNX/WASM runtime as
+`on demand`, with the largest initial JS chunk at about 160 kB.
 
 ## Verification
 
