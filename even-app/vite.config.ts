@@ -66,4 +66,18 @@ export default defineConfig({
       allowedHeaders: 'Content-Type, Authorization',
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@ricky0123/vad-web') || id.includes('onnxruntime-web')) {
+            return 'voice-runtime';
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
+      },
+    },
+  },
 });
