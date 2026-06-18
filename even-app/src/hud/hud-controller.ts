@@ -37,6 +37,7 @@ const H = 288;
 
 export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
 export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
+export type HUDAction = 'resume' | 'end-practice' | 'exit-echo';
 
 export function parseWearingState(status: any): WearingState {
   const rawWearing =
@@ -87,9 +88,8 @@ export class HUDController {
 
   // ── HUD Interruption Menu State ──
   private _isInterruptMenuVisible = false;
-  private _menuSelectedIndex = 0; // 0: Resume, 1: Stop
-  private _isConfirmingStop = false;
-  private _onActionCallback?: (action: 'stop' | 'resume') => void;
+  private _menuSelectedIndex = 0;
+  private _onActionCallback?: (action: HUDAction) => void;
 
   get ready(): boolean { return this._ready; }
   get mode(): HUDMode { return this._mode; }
@@ -896,7 +896,7 @@ export class HUDController {
   // ── Interruption Menu Handling ──
 
   /** Register callback for HUD-triggered actions */
-  onAction(cb: (action: 'stop' | 'resume') => void) {
+  onAction(cb: (action: HUDAction) => void) {
     this._onActionCallback = cb;
   }
 
@@ -905,7 +905,6 @@ export class HUDController {
     this._isSessionActive = active;
     if (!active) {
       this._isInterruptMenuVisible = false;
-      this._isConfirmingStop = false;
     }
   }
 
@@ -920,27 +919,18 @@ export class HUDController {
         break;
       case 'HIGHLIGHT_MOVE':
         if (this._isInterruptMenuVisible) {
-          this._menuSelectedIndex = action.direction === 'down' ? 1 : 0;
+          const itemCount = 3;
+          const delta = action.direction === 'down' ? 1 : -1;
+          this._menuSelectedIndex = (this._menuSelectedIndex + delta + itemCount) % itemCount;
           this.updateInterruptMenu();
         }
         break;
       case 'SELECT_HIGHLIGHTED':
         if (this._isInterruptMenuVisible) {
-          if (this._menuSelectedIndex === 0) {
-            // Option 1: Resume (or No/Go Back in confirmation mode)
-            this.hideInterruptMenu();
-            this._onActionCallback?.('resume');
-          } else {
-            // Option 2: Stop (or Yes/Stop in confirmation mode)
-            if (this._isConfirmingStop) {
-              this.hideInterruptMenu();
-              this._onActionCallback?.('stop');
-            } else {
-              this._isConfirmingStop = true;
-              this._menuSelectedIndex = 0; // Default to 'No' for safety
-              this.updateInterruptMenu();
-            }
-          }
+          const actions: HUDAction[] = ['resume', 'end-practice', 'exit-echo'];
+          const selectedAction = actions[this._menuSelectedIndex] ?? 'resume';
+          this.hideInterruptMenu();
+          this._onActionCallback?.(selectedAction);
         }
         break;
     }
@@ -957,13 +947,11 @@ export class HUDController {
   private async showInterruptMenu() {
     this._isInterruptMenuVisible = true;
     this._menuSelectedIndex = 0;
-    this._isConfirmingStop = false;
     await this.updateInterruptMenu();
   }
 
   private async hideInterruptMenu() {
     this._isInterruptMenuVisible = false;
-    this._isConfirmingStop = false;
     // Restore previous view
     if (this._mode === 'combat') {
       await this.updateCombatChat();
@@ -973,10 +961,8 @@ export class HUDController {
   }
 
   private async updateInterruptMenu() {
-    const title = this._isConfirmingStop ? 'CONFIRM STOP?' : 'TRAINING PAUSED';
-    const items = this._isConfirmingStop 
-      ? ['[ NO, GO BACK ]', '[ YES, STOP ]']
-      : ['RESUME TRAINING', 'STOP SESSION'];
+    const title = 'ECHO PAUSED';
+    const items = ['RESUME', 'END PRACTICE', 'EXIT ECHO'];
     
     const displayLines = buildScrollableList({
       items,
@@ -996,6 +982,29 @@ export class HUDController {
     ].join('\n');
 
     await this.quickUpdate(2, 'main', content);
+  }
+
+  async exitEcho(): Promise<void> {
+    if (this.bridge && this._ready) {
+      await this.setAudioCapture(false);
+    }
+
+    this.unsubscribeEvents?.();
+    this.unsubscribeEvents = undefined;
+    this.stopStatusPolling();
+
+    if (this.bridge && this._ready) {
+      await this.bridge.shutDownPageContainer(1).catch((err: unknown) => {
+        console.warn('[HUD] shutDownPageContainer(1) failed:', err);
+      });
+    }
+
+    this.bridge = null;
+    this._ready = false;
+    this._connected = false;
+    this._startupDone = false;
+    this.audioListeners = [];
+    this.statusListeners = [];
   }
 
   dispose(): void {

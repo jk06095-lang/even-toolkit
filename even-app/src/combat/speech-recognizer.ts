@@ -43,9 +43,27 @@ export class SpeechRecognizer {
   private bridgeTranscribing = false;
   private lastInterimSampleCount = 0;
   private interimTranscribing = false;
+  private requestControllers = new Set<AbortController>();
 
   constructor(callbacks: SpeechRecognizerCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  private beginRequest(): AbortController {
+    const controller = new AbortController();
+    this.requestControllers.add(controller);
+    return controller;
+  }
+
+  private finishRequest(controller: AbortController): void {
+    this.requestControllers.delete(controller);
+  }
+
+  private abortRequests(): void {
+    for (const controller of this.requestControllers) {
+      controller.abort();
+    }
+    this.requestControllers.clear();
   }
 
   get active(): boolean {
@@ -189,6 +207,7 @@ export class SpeechRecognizer {
     if (audio.length < 16000 * 0.3) return; // Less than 0.3s
 
     this.bridgeTranscribing = true;
+    const controller = this.beginRequest();
 
     try {
       const wavBlob = float32ToWav(audio, 16000);
@@ -201,9 +220,10 @@ export class SpeechRecognizer {
           mimeType: 'audio/wav',
           data: base64,
         },
-      });
+      }, controller.signal);
 
       const text = extractTranscript(response);
+      if (!this._active || this._mode !== 'bridge') return;
       if (text && text.length > 1) {
         // Filter out meta-commentary from the transcription service.
         const clean = text
@@ -217,8 +237,11 @@ export class SpeechRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[SpeechRecognizer] ECHO API transcription failed:', err);
+      if (!controller.signal.aborted) {
+        console.warn('[SpeechRecognizer] ECHO API transcription failed:', err);
+      }
     } finally {
+      this.finishRequest(controller);
       this.bridgeTranscribing = false;
     }
   }
@@ -230,6 +253,7 @@ export class SpeechRecognizer {
     if (audio.length < 16000 * 0.5) return; // Need at least 0.5s of audio
 
     this.interimTranscribing = true;
+    const controller = this.beginRequest();
 
     try {
       const wavBlob = float32ToWav(audio, 16000);
@@ -242,9 +266,10 @@ export class SpeechRecognizer {
           mimeType: 'audio/wav',
           data: base64,
         },
-      });
+      }, controller.signal);
 
       const text = extractTranscript(response);
+      if (!this._active || this._mode !== 'bridge') return;
       if (text && text.length > 1) {
         // Filter out meta-commentary from the transcription service.
         const clean = text
@@ -259,8 +284,11 @@ export class SpeechRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[SpeechRecognizer] ECHO API interim transcription failed:', err);
+      if (!controller.signal.aborted) {
+        console.warn('[SpeechRecognizer] ECHO API interim transcription failed:', err);
+      }
     } finally {
+      this.finishRequest(controller);
       this.interimTranscribing = false;
     }
   }
@@ -391,6 +419,7 @@ export class SpeechRecognizer {
     this.pcmBuffer = [];
     this.pcmBufferLength = 0;
     this.isSpeaking = false;
+    this.abortRequests();
 
     console.log('[SpeechRecognizer] Stopped');
   }

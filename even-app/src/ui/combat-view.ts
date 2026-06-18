@@ -133,7 +133,7 @@ export function renderCombatView(): string {
         <!-- Action Buttons -->
         <div style="margin-top: var(--spacing-cross); display: flex; gap: var(--spacing-same);">
           <button class="btn btn-neutral btn-full" id="btn-pause-session">Pause</button>
-          <button class="btn btn-danger btn-full" id="btn-stop-session">Stop Session</button>
+          <button class="btn btn-danger btn-full" id="btn-stop-session">End Practice</button>
         </div>
       </div>
 

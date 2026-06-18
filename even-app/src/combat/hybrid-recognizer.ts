@@ -71,9 +71,27 @@ export class HybridRecognizer {
   private bridgeTranscribing = false;
   private lastInterimSampleCount = 0;
   private interimTranscribing = false;
+  private requestControllers = new Set<AbortController>();
 
   constructor(callbacks: HybridRecognizerCallbacks) {
     this.callbacks = callbacks;
+  }
+
+  private beginRequest(): AbortController {
+    const controller = new AbortController();
+    this.requestControllers.add(controller);
+    return controller;
+  }
+
+  private finishRequest(controller: AbortController): void {
+    this.requestControllers.delete(controller);
+  }
+
+  private abortRequests(): void {
+    for (const controller of this.requestControllers) {
+      controller.abort();
+    }
+    this.requestControllers.clear();
   }
 
   // ── Accessors ──
@@ -279,6 +297,7 @@ export class HybridRecognizer {
     this.isSpeaking = false;
     this.bridgeTranscribing = false;
     this.interimTranscribing = false;
+    this.abortRequests();
 
     console.log('[HybridRecognizer] Stopped');
   }
@@ -406,6 +425,7 @@ export class HybridRecognizer {
     if (audio.length < 16_000 * 0.3) return; // < 0.3 s
 
     this.bridgeTranscribing = true;
+    const controller = this.beginRequest();
 
     try {
       const wavBlob = float32ToWav(audio, 16_000);
@@ -418,9 +438,10 @@ export class HybridRecognizer {
           mimeType: 'audio/wav',
           data: base64,
         },
-      });
+      }, controller.signal);
 
       const text = extractTranscript(response);
+      if (!this._active || this._mode !== 'bridge') return;
       if (text && text.length > 1) {
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
@@ -433,8 +454,11 @@ export class HybridRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[HybridRecognizer] ECHO API transcription failed:', err);
+      if (!controller.signal.aborted) {
+        console.warn('[HybridRecognizer] ECHO API transcription failed:', err);
+      }
     } finally {
+      this.finishRequest(controller);
       this.bridgeTranscribing = false;
     }
   }
@@ -444,6 +468,7 @@ export class HybridRecognizer {
     if (audio.length < 16_000 * 0.5) return; // Need at least 0.5 s
 
     this.interimTranscribing = true;
+    const controller = this.beginRequest();
 
     try {
       const wavBlob = float32ToWav(audio, 16_000);
@@ -456,9 +481,10 @@ export class HybridRecognizer {
           mimeType: 'audio/wav',
           data: base64,
         },
-      });
+      }, controller.signal);
 
       const text = extractTranscript(response);
+      if (!this._active || this._mode !== 'bridge') return;
       if (text && text.length > 1) {
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
@@ -471,8 +497,11 @@ export class HybridRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[HybridRecognizer] ECHO API interim transcription failed:', err);
+      if (!controller.signal.aborted) {
+        console.warn('[HybridRecognizer] ECHO API interim transcription failed:', err);
+      }
     } finally {
+      this.finishRequest(controller);
       this.interimTranscribing = false;
     }
   }

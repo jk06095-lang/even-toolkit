@@ -42,6 +42,7 @@ let expressionUsage: Map<string, boolean> = new Map();
 let currentActiveHint: string | null = null;
 let currentMode: 'general' | 'scenario' | null = null;
 let preferredAudioSource: 'bridge' | 'browser' = (localStorage.getItem('preferredAudioSource') as 'bridge' | 'browser') || 'bridge';
+let endingPracticePromise: Promise<void> | null = null;
 
 // ── App Shell ──
 
@@ -149,14 +150,16 @@ async function initHUD(): Promise<void> {
     hud = new HUDController();
     
     // Handle actions from the glasses touchpad
-    hud.onAction((action) => {
+    hud.onAction(async (action) => {
       console.log('[App] Action from HUD:', action);
-      if (action === 'stop') {
-        stopSession();
+      if (action === 'end-practice') {
+        await endPracticeSession();
+      } else if (action === 'exit-echo') {
+        await exitEcho();
       } else if (action === 'resume') {
         // Resume session if it was paused
         if (session && session.state === 'paused') {
-          session.resume();
+          await session.resume();
           // Update UI button state if needed
           const btnPause = document.getElementById('btn-pause-session') as HTMLButtonElement;
           if (btnPause) {
@@ -392,7 +395,9 @@ function bindCombatEvents(): void {
     if (!selectedScenario) return;
     startSession();
   });
-  document.getElementById('btn-stop-session')?.addEventListener('click', stopSession);
+  document.getElementById('btn-stop-session')?.addEventListener('click', () => {
+    endPracticeSession();
+  });
   
   document.getElementById('btn-pause-session')?.addEventListener('click', async () => {
     if (!session) return;
@@ -442,7 +447,7 @@ function bindCombatEvents(): void {
       }
       
       // Restart session
-      await stopSession();
+      await endPracticeSession();
       setTimeout(async () => {
         await startSession();
       }, 500);
@@ -776,65 +781,99 @@ async function startSession(): Promise<void> {
     } else {
       alert('Failed to start microphone: ' + err.message);
     }
-    stopSession();
+    endPracticeSession();
   }
 }
 
 async function stopSession(): Promise<void> {
-  if (session) {
-    await session.stop();
-    session = null;
-  }
-  toggleSessionUI(false);
-  handleSessionState('idle'); // Force UI to standby
-
-  // Return glasses to standby screen instead of blank
-  hud?.setSessionActive(false);
-  hud?.enterStandby();
-
-  // Reset soundwave bars
-  for (let i = 0; i < 8; i++) {
-    const lBar = document.getElementById(`sw-l${i}`);
-    const rBar = document.getElementById(`sw-r${i}`);
-    if (lBar) { lBar.style.height = '3px'; lBar.style.background = 'var(--color-text-muted)'; }
-    if (rBar) { rBar.style.height = '3px'; rBar.style.background = 'var(--color-text-muted)'; }
-  }
-
-  // Hide soundwave panel
-  const swPanel = document.getElementById('soundwave-panel');
-  if (swPanel) {
-    swPanel.style.display = 'none';
-    swPanel.classList.remove('active');
-    swPanel.classList.add('idle');
-  }
-
-  // Show mode selector area again and reset selection
-  const modeSelector = document.getElementById('mode-selector-card');
-  if (modeSelector) modeSelector.style.display = 'block';
-  
-  const generalArea = document.getElementById('general-practice-area');
-  const scenarioArea = document.getElementById('scenario-practice-area');
-  if (generalArea) generalArea.style.display = 'none';
-  if (scenarioArea) scenarioArea.style.display = 'none';
-  
-  const btnGen = document.getElementById('btn-mode-general');
-  const btnScen = document.getElementById('btn-mode-scenario');
-  if (btnGen) btnGen.style.borderColor = 'transparent';
-  if (btnScen) btnScen.style.borderColor = 'transparent';
-  currentMode = null;
-
-  // Hide expression tracker
-  const exprTracker = document.getElementById('expression-tracker');
-  if (exprTracker) exprTracker.style.display = 'none';
-
-  // Hide live transcript and audio source
-  const liveContainer = document.getElementById('live-transcript-container');
-  if (liveContainer) liveContainer.style.display = 'none';
-  const audioLabel = document.getElementById('audio-source-label');
-  if (audioLabel) audioLabel.style.display = 'none';
-  const transcriptDisplay = document.getElementById('transcript-display');
-  if (transcriptDisplay) transcriptDisplay.style.display = 'none';
+  await endPracticeSession();
 }
+
+async function endPracticeSession(options: { returnToStandby?: boolean } = {}): Promise<void> {
+  if (endingPracticePromise) {
+    await endingPracticePromise;
+    return;
+  }
+
+  endingPracticePromise = (async () => {
+    const { returnToStandby = true } = options;
+
+    try {
+      if (session) {
+        await session.stop();
+      }
+    } catch (err) {
+      console.warn('[App] Error while ending practice session:', err);
+    } finally {
+      session = null;
+    }
+
+    toggleSessionUI(false);
+    handleSessionState('idle'); // Force UI to standby
+
+    // Return glasses to standby screen instead of blank
+    hud?.setSessionActive(false);
+    if (returnToStandby) {
+      await hud?.enterStandby();
+    }
+
+    // Reset soundwave bars
+    for (let i = 0; i < 8; i++) {
+      const lBar = document.getElementById(`sw-l${i}`);
+      const rBar = document.getElementById(`sw-r${i}`);
+      if (lBar) { lBar.style.height = '3px'; lBar.style.background = 'var(--color-text-muted)'; }
+      if (rBar) { rBar.style.height = '3px'; rBar.style.background = 'var(--color-text-muted)'; }
+    }
+
+    // Hide soundwave panel
+    const swPanel = document.getElementById('soundwave-panel');
+    if (swPanel) {
+      swPanel.style.display = 'none';
+      swPanel.classList.remove('active');
+      swPanel.classList.add('idle');
+    }
+
+    // Show mode selector area again and reset selection
+    const modeSelector = document.getElementById('mode-selector-card');
+    if (modeSelector) modeSelector.style.display = 'block';
+    
+    const generalArea = document.getElementById('general-practice-area');
+    const scenarioArea = document.getElementById('scenario-practice-area');
+    if (generalArea) generalArea.style.display = 'none';
+    if (scenarioArea) scenarioArea.style.display = 'none';
+    
+    const btnGen = document.getElementById('btn-mode-general');
+    const btnScen = document.getElementById('btn-mode-scenario');
+    if (btnGen) btnGen.style.borderColor = 'transparent';
+    if (btnScen) btnScen.style.borderColor = 'transparent';
+    currentMode = null;
+
+    // Hide expression tracker
+    const exprTracker = document.getElementById('expression-tracker');
+    if (exprTracker) exprTracker.style.display = 'none';
+
+    // Hide live transcript and audio source
+    const liveContainer = document.getElementById('live-transcript-container');
+    if (liveContainer) liveContainer.style.display = 'none';
+    const audioLabel = document.getElementById('audio-source-label');
+    if (audioLabel) audioLabel.style.display = 'none';
+    const transcriptDisplay = document.getElementById('transcript-display');
+    if (transcriptDisplay) transcriptDisplay.style.display = 'none';
+  })();
+
+  try {
+    await endingPracticePromise;
+  } finally {
+    endingPracticePromise = null;
+  }
+}
+
+async function exitEcho(): Promise<void> {
+  await endPracticeSession({ returnToStandby: false });
+  await hud?.exitEcho();
+  hud = null;
+}
+
 function toggleSessionUI(active: boolean): void {
   const btnStartGen = document.getElementById('btn-start-general') as HTMLButtonElement;
   const btnStartScen = document.getElementById('btn-start-scenario') as HTMLButtonElement;

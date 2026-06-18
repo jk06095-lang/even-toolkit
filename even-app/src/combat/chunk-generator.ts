@@ -39,7 +39,7 @@ export interface SpeechEvaluationResult {
   latencyMs: number;
 }
 
-export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
+export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
   const start = Date.now();
   const fallback = () => ({
     chunk: getRandomFallbackChunk(req.category ?? 'general'),
@@ -62,7 +62,7 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
       scenarioContext: req.scenarioContext,
       missedHint: req.missedHint,
       intent: req.missedHint ? 'simplify' : 'cue',
-    });
+    }, signal);
 
     let chunk = cleanChunk(extractText(result, ['chunk', 'cue', 'text']));
 
@@ -80,7 +80,9 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
       latencyMs: Date.now() - start,
     };
   } catch (err) {
-    console.warn('[ChunkGen] ECHO API cue failed, using fallback:', err);
+    if (!signal?.aborted) {
+      console.warn('[ChunkGen] ECHO API cue failed, using fallback:', err);
+    }
     return fallback();
   }
 }
@@ -88,6 +90,7 @@ export async function generateChunk(req: ChunkRequest): Promise<ChunkResult> {
 export async function evaluateSpeech(
   audio: Float32Array,
   req: ChunkRequest,
+  signal?: AbortSignal,
 ): Promise<SpeechEvaluationResult | null> {
   if (audio.length < 16_000 * 0.5) return null;
   if (!isEchoApiConfigured()) return null;
@@ -109,7 +112,7 @@ export async function evaluateSpeech(
       lastUtterance: req.lastUtterance,
       usedHints: req.usedHints,
       scenarioContext: req.scenarioContext,
-    });
+    }, signal);
 
     const transcript = cleanTranscript(extractText(result, ['transcript', 'text']));
     let hint = cleanChunk(extractText(result, ['hint', 'chunk', 'cue']));
@@ -124,7 +127,7 @@ export async function evaluateSpeech(
     }
 
     if (hint && req.usedHints?.some((used) => used.toLowerCase() === hint.toLowerCase())) {
-      const fresh = await generateChunk(req);
+      const fresh = await generateChunk(req, signal);
       hint = fresh.chunk || '';
     }
 
@@ -135,12 +138,18 @@ export async function evaluateSpeech(
       latencyMs: Date.now() - start,
     };
   } catch (err) {
-    console.warn('[ChunkGen] Speech evaluation failed:', err);
+    if (!signal?.aborted) {
+      console.warn('[ChunkGen] Speech evaluation failed:', err);
+    }
     return null;
   }
 }
 
-export async function evaluateGrammar(transcript: string, topic: string): Promise<string | null> {
+export async function evaluateGrammar(
+  transcript: string,
+  topic: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   if (!transcript || transcript.trim().length < 5) return null;
   if (!isEchoApiConfigured()) return null;
 
@@ -149,7 +158,7 @@ export async function evaluateGrammar(transcript: string, topic: string): Promis
       task: 'grammar',
       topic,
       transcript,
-    });
+    }, signal);
 
     const correction = cleanChunk(extractText(result, ['correction', 'text', 'result']));
     if (!correction || correction.toLowerCase() === 'null') {
@@ -165,12 +174,18 @@ export async function evaluateGrammar(transcript: string, topic: string): Promis
 
     return correction;
   } catch (err) {
-    console.warn('[ChunkGen] Grammar evaluation failed:', err);
+    if (!signal?.aborted) {
+      console.warn('[ChunkGen] Grammar evaluation failed:', err);
+    }
     return null;
   }
 }
 
-export async function simplifyHint(hint: string, topic: string): Promise<string | null> {
+export async function simplifyHint(
+  hint: string,
+  topic: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
   if (!isEchoApiConfigured()) return null;
 
   try {
@@ -179,13 +194,15 @@ export async function simplifyHint(hint: string, topic: string): Promise<string 
       difficulty: 1,
       missedHint: hint,
       intent: 'simplify',
-    });
+    }, signal);
 
     const simplified = cleanChunk(extractText(result, ['chunk', 'cue', 'text']));
     if (!simplified || simplified.length < 2) return null;
     return simplified;
   } catch (err) {
-    console.warn('[ChunkGen] Simplification failed:', err);
+    if (!signal?.aborted) {
+      console.warn('[ChunkGen] Simplification failed:', err);
+    }
     return null;
   }
 }

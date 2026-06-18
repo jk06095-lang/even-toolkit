@@ -108,6 +108,9 @@ export class SessionEngine {
   private lastTranscriptActivityTime = 0;
   private showingCountdown = false;
   private preferredAudioSource: 'bridge' | 'browser' = 'bridge';
+  private lifecycleToken = 0;
+  private activeRequestControllers = new Set<AbortController>();
+  private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(week: number, callbacks: SessionCallbacks, preferredAudioSource: 'bridge' | 'browser' = 'bridge') {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
@@ -135,6 +138,42 @@ export class SessionEngine {
     this.callbacks.onStateChange(state);
   }
 
+  private beginRequest(): { token: number; controller: AbortController } {
+    const controller = new AbortController();
+    this.activeRequestControllers.add(controller);
+    return { token: this.lifecycleToken, controller };
+  }
+
+  private finishRequest(controller: AbortController): void {
+    this.activeRequestControllers.delete(controller);
+  }
+
+  private isCurrentRequest(token: number): boolean {
+    return token === this.lifecycleToken && this._state !== 'session_end';
+  }
+
+  private abortActiveRequests(): void {
+    for (const controller of this.activeRequestControllers) {
+      controller.abort();
+    }
+    this.activeRequestControllers.clear();
+  }
+
+  private scheduleTimeout(callback: () => void, delayMs: number): void {
+    const timeout = setTimeout(() => {
+      this.pendingTimeouts.delete(timeout);
+      callback();
+    }, delayMs);
+    this.pendingTimeouts.add(timeout);
+  }
+
+  private clearPendingTimeouts(): void {
+    for (const timeout of this.pendingTimeouts) {
+      clearTimeout(timeout);
+    }
+    this.pendingTimeouts.clear();
+  }
+
   /**
    * Configure the session topic and category before starting.
    */
@@ -159,6 +198,9 @@ export class SessionEngine {
   async start(hud?: any): Promise<void> {
     if (this._state !== 'idle' && this._state !== 'calibrated') return;
 
+    this.lifecycleToken++;
+    this.abortActiveRequests();
+    this.clearPendingTimeouts();
     this.sessionStartTime = Date.now();
     this.hintCount = 0;
     this.speechCount = 0;
@@ -208,6 +250,7 @@ export class SessionEngine {
         if (this.isGenerating || this._state !== 'listening') return;
 
         this.isGenerating = true;
+        const request = this.beginRequest();
         try {
           const result = await evaluateSpeech(audio, {
             topic: this._topic,
@@ -216,7 +259,9 @@ export class SessionEngine {
             lastUtterance: this.lastLiveTranscript || undefined,
             usedHints: this.usedHintChunks,
             scenarioContext: this._scenarioContext || undefined,
-          });
+          }, request.controller.signal);
+
+          if (!this.isCurrentRequest(request.token)) return;
 
           if (result) {
             // Forward the transcript to the UI
@@ -242,10 +287,7 @@ export class SessionEngine {
                     
                     // Trigger grammar evaluation asynchronously
                     (async () => {
-                      const correction = await evaluateGrammar(trimmed, this._topic);
-                      if (correction && this.hudRef && this._state === 'listening') {
-                        this.hudRef.showGrammarFeedback(correction);
-                      }
+                      await this.showGrammarFeedbackIfCurrent(trimmed);
                     })();
                   }
                 }
@@ -278,7 +320,7 @@ export class SessionEngine {
               });
 
               // Auto-clear after flash duration, then restart silence cycle
-              setTimeout(() => {
+              this.scheduleTimeout(() => {
                 if (this._state === 'hud_flash') {
                   this.setState('listening');
                   this.resetTranscriptActivity();
@@ -292,6 +334,7 @@ export class SessionEngine {
             this.transcriptStore?.addSpeech('[speech detected]', 'speech_api');
           }
         } finally {
+          this.finishRequest(request.controller);
           this.isGenerating = false;
         }
       },
@@ -413,10 +456,7 @@ export class SessionEngine {
 
         // Trigger grammar evaluation asynchronously
         (async () => {
-          const correction = await evaluateGrammar(trimmed, this._topic);
-          if (correction && this.hudRef && this._state === 'listening') {
-            this.hudRef.showGrammarFeedback(correction);
-          }
+          await this.showGrammarFeedbackIfCurrent(trimmed);
         })();
       },
       onSpeechStart: () => {
@@ -463,6 +503,29 @@ export class SessionEngine {
     this.vad?.simulateSilenceRestart();
   }
 
+  private async showGrammarFeedbackIfCurrent(transcript: string): Promise<void> {
+    if (this._state !== 'listening') return;
+
+    const request = this.beginRequest();
+    try {
+      const correction = await evaluateGrammar(transcript, this._topic, request.controller.signal);
+      if (
+        correction &&
+        this.isCurrentRequest(request.token) &&
+        this.hudRef &&
+        this._state === 'listening'
+      ) {
+        this.hudRef.showGrammarFeedback(correction);
+      }
+    } catch (err) {
+      if (!request.controller.signal.aborted) {
+        console.warn('[Session] Grammar evaluation failed:', err);
+      }
+    } finally {
+      this.finishRequest(request.controller);
+    }
+  }
+
   /**
    * Start silence countdown interval that updates HUD every second.
    */
@@ -497,6 +560,9 @@ export class SessionEngine {
    * End the session and produce a log.
    */
   async stop(): Promise<void> {
+    this.lifecycleToken++;
+    this.abortActiveRequests();
+    this.clearPendingTimeouts();
     this.stopSilenceCountdown();
 
     // Stop speech recognizer
@@ -576,6 +642,9 @@ export class SessionEngine {
   async pause(): Promise<void> {
     if (this._state !== 'listening' && this._state !== 'silence_detected' && this._state !== 'hud_flash') return;
     
+    this.lifecycleToken++;
+    this.abortActiveRequests();
+    this.clearPendingTimeouts();
     this.stopSilenceCountdown();
     
     if (this.speechRecognizer) {
@@ -597,6 +666,7 @@ export class SessionEngine {
    */
   async resume(): Promise<void> {
     if (this._state !== 'paused') return;
+    this.lifecycleToken++;
     
     if (this.vad) {
       await this.vad.resume();
@@ -647,10 +717,16 @@ export class SessionEngine {
       this.setState('chunk_generating');
 
       try {
-        const simplified = await simplifyHint(activeHint.text, this._topic);
-        if ((this._state as any) === 'session_end') return;
+          const request = this.beginRequest();
+          let simplified: string | null = null;
+          try {
+            simplified = await simplifyHint(activeHint.text, this._topic, request.controller.signal);
+          } finally {
+            this.finishRequest(request.controller);
+          }
+          if (!this.isCurrentRequest(request.token)) return;
 
-        if (simplified && simplified !== activeHint.text) {
+          if (simplified && simplified !== activeHint.text) {
           // Show simplified hint
           this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
           this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1));
@@ -669,7 +745,7 @@ export class SessionEngine {
           this.setState('hud_flash');
           this.callbacks.onChunkGenerated({ chunk: simplified, source: 'gemini', latencyMs: 0 });
 
-          setTimeout(() => {
+          this.scheduleTimeout(() => {
             if (this._state === 'hud_flash') {
               this.setState('listening');
               this.resetTranscriptActivity();
@@ -694,7 +770,7 @@ export class SessionEngine {
 
     // Week 4 blackout check
     if (Math.random() < this.weekConfig.blackoutProbability) {
-      setTimeout(() => {
+      this.scheduleTimeout(() => {
         if (this._state === 'silence_detected') {
           this.setState('listening');
         }
@@ -712,6 +788,7 @@ export class SessionEngine {
   private async generateContextualHint(): Promise<void> {
     this.isGenerating = true;
     this.setState('chunk_generating');
+    const request = this.beginRequest();
 
     try {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
@@ -726,9 +803,9 @@ export class SessionEngine {
         scenarioContext: this._scenarioContext || undefined,
         conversationContext,
         adaptiveDifficulty,
-      });
+      }, request.controller.signal);
 
-      if ((this._state as any) === 'session_end') return;
+      if (!this.isCurrentRequest(request.token)) return;
 
       if (result.chunk) {
         this.hintCount++;
@@ -747,7 +824,7 @@ export class SessionEngine {
         this.setState('hud_flash');
         this.callbacks.onChunkGenerated(result);
 
-        setTimeout(() => {
+        this.scheduleTimeout(() => {
           if (this._state === 'hud_flash') {
             this.setState('listening');
             this.resetTranscriptActivity();
@@ -761,6 +838,7 @@ export class SessionEngine {
       this.setState('listening');
       this.resetTranscriptActivity();
     } finally {
+      this.finishRequest(request.controller);
       this.isGenerating = false;
     }
   }

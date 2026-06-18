@@ -8,6 +8,39 @@
 - Confirm pause and resume do not multiply timers.
 - Confirm ending a session clears active cue state.
 
+## End Practice vs Exit ECHO
+
+`END PRACTICE` and `EXIT ECHO` must be tested separately.
+
+`END PRACTICE` expected cleanup:
+
+- VAD stops.
+- G2 audio capture stops.
+- Phone/Web Speech recognition stops when active.
+- Silence countdown and HUD flash timers clear.
+- The current session is finalized and saved.
+- The glasses return to standby.
+- Late cue/transcription/grammar responses do not update the HUD.
+
+`EXIT ECHO` expected cleanup:
+
+- Runs the same practice cleanup.
+- Does not return to standby first.
+- Calls Even Hub page shutdown with exit target `1`.
+- Clears HUD event/status listeners.
+- Leaves no active audio capture.
+
+Ten-cycle test:
+
+1. Start a G2 Mic session.
+2. Trigger the HUD pause menu.
+3. Select `END PRACTICE`.
+4. Confirm standby returns.
+5. Start another session.
+6. Repeat until 10 completed cycles.
+7. Repeat once with `EXIT ECHO` as the final action.
+8. Confirm audio packet callbacks, status polling, and Web Speech callbacks are not duplicated.
+
 ## Audio source separation
 
 - With `G2 Mic` selected, Phone Mic must not open.
