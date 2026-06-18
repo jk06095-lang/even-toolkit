@@ -58,6 +58,25 @@ npm run qa:summarize-export -- path/to/echo_my_data.json
 
 The generated Markdown can be pasted into the pilot scorecard sections below.
 
+## Evidence Manifest Gate
+
+Use [docs/project-echo-pilot-evidence.template.json](./docs/project-echo-pilot-evidence.template.json)
+as the required evidence manifest for issue #10. The checked-in template is a
+draft scaffold; it is shape-checked during `npm run verify:all` with
+`npm run validate:pilot-template`.
+
+For final evidence, copy the template to a completed manifest, fill all five
+participants, A/B/C runs, metrics, artifact references, and case-study links,
+then run:
+
+```bash
+npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json
+```
+
+The final command intentionally fails if the manifest still has `TBD`, missing
+numeric metrics, fewer than 5 participants, missing A/B/C runs, missing real G2
+video evidence, or README links not marked as updated.
+
 ## UX Metrics
 
 | Metric | Definition | Target capture |

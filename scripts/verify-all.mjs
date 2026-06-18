@@ -7,6 +7,10 @@ const steps = [
     args: ['run', 'build'],
   },
   {
+    label: 'Project ECHO pilot evidence template',
+    args: ['run', 'validate:pilot-template'],
+  },
+  {
     label: 'ECHO API proxy verify',
     args: ['--prefix', 'echo-api-proxy', 'run', 'verify'],
   },

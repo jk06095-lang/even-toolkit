@@ -386,6 +386,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
+    "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
     "verify:all": "node scripts/verify-all.mjs",
     "prepublishOnly": "npm run build"
   },

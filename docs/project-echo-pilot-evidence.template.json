@@ -1,0 +1,604 @@
+{
+  "project": "Project ECHO",
+  "pilotDate": "TBD",
+  "evidenceStatus": "draft",
+  "hardware": {
+    "device": "Even Realities G2",
+    "firmwareVersion": "TBD",
+    "appVersion": "TBD",
+    "bridgeVersion": "TBD"
+  },
+  "participants": [
+    {
+      "id": "P01",
+      "consentRecorded": false,
+      "scenario": "TBD",
+      "order": ["A", "B", "C"],
+      "runs": [
+        {
+          "condition": "A",
+          "mode": "No assistance",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "B",
+          "mode": "Full sentence suggestion",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "C",
+          "mode": "3-5 word cue",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P02",
+      "consentRecorded": false,
+      "scenario": "TBD",
+      "order": ["B", "C", "A"],
+      "runs": [
+        {
+          "condition": "A",
+          "mode": "No assistance",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "B",
+          "mode": "Full sentence suggestion",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "C",
+          "mode": "3-5 word cue",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P03",
+      "consentRecorded": false,
+      "scenario": "TBD",
+      "order": ["C", "A", "B"],
+      "runs": [
+        {
+          "condition": "A",
+          "mode": "No assistance",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "B",
+          "mode": "Full sentence suggestion",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "C",
+          "mode": "3-5 word cue",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P04",
+      "consentRecorded": false,
+      "scenario": "TBD",
+      "order": ["A", "C", "B"],
+      "runs": [
+        {
+          "condition": "A",
+          "mode": "No assistance",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "B",
+          "mode": "Full sentence suggestion",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "C",
+          "mode": "3-5 word cue",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        }
+      ]
+    },
+    {
+      "id": "P05",
+      "consentRecorded": false,
+      "scenario": "TBD",
+      "order": ["B", "A", "C"],
+      "runs": [
+        {
+          "condition": "A",
+          "mode": "No assistance",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "B",
+          "mode": "Full sentence suggestion",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        },
+        {
+          "condition": "C",
+          "mode": "3-5 word cue",
+          "systemMetrics": {
+            "g2MicSuccessRate": null,
+            "phoneFallbackRate": null,
+            "falseSilenceDetectionRatePerMinute": null,
+            "missedSpeechRate": null,
+            "cueP50LatencyMs": null,
+            "cueP95LatencyMs": null,
+            "crashCount": null,
+            "reconnectCount": null,
+            "batteryConsumptionPercent": null
+          },
+          "uxMetrics": {
+            "timeToFirstUtteranceMs": null,
+            "cueUsageRate": null,
+            "cueDismissalRate": null,
+            "falseCueRate": null,
+            "phoneChecks": null,
+            "eyeContactBreaks": null,
+            "interruptionRating": null,
+            "trustRating": null,
+            "privacyConcernRating": null
+          },
+          "artifacts": {
+            "qaExportPath": "TBD",
+            "observerNotesPath": "TBD",
+            "videoEvidence": "TBD"
+          }
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "conditions": {
+      "A": {
+        "systemMetrics": {
+          "g2MicSuccessRate": null,
+          "phoneFallbackRate": null,
+          "falseSilenceDetectionRatePerMinute": null,
+          "missedSpeechRate": null,
+          "cueP50LatencyMs": null,
+          "cueP95LatencyMs": null,
+          "crashCount": null,
+          "reconnectCount": null,
+          "batteryConsumptionPercent": null
+        },
+        "uxMetrics": {
+          "timeToFirstUtteranceMs": null,
+          "cueUsageRate": null,
+          "cueDismissalRate": null,
+          "falseCueRate": null,
+          "phoneChecks": null,
+          "eyeContactBreaks": null,
+          "interruptionRating": null,
+          "trustRating": null,
+          "privacyConcernRating": null
+        },
+        "decision": "TBD"
+      },
+      "B": {
+        "systemMetrics": {
+          "g2MicSuccessRate": null,
+          "phoneFallbackRate": null,
+          "falseSilenceDetectionRatePerMinute": null,
+          "missedSpeechRate": null,
+          "cueP50LatencyMs": null,
+          "cueP95LatencyMs": null,
+          "crashCount": null,
+          "reconnectCount": null,
+          "batteryConsumptionPercent": null
+        },
+        "uxMetrics": {
+          "timeToFirstUtteranceMs": null,
+          "cueUsageRate": null,
+          "cueDismissalRate": null,
+          "falseCueRate": null,
+          "phoneChecks": null,
+          "eyeContactBreaks": null,
+          "interruptionRating": null,
+          "trustRating": null,
+          "privacyConcernRating": null
+        },
+        "decision": "TBD"
+      },
+      "C": {
+        "systemMetrics": {
+          "g2MicSuccessRate": null,
+          "phoneFallbackRate": null,
+          "falseSilenceDetectionRatePerMinute": null,
+          "missedSpeechRate": null,
+          "cueP50LatencyMs": null,
+          "cueP95LatencyMs": null,
+          "crashCount": null,
+          "reconnectCount": null,
+          "batteryConsumptionPercent": null
+        },
+        "uxMetrics": {
+          "timeToFirstUtteranceMs": null,
+          "cueUsageRate": null,
+          "cueDismissalRate": null,
+          "falseCueRate": null,
+          "phoneChecks": null,
+          "eyeContactBreaks": null,
+          "interruptionRating": null,
+          "trustRating": null,
+          "privacyConcernRating": null
+        },
+        "decision": "TBD"
+      }
+    }
+  },
+  "caseStudy": {
+    "koreanCaseStudyUrl": "TBD",
+    "englishCaseStudyUrl": "TBD",
+    "architectureDiagramUrl": "TBD",
+    "realG2VideoUrl": "TBD",
+    "readmeLinksUpdated": false
+  }
+}

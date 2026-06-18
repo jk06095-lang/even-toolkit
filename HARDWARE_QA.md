@@ -158,6 +158,15 @@ Still requires real G2 validation:
 - Reconnect count
 - Battery consumption
 
+Record these metrics in
+[docs/project-echo-pilot-evidence.template.json](./docs/project-echo-pilot-evidence.template.json)
+after the real-device pilot. The draft template is checked by
+`npm run validate:pilot-template`; final evidence must pass:
+
+```bash
+npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json
+```
+
 ## User test measures
 
 - Time to first utterance
