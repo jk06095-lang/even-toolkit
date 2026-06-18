@@ -47,6 +47,17 @@ Ten-cycle test:
 - With `Phone Mic` selected, G2 PCM is not required.
 - If G2 Mic fails, the app must ask the user to select Phone Mic instead of switching silently.
 
+## VAD calibration QA
+
+- Run calibration, then start a G2 Mic session and confirm the console logs the active BridgeVAD threshold.
+- Confirm the calibration result shows VAD threshold and noise floor in the phone UI.
+- Quiet room: record threshold, false starts, and missed speech.
+- Cafe background: record threshold, false starts, and missed speech.
+- Air-conditioner noise: record threshold, false starts, and missed speech.
+- Outdoor stationary wind: record threshold, false starts, and missed speech.
+- Confirm higher noise-floor environments produce a higher BridgeVAD threshold than quiet room.
+- If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
+
 ## Assist mode QA
 
 - Start a new practice session and confirm the phone UI shows `Assist: Manual`.

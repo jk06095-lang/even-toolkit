@@ -17,7 +17,103 @@ const CALIBRATION_KEY = 'echo_calibration';
 export interface CalibrationResult {
   pitch: PitchResult;
   filter: FilterConfig;
+  noiseFloorRms: number;
+  speechFloorRms: number;
+  speechThreshold: number;
+  calibratedAt: number;
   timestamp: number;
+}
+
+export interface VadCalibration {
+  noiseFloorRms: number;
+  speechFloorRms: number;
+  speechThreshold: number;
+  calibratedAt: number;
+}
+
+const FALLBACK_VAD_CALIBRATION: VadCalibration = {
+  noiseFloorRms: 0.005,
+  speechFloorRms: 0.04,
+  speechThreshold: 0.015,
+  calibratedAt: 0,
+};
+
+function percentile(sortedValues: number[], pct: number): number {
+  if (sortedValues.length === 0) return 0;
+  const index = Math.min(
+    sortedValues.length - 1,
+    Math.max(0, Math.floor((sortedValues.length - 1) * pct)),
+  );
+  return sortedValues[index] ?? 0;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Convert calibration RMS samples into the threshold scale used by BridgeVAD.
+ * Samples are normalized RMS values in the same 0-1 range emitted to the UI.
+ */
+export function deriveVadCalibration(
+  rmsSamples: number[],
+  calibratedAt = Date.now(),
+): VadCalibration {
+  const samples = rmsSamples
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .map((value) => clamp(value, 0, 1))
+    .sort((a, b) => a - b);
+
+  if (samples.length < 4) {
+    return { ...FALLBACK_VAD_CALIBRATION, calibratedAt };
+  }
+
+  const noiseFloorRms = percentile(samples, 0.2);
+  const speechFloorRms = Math.max(percentile(samples, 0.7), percentile(samples, 0.9) * 0.75);
+  const separation = speechFloorRms - noiseFloorRms;
+
+  const speechThreshold =
+    separation >= 0.01
+      ? noiseFloorRms + separation * 0.35
+      : Math.max(FALLBACK_VAD_CALIBRATION.speechThreshold, noiseFloorRms * 2.2);
+
+  return {
+    noiseFloorRms: roundRms(noiseFloorRms),
+    speechFloorRms: roundRms(speechFloorRms),
+    speechThreshold: roundRms(clamp(
+      speechThreshold,
+      FALLBACK_VAD_CALIBRATION.speechThreshold,
+      0.35,
+    )),
+    calibratedAt,
+  };
+}
+
+function roundRms(value: number): number {
+  return Math.round(value * 10000) / 10000;
+}
+
+function normalizeCalibrationResult(input: CalibrationResult): CalibrationResult {
+  const calibratedAt = input.calibratedAt ?? input.timestamp ?? Date.now();
+  const hasVadCalibration =
+    Number.isFinite(input.noiseFloorRms) &&
+    Number.isFinite(input.speechFloorRms) &&
+    Number.isFinite(input.speechThreshold);
+
+  const vadCalibration = hasVadCalibration
+    ? {
+        noiseFloorRms: input.noiseFloorRms,
+        speechFloorRms: input.speechFloorRms,
+        speechThreshold: input.speechThreshold,
+        calibratedAt,
+      }
+    : { ...FALLBACK_VAD_CALIBRATION, calibratedAt };
+
+  return {
+    ...input,
+    ...vadCalibration,
+    timestamp: input.timestamp ?? calibratedAt,
+  };
 }
 
 /**
@@ -67,14 +163,26 @@ export async function runCalibration(
     console.log('[Calibration] Using browser/computer microphone');
   }
 
-  const pitch = await calibratePitch(onProgress, bridgeSource, onVolume);
+  const rmsSamples: number[] = [];
+  const captureVolume = (volume: number) => {
+    rmsSamples.push(volume);
+    onVolume?.(volume);
+  };
+
+  const pitch = await calibratePitch(onProgress, bridgeSource, captureVolume);
   const filter = computeFilterConfig(pitch.f0, pitch.range);
+  const vadCalibration = deriveVadCalibration(rmsSamples);
 
   const result: CalibrationResult = {
     pitch,
     filter,
-    timestamp: Date.now(),
+    ...vadCalibration,
+    timestamp: vadCalibration.calibratedAt,
   };
+
+  console.info(
+    `[Calibration] VAD threshold=${result.speechThreshold} noise=${result.noiseFloorRms} speech=${result.speechFloorRms}`,
+  );
 
   // Persist to localStorage (IndexedDB bridge may not be available yet)
   try {
@@ -93,7 +201,7 @@ export function loadCalibration(): CalibrationResult | null {
   try {
     const raw = localStorage.getItem(CALIBRATION_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as CalibrationResult;
+    return normalizeCalibrationResult(JSON.parse(raw) as CalibrationResult);
   } catch {
     return null;
   }
@@ -104,6 +212,7 @@ export function loadCalibration(): CalibrationResult | null {
  * (skips microphone, assumes male low-pitch voice).
  */
 export function defaultCalibration(): CalibrationResult {
+  const now = Date.now();
   const pitch: PitchResult = {
     f0: 130,
     range: 'low',
@@ -113,6 +222,8 @@ export function defaultCalibration(): CalibrationResult {
   return {
     pitch,
     filter: computeFilterConfig(pitch.f0, pitch.range),
-    timestamp: Date.now(),
+    ...FALLBACK_VAD_CALIBRATION,
+    calibratedAt: now,
+    timestamp: now,
   };
 }

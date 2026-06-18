@@ -9,6 +9,7 @@ import { VADManager } from './vad-manager';
 import { generateChunk, evaluateSpeech, evaluateGrammar, simplifyHint, type ChunkResult } from './chunk-generator';
 import type { ChunkCategory } from './fallback-chunks';
 import type { HUDController } from '../hud/hud-controller';
+import type { VadCalibration } from '../dsp/calibration';
 import { HybridRecognizer } from './hybrid-recognizer';
 import { TranscriptStore, type SessionTranscript } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
@@ -123,6 +124,7 @@ export class SessionEngine {
   private lastTranscriptActivityTime = 0;
   private showingCountdown = false;
   private preferredAudioSource: 'bridge' | 'browser' = 'bridge';
+  private vadCalibration: VadCalibration | null = null;
   private lifecycleToken = 0;
   private activeRequestControllers = new Set<AbortController>();
   private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
@@ -140,10 +142,16 @@ export class SessionEngine {
   private activeCueTrigger: CueTrigger | null = null;
   private cueVisible = false;
 
-  constructor(week: number, callbacks: SessionCallbacks, preferredAudioSource: 'bridge' | 'browser' = 'bridge') {
+  constructor(
+    week: number,
+    callbacks: SessionCallbacks,
+    preferredAudioSource: 'bridge' | 'browser' = 'bridge',
+    vadCalibration?: VadCalibration | null,
+  ) {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
     this.callbacks = callbacks;
     this.preferredAudioSource = preferredAudioSource;
+    this.vadCalibration = vadCalibration ?? null;
   }
 
   /** Whether VAD is running in simulation (keyboard) mode */
@@ -175,6 +183,10 @@ export class SessionEngine {
       this.autoDismissStreak = 0;
     }
     this.emitAssistMetrics();
+  }
+
+  setVadCalibration(vadCalibration: VadCalibration | null): void {
+    this.vadCalibration = vadCalibration;
   }
 
   private emitAssistMetrics(): void {
@@ -294,6 +306,7 @@ export class SessionEngine {
       silenceThresholdMs: this.weekConfig.silenceThresholdMs,
       hud,
       preferredSource: this.preferredAudioSource,
+      calibration: this.vadCalibration,
 
       onSilenceThreshold: () => {
         this.handleSilenceThreshold();

@@ -29,6 +29,25 @@ payloads unless a future explicit retention control enables that behavior.
 - `Phone Mic`: browser microphone -> Web Speech or ECHO API proxy STT
 - `Hybrid Experiment`: reserved for explicit future opt-in, not automatic fallback
 
+## Calibration-to-VAD path
+
+Calibration records normalized RMS samples while the user speaks. The app
+derives `noiseFloorRms`, `speechFloorRms`, `speechThreshold`, and `calibratedAt`
+from those samples and stores them with the calibration result.
+
+Runtime path:
+
+```text
+runCalibration()
+  -> SessionEngine
+  -> VADManager
+  -> BridgeVAD.speechThreshold
+```
+
+When calibration is missing or sparse, BridgeVAD uses the conservative fallback
+threshold `0.015`. Debug logs print the active BridgeVAD threshold plus the
+calibrated noise and speech floors when available.
+
 ## Assist modes
 
 - `Manual Assist` is the default for every new practice session.

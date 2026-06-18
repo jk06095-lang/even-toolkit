@@ -15,6 +15,7 @@
 import { MicVAD, FrameProcessor, Message } from '@ricky0123/vad-web';
 import * as ort from 'onnxruntime-web';
 import { HUDController } from '../hud/hud-controller';
+import type { VadCalibration } from '../dsp/calibration';
 
 // These are needed for manual VAD loading
 import { SileroLegacy } from '@ricky0123/vad-web/dist/models';
@@ -47,6 +48,8 @@ export interface VADConfig {
   hud?: HUDController;
   /** Preferred audio source: bridge or browser */
   preferredSource?: 'bridge' | 'browser';
+  /** Voice calibration-derived BridgeVAD thresholds */
+  calibration?: VadCalibration | null;
 }
 
 export class VADManager {
@@ -179,7 +182,7 @@ export class VADManager {
           if (this._state === 'paused') return;
           this.startSilenceTimer();
         }
-      });
+      }, this.config.calibration ?? undefined);
       
       await bridgeVad.start();
       
@@ -193,7 +196,9 @@ export class VADManager {
       }
       
       this.vad = bridgeVad;
-      console.log('[VAD] BridgeVAD: Hardware microphone stream initiated.');
+      console.log(
+        `[VAD] BridgeVAD: Hardware microphone stream initiated. threshold=${bridgeVad.speechThresholdDebug}`,
+      );
       return true;
     } catch (err) {
       console.error('[VAD] BridgeVAD initialization failed:', err);
@@ -360,6 +365,7 @@ interface BridgeVADCallbacks {
 class BridgeVAD {
   private hud: HUDController;
   private callbacks: BridgeVADCallbacks;
+  private calibration?: VadCalibration;
   private unsub?: () => void;
   private active = false;
   private paused = false;
@@ -376,17 +382,33 @@ class BridgeVAD {
   private silenceFrames = 0;
   
   // Tunable Thresholds
-  private speechThreshold = 0.015; // RMS threshold for speech
+  private speechThreshold = 0.015; // Normalized RMS threshold for speech
   private minSilenceFrames = 15;   // ~0.5s of silence to finalize chunk
 
-  static async new(hud: HUDController, callbacks: BridgeVADCallbacks): Promise<BridgeVAD> {
+  static async new(
+    hud: HUDController,
+    callbacks: BridgeVADCallbacks,
+    calibration?: VadCalibration,
+  ): Promise<BridgeVAD> {
     // Skip ONNX model loading entirely to prevent initialization crashes on device.
-    return new BridgeVAD(hud, callbacks);
+    return new BridgeVAD(hud, callbacks, calibration);
   }
 
-  constructor(hud: HUDController, callbacks: BridgeVADCallbacks) {
+  constructor(hud: HUDController, callbacks: BridgeVADCallbacks, calibration?: VadCalibration) {
     this.hud = hud;
     this.callbacks = callbacks;
+    this.calibration = calibration;
+    if (calibration && Number.isFinite(calibration.speechThreshold)) {
+      this.speechThreshold = Math.min(0.35, Math.max(0.015, calibration.speechThreshold));
+    }
+  }
+
+  get speechThresholdDebug(): string {
+    if (!this.calibration) {
+      return `${this.speechThreshold} fallback`;
+    }
+
+    return `${this.speechThreshold} calibrated noise=${this.calibration.noiseFloorRms} speech=${this.calibration.speechFloorRms}`;
   }
 
   async start(): Promise<void> {
@@ -397,6 +419,7 @@ class BridgeVAD {
     this.receivedData = false;
 
     console.log('[VAD] BridgeVAD: Starting audio stream from glasses...');
+    console.info(`[VAD] BridgeVAD calibrated threshold: ${this.speechThresholdDebug}`);
 
     // 1. Subscribe to audio events
     this.unsub = this.hud.onAudioData(this.handlePcm.bind(this));

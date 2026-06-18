@@ -349,6 +349,8 @@ function showCalibrationResult(cal: CalibrationResult): void {
   setEl('cal-range', cal.pitch.range.toUpperCase());
   setEl('cal-persona', cal.filter.persona);
   setEl('cal-filter', `${cal.filter.filterType} @ ${cal.filter.cutoffHz}Hz`);
+  setEl('cal-vad-threshold', cal.speechThreshold.toFixed(4));
+  setEl('cal-noise-floor', cal.noiseFloorRms.toFixed(4));
 
   const ring = document.getElementById('cal-ring');
   if (ring) {
@@ -778,7 +780,7 @@ async function startSession(): Promise<void> {
       }
     },
     onAssistMetrics: updateAssistMetricsUI,
-  }, preferredAudioSource);
+  }, preferredAudioSource, calibration);
 
   session.setAssistMode(selectedAssistMode);
 

@@ -61,6 +61,14 @@ export function renderCalibrationView(): string {
               <div class="value" id="cal-filter" style="color: var(--color-text)">—</div>
               <div class="label">Filter Type</div>
             </div>
+            <div class="stat-item">
+              <div class="value" id="cal-vad-threshold" style="color: var(--phase1)">--</div>
+              <div class="label">VAD Threshold</div>
+            </div>
+            <div class="stat-item">
+              <div class="value" id="cal-noise-floor" style="color: var(--color-text)">--</div>
+              <div class="label">Noise Floor</div>
+            </div>
           </div>
         </div>
 
