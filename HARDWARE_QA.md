@@ -71,6 +71,7 @@ Still requires real G2 validation:
 - Confirm higher noise-floor environments produce a higher BridgeVAD threshold than quiet room.
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
 - After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
+- Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json`.
 
 ## Delayed proxy QA
 

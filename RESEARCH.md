@@ -48,6 +48,16 @@ Privacy-safe session telemetry is available in the Review tab through
 p50/p95/max, assist counts, average silence, self-response rate, and VAD
 calibration threshold/floors without raw utterance, cue text, or audio payloads.
 
+After exporting one or more `echo_my_data_*.json` files, summarize the system
+metrics with:
+
+```bash
+cd even-app
+npm run qa:summarize-export -- path/to/echo_my_data.json
+```
+
+The generated Markdown can be pasted into the pilot scorecard sections below.
+
 ## UX Metrics
 
 | Metric | Definition | Target capture |
