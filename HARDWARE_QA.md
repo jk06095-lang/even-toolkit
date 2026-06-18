@@ -1,5 +1,14 @@
 # Hardware QA
 
+Use [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json)
+as the required physical G2 evidence manifest for issues #2, #3, #4, and #6.
+The draft template is shape-checked by `npm run validate:hardware-template`
+inside `npm run verify:all`. Final hardware QA must pass:
+
+```bash
+npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json
+```
+
 ## Session lifecycle
 
 - Start and end a practice session 10 times.

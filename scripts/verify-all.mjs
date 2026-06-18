@@ -11,6 +11,10 @@ const steps = [
     args: ['run', 'validate:pilot-template'],
   },
   {
+    label: 'Project ECHO hardware QA template',
+    args: ['run', 'validate:hardware-template'],
+  },
+  {
     label: 'ECHO API proxy verify',
     args: ['--prefix', 'echo-api-proxy', 'run', 'verify'],
   },

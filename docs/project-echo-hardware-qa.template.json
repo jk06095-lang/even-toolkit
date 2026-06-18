@@ -1,0 +1,189 @@
+{
+  "project": "Project ECHO",
+  "runDate": "TBD",
+  "evidenceStatus": "draft",
+  "device": {
+    "name": "Even Realities G2",
+    "firmwareVersion": "TBD",
+    "appVersion": "TBD",
+    "bridgeVersion": "TBD"
+  },
+  "lifecycle": {
+    "tenCycleRuns": [
+      {
+        "cycle": 1,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 2,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 3,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 4,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 5,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 6,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 7,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 8,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 9,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      },
+      {
+        "cycle": 10,
+        "startG2MicSession": null,
+        "endPracticeSelected": null,
+        "standbyReturned": null,
+        "duplicateMicStreams": null,
+        "duplicateHudCallbacks": null,
+        "pendingTimers": null,
+        "evidenceRef": "TBD"
+      }
+    ],
+    "exitEchoRun": {
+      "exitFromActiveSession": null,
+      "shutdownTarget": null,
+      "statusListenersCleared": null,
+      "audioCaptureStopped": null,
+      "lateResponsesIgnored": null,
+      "evidenceRef": "TBD"
+    }
+  },
+  "hud": {
+    "states": {
+      "READY": {
+        "rendered": null,
+        "noOverlap": null,
+        "evidenceRef": "TBD"
+      },
+      "LISTENING": {
+        "rendered": null,
+        "noOverlap": null,
+        "evidenceRef": "TBD"
+      },
+      "CUE": {
+        "rendered": null,
+        "noOverlap": null,
+        "evidenceRef": "TBD"
+      },
+      "PAUSED": {
+        "rendered": null,
+        "noOverlap": null,
+        "evidenceRef": "TBD"
+      }
+    },
+    "phoneDetailOnly": null,
+    "grammarHiddenOnG2": null,
+    "videoEvidence": "TBD"
+  },
+  "assist": {
+    "manualDefault": null,
+    "autoOptInOnly": null,
+    "doubleClickRequestsCue": null,
+    "swipeDismissesCue": null,
+    "speechClearsCue": null,
+    "twoDismissAutoPause": null,
+    "interventionCapEnforced": null,
+    "metricsCaptured": null,
+    "evidenceRef": "TBD"
+  },
+  "delayedProxy": {
+    "scenarios": {
+      "endPractice": {
+        "abortObserved": null,
+        "lateResponseIgnored": null,
+        "hudUnchanged": null,
+        "phoneCueUnchanged": null,
+        "evidenceRef": "TBD"
+      },
+      "pause": {
+        "abortObserved": null,
+        "lateResponseIgnored": null,
+        "hudUnchanged": null,
+        "phoneCueUnchanged": null,
+        "evidenceRef": "TBD"
+      },
+      "exitEcho": {
+        "abortObserved": null,
+        "lateResponseIgnored": null,
+        "hudUnchanged": null,
+        "phoneCueUnchanged": null,
+        "evidenceRef": "TBD"
+      }
+    },
+    "latencyMetadataVisible": null,
+    "noRawTranscriptInLogs": null,
+    "debugLogRef": "TBD"
+  }
+}
