@@ -25,7 +25,8 @@ filled in.
 
 Run `npm run verify:all` before release or hardware QA. It verifies the root
 TypeScript build, ECHO API proxy smoke tests, and ECHO app test/build/package
-gate.
+gate. A ready-to-copy GitHub Actions workflow template is available at
+[docs/github-actions-verify.yml](./docs/github-actions-verify.yml).
 
 ## Built with
 

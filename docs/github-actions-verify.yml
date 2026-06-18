@@ -1,0 +1,40 @@
+# Copy this file to `.github/workflows/verify.yml` from an account or token with
+# GitHub `workflow` scope to enable hosted CI.
+name: Verify
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Local Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            even-app/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install ECHO app dependencies
+        run: npm ci --prefix even-app
+
+      - name: Verify all local gates
+        run: npm run verify:all
