@@ -15,6 +15,11 @@ const PLACEHOLDER_PATTERNS = [
   /^https?:\/\/example\.com/i,
 ];
 
+const EVIDENCE_EXTENSIONS = ['md', 'txt', 'log', 'json', 'png', 'jpg', 'jpeg', 'webp', 'svg', 'mp4', 'mov', 'webm', 'mkv'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
+const LOG_EXTENSIONS = ['md', 'txt', 'log', 'json'];
+const REPORT_EXTENSIONS = ['md', 'txt', 'log', 'json'];
+
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
 const verbose = args.includes('--verbose');
@@ -26,9 +31,10 @@ if (wantsHelp || !targetArg) {
 
 Validates the Project ECHO physical G2 hardware QA evidence manifest.
 
-Without --allow-draft, placeholders, missing evidence references, and values
-that do not match the expected cleanup/HUD/assist/delayed-proxy outcomes fail
-the command. Use --allow-draft only for the checked-in template shape.`);
+Without --allow-draft, placeholders, missing evidence references, invalid
+evidence link/path values, and outcomes that do not match the expected
+cleanup/HUD/assist/delayed-proxy behavior fail the command. Use --allow-draft
+only for the checked-in template shape.`);
   process.exit(wantsHelp ? 0 : 1);
 }
 
@@ -98,6 +104,46 @@ function validateText(object, key, pointer, options = {}) {
   }
 }
 
+function validateEvidenceLink(object, key, pointer, options = {}) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || isPlaceholder(value)) {
+    addError(fieldPointer, 'must be filled with a non-placeholder evidence link or repo path');
+    return;
+  }
+
+  const extensions = options.extensions ?? EVIDENCE_EXTENSIONS;
+  if (!looksLikeEvidenceTarget(value, extensions)) {
+    addError(
+      fieldPointer,
+      `must be an https URL or repo path ending in one of: ${extensions.join(', ')}`,
+    );
+  }
+}
+
+function looksLikeEvidenceTarget(value, extensions) {
+  const trimmed = String(value ?? '').trim();
+  if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  if (/^http:\/\//i.test(trimmed)) return false;
+
+  const escapedExtensions = extensions.map((extension) => extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const relativePathPattern = new RegExp(
+    `^(?:\\.{1,2}/)?[A-Za-z0-9_.\\-/]+\\.(${escapedExtensions.join('|')})$`,
+    'i',
+  );
+  return relativePathPattern.test(trimmed);
+}
+
 function validateExpected(object, key, expected, pointer) {
   const fieldPointer = `${pointer}.${key}`;
   if (!hasOwn(object, key)) {
@@ -154,7 +200,7 @@ function validateLifecycle(manifestObject) {
       validateExpected(run, 'duplicateMicStreams', false, pointer);
       validateExpected(run, 'duplicateHudCallbacks', false, pointer);
       validateExpected(run, 'pendingTimers', false, pointer);
-      validateText(run, 'evidenceRef', pointer);
+      validateEvidenceLink(run, 'evidenceRef', pointer);
     });
   }
 
@@ -165,7 +211,7 @@ function validateLifecycle(manifestObject) {
     validateExpected(run, 'statusListenersCleared', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'audioCaptureStopped', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'lateResponsesIgnored', true, 'lifecycle.exitEchoRun');
-    validateText(run, 'evidenceRef', 'lifecycle.exitEchoRun');
+    validateEvidenceLink(run, 'evidenceRef', 'lifecycle.exitEchoRun');
   }
 }
 
@@ -178,12 +224,14 @@ function validateHud(manifestObject) {
     if (!validateObject(manifestObject.hud.states[state], pointer)) continue;
     validateExpected(manifestObject.hud.states[state], 'rendered', true, pointer);
     validateExpected(manifestObject.hud.states[state], 'noOverlap', true, pointer);
-    validateText(manifestObject.hud.states[state], 'evidenceRef', pointer);
+    validateEvidenceLink(manifestObject.hud.states[state], 'evidenceRef', pointer);
   }
 
   validateExpected(manifestObject.hud, 'phoneDetailOnly', true, 'hud');
   validateExpected(manifestObject.hud, 'grammarHiddenOnG2', true, 'hud');
-  validateText(manifestObject.hud, 'videoEvidence', 'hud');
+  validateEvidenceLink(manifestObject.hud, 'videoEvidence', 'hud', {
+    extensions: VIDEO_EXTENSIONS,
+  });
 }
 
 function validateAssist(manifestObject) {
@@ -201,7 +249,7 @@ function validateAssist(manifestObject) {
   ]) {
     validateExpected(manifestObject.assist, key, true, 'assist');
   }
-  validateText(manifestObject.assist, 'evidenceRef', 'assist');
+  validateEvidenceLink(manifestObject.assist, 'evidenceRef', 'assist');
 }
 
 function validateDelayedProxy(manifestObject) {
@@ -215,12 +263,14 @@ function validateDelayedProxy(manifestObject) {
     validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'lateResponseIgnored', true, pointer);
     validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'hudUnchanged', true, pointer);
     validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'phoneCueUnchanged', true, pointer);
-    validateText(manifestObject.delayedProxy.scenarios[scenario], 'evidenceRef', pointer);
+    validateEvidenceLink(manifestObject.delayedProxy.scenarios[scenario], 'evidenceRef', pointer);
   }
 
   validateExpected(manifestObject.delayedProxy, 'latencyMetadataVisible', true, 'delayedProxy');
   validateExpected(manifestObject.delayedProxy, 'noRawTranscriptInLogs', true, 'delayedProxy');
-  validateText(manifestObject.delayedProxy, 'debugLogRef', 'delayedProxy');
+  validateEvidenceLink(manifestObject.delayedProxy, 'debugLogRef', 'delayedProxy', {
+    extensions: LOG_EXTENSIONS,
+  });
 }
 
 function validateVoiceRuntime(manifestObject) {
@@ -240,8 +290,10 @@ function validateVoiceRuntime(manifestObject) {
     validateExpected(manifestObject.voiceRuntime, key, true, 'voiceRuntime');
   }
 
-  validateText(manifestObject.voiceRuntime, 'bundleReportRef', 'voiceRuntime');
-  validateText(manifestObject.voiceRuntime, 'deviceEvidenceRef', 'voiceRuntime');
+  validateEvidenceLink(manifestObject.voiceRuntime, 'bundleReportRef', 'voiceRuntime', {
+    extensions: REPORT_EXTENSIONS,
+  });
+  validateEvidenceLink(manifestObject.voiceRuntime, 'deviceEvidenceRef', 'voiceRuntime');
 }
 
 validateManifestRoot(manifest);

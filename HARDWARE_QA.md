@@ -9,6 +9,11 @@ inside `npm run verify:all`. Final hardware QA must pass:
 npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json
 ```
 
+Every final `evidenceRef`, `videoEvidence`, `debugLogRef`, `bundleReportRef`,
+and `deviceEvidenceRef` must be a non-placeholder `https://` URL or a repo path
+to an evidence file such as `.md`, `.json`, `.log`, image, or video. Plain
+status text such as `done` is not accepted as evidence.
+
 ## Session lifecycle
 
 - Start and end a practice session 10 times.
