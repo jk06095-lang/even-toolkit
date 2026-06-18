@@ -58,6 +58,15 @@ Ten-cycle test:
 - Confirm higher noise-floor environments produce a higher BridgeVAD threshold than quiet room.
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
 
+## Delayed proxy QA
+
+- Configure a delayed proxy response for cue generation.
+- Start a session, trigger a cue request, then select `END PRACTICE` before the proxy returns.
+- Confirm the delayed response does not update the G2 HUD or phone cue card after the session ends.
+- Repeat the same delayed response test with Pause and Exit ECHO.
+- Confirm console/session metadata shows request ID, request scope, network latency, generation latency, HUD rendering latency, and end-to-end latency.
+- Confirm debug logs do not print raw transcript text as part of latency metadata.
+
 ## Assist mode QA
 
 - Start a new practice session and confirm the phone UI shows `Assist: Manual`.

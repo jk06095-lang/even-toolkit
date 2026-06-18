@@ -612,14 +612,18 @@ async function startSession(): Promise<void> {
 
   session = new SessionEngine(currentWeek, {
     onStateChange: handleSessionState,
-    onChunkGenerated: (result) => {
+    onChunkGenerated: async (result) => {
       currentActiveHint = result.chunk;
-      handleChunkGenerated(result);
+      await handleChunkGenerated(result);
     },
     onSpeechDetected: handleSpeechDetected,
     onSilenceStart: handleSilenceStart,
     onSessionLog: (log) => {
-      console.log('[Session Log]', log);
+      const { transcript, ...safeLog } = log;
+      console.log('[Session Log]', {
+        ...safeLog,
+        transcript: transcript ? '[local transcript available for export]' : undefined,
+      });
     },
     onTranscript: (transcript) => {
       const display = document.getElementById('transcript-display');
@@ -1090,7 +1094,7 @@ function handleSessionState(state: SessionState): void {
   updateSilenceMeter(state);
 }
 
-function handleChunkGenerated(result: ChunkResult): void {
+async function handleChunkGenerated(result: ChunkResult): Promise<void> {
   const chunkDisplay = document.getElementById('chunk-display');
   if (chunkDisplay && result.chunk) {
     chunkDisplay.style.display = 'block';
@@ -1102,9 +1106,9 @@ function handleChunkGenerated(result: ChunkResult): void {
 
   // HUD
   if (currentWeek === 3) {
-    hud?.showSpeedUp(result.chunk);
+    await hud?.showSpeedUp(result.chunk);
   } else {
-    hud?.flashChunk(result.chunk);
+    await hud?.flashChunk(result.chunk);
   }
 
   // Add to history

@@ -149,8 +149,12 @@ async function buildStage3(
   if (!isEchoApiConfigured()) return fallback;
 
   try {
+    const requestId = `${stage1.session_id}:session-analysis:${Date.now()}`;
+    console.info(`[Export] Session analysis request ${requestId}`);
     const response = await requestSessionAnalysis<ExportStage3 | string>({
       task: 'session_handoff',
+      clientSessionId: stage1.session_id,
+      requestId,
       stage_1_raw: stage1,
       stage_2_analysis: stage2,
     });

@@ -48,6 +48,26 @@ When calibration is missing or sparse, BridgeVAD uses the conservative fallback
 threshold `0.015`. Debug logs print the active BridgeVAD threshold plus the
 calibrated noise and speech floors when available.
 
+## Request guards and latency
+
+Each live proxy request receives a per-session request scope plus request ID.
+The session engine aborts in-flight proxy calls on pause and end, and ignores
+responses whose request scope no longer matches the current session.
+
+Cue latency records include:
+
+- `silence_detected_at`
+- `cue_request_started_at`
+- `cue_response_received_at`
+- `cue_displayed_at`
+- `network_latency_ms`
+- `generation_latency_ms`
+- `hud_render_latency_ms`
+- `end_to_end_latency_ms`
+
+Latency records are stored as metadata only. They do not include raw transcript
+text, audio payloads, or cue request bodies.
+
 ## Assist modes
 
 - `Manual Assist` is the default for every new practice session.

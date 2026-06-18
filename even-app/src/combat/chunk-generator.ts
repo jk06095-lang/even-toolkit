@@ -18,6 +18,8 @@ export interface ChunkRequest {
   topic: string;
   week: number;
   category?: ChunkCategory;
+  clientSessionId?: string;
+  requestId?: string;
   lastUtterance?: string;
   usedHints?: string[];
   scenarioContext?: string;
@@ -30,6 +32,8 @@ export interface ChunkResult {
   chunk: string;
   source: 'gemini' | 'fallback';
   latencyMs: number;
+  networkLatencyMs?: number;
+  generationLatencyMs?: number | null;
 }
 
 export interface SpeechEvaluationResult {
@@ -37,6 +41,8 @@ export interface SpeechEvaluationResult {
   chunk: string | null;
   source: 'gemini';
   latencyMs: number;
+  networkLatencyMs?: number;
+  generationLatencyMs?: number | null;
 }
 
 export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
@@ -45,6 +51,8 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
     chunk: getRandomFallbackChunk(req.category ?? 'general'),
     source: 'fallback' as const,
     latencyMs: Date.now() - start,
+    networkLatencyMs: 0,
+    generationLatencyMs: 0,
   });
 
   if (!isEchoApiConfigured()) {
@@ -56,6 +64,8 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
       topic: req.topic,
       difficulty: req.adaptiveDifficulty ?? req.week,
       category: req.category,
+      clientSessionId: req.clientSessionId,
+      requestId: req.requestId,
       recentTranscript: req.conversationContext,
       lastUtterance: req.lastUtterance,
       usedHints: req.usedHints,
@@ -64,6 +74,8 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
       intent: req.missedHint ? 'simplify' : 'cue',
     }, signal);
 
+    const networkLatencyMs = Date.now() - start;
+    const generationLatencyMs = extractLatency(result);
     let chunk = cleanChunk(extractText(result, ['chunk', 'cue', 'text']));
 
     if (chunk && req.usedHints?.some((hint) => hint.toLowerCase() === chunk.toLowerCase())) {
@@ -77,7 +89,9 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
     return {
       chunk,
       source: 'gemini',
-      latencyMs: Date.now() - start,
+      latencyMs: networkLatencyMs,
+      networkLatencyMs,
+      generationLatencyMs,
     };
   } catch (err) {
     if (!signal?.aborted) {
@@ -104,6 +118,8 @@ export async function evaluateSpeech(
       task: 'speech_evaluation',
       topic: req.topic,
       difficulty: req.adaptiveDifficulty ?? req.week,
+      clientSessionId: req.clientSessionId,
+      requestId: req.requestId,
       language: 'en-US',
       audio: {
         mimeType: 'audio/wav',
@@ -114,6 +130,8 @@ export async function evaluateSpeech(
       scenarioContext: req.scenarioContext,
     }, signal);
 
+    const networkLatencyMs = Date.now() - start;
+    const generationLatencyMs = extractLatency(result);
     const transcript = cleanTranscript(extractText(result, ['transcript', 'text']));
     let hint = cleanChunk(extractText(result, ['hint', 'chunk', 'cue']));
 
@@ -135,7 +153,9 @@ export async function evaluateSpeech(
       transcript,
       chunk: hint || null,
       source: 'gemini',
-      latencyMs: Date.now() - start,
+      latencyMs: networkLatencyMs,
+      networkLatencyMs,
+      generationLatencyMs,
     };
   } catch (err) {
     if (!signal?.aborted) {
@@ -148,6 +168,7 @@ export async function evaluateSpeech(
 export async function evaluateGrammar(
   transcript: string,
   topic: string,
+  metadata?: { clientSessionId?: string; requestId?: string },
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (!transcript || transcript.trim().length < 5) return null;
@@ -157,6 +178,8 @@ export async function evaluateGrammar(
     const result = await requestSessionAnalysis<any>({
       task: 'grammar',
       topic,
+      clientSessionId: metadata?.clientSessionId,
+      requestId: metadata?.requestId,
       transcript,
     }, signal);
 
@@ -184,6 +207,7 @@ export async function evaluateGrammar(
 export async function simplifyHint(
   hint: string,
   topic: string,
+  metadata?: { clientSessionId?: string; requestId?: string },
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (!isEchoApiConfigured()) return null;
@@ -192,6 +216,8 @@ export async function simplifyHint(
     const result = await requestCue({
       topic,
       difficulty: 1,
+      clientSessionId: metadata?.clientSessionId,
+      requestId: metadata?.requestId,
       missedHint: hint,
       intent: 'simplify',
     }, signal);
@@ -218,6 +244,12 @@ function extractText(input: unknown, keys: string[]): string {
   }
 
   return '';
+}
+
+function extractLatency(input: unknown): number | null {
+  if (!input || typeof input !== 'object') return null;
+  const value = (input as Record<string, unknown>).latencyMs;
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function cleanChunk(raw: string): string {

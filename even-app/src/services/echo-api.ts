@@ -112,6 +112,8 @@ export interface CueApiRequest {
   topic: string;
   difficulty: number;
   category?: string;
+  clientSessionId?: string;
+  requestId?: string;
   recentTranscript?: string;
   lastUtterance?: string;
   usedHints?: string[];
@@ -132,6 +134,8 @@ export interface CueApiResponse {
 export interface TranscriptionApiRequest {
   topic?: string;
   difficulty?: number;
+  clientSessionId?: string;
+  requestId?: string;
   language?: string;
   task?: 'transcribe' | 'speech_evaluation';
   audio: {

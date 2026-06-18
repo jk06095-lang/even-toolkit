@@ -29,6 +29,7 @@ export type SessionState =
 
 export type AssistMode = 'manual' | 'auto';
 type CueTrigger = 'manual' | 'auto' | 'speech-evaluation' | 'simplified';
+export type ProxyRequestKind = 'cue' | 'transcription' | 'grammar' | 'session-analysis';
 
 export interface AssistMetrics {
   manual_request_count: number;
@@ -37,6 +38,22 @@ export interface AssistMetrics {
   false_trigger_count: number;
   cue_used_count: number;
   auto_assist_paused: boolean;
+}
+
+export interface CueLatencyRecord {
+  session_request_scope_id: string;
+  request_id: string;
+  request_kind: ProxyRequestKind;
+  trigger: CueTrigger;
+  silence_detected_at: number | null;
+  cue_request_started_at: number;
+  cue_response_received_at: number;
+  cue_displayed_at: number | null;
+  network_latency_ms: number | null;
+  generation_latency_ms: number | null;
+  hud_render_latency_ms: number | null;
+  end_to_end_latency_ms: number | null;
+  source: 'gemini' | 'fallback';
 }
 
 export interface WeekConfig {
@@ -67,13 +84,14 @@ export interface SessionLog {
   hintHistory: { chunk: string; source: string; timestamp: number }[];
   silenceDurations: number[];
   assistMetrics: AssistMetrics;
+  cueLatencyRecords: CueLatencyRecord[];
   /** Full transcript saved to cache — available for export */
   transcript?: SessionTranscript;
 }
 
 export interface SessionCallbacks {
   onStateChange: (state: SessionState) => void;
-  onChunkGenerated: (result: ChunkResult) => void;
+  onChunkGenerated: (result: ChunkResult) => void | Promise<void>;
   onSpeechDetected: () => void;
   onSilenceStart: () => void;
   onSessionLog: (log: SessionLog) => void;
@@ -126,8 +144,12 @@ export class SessionEngine {
   private preferredAudioSource: 'bridge' | 'browser' = 'bridge';
   private vadCalibration: VadCalibration | null = null;
   private lifecycleToken = 0;
+  private sessionRequestScopeId = '';
+  private requestSequence = 0;
   private activeRequestControllers = new Set<AbortController>();
   private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+  private cueLatencyRecords: CueLatencyRecord[] = [];
+  private lastSilenceDetectedAt: number | null = null;
   private assistMode: AssistMode = 'manual';
   private assistMetrics: AssistMetrics = {
     manual_request_count: 0,
@@ -218,18 +240,37 @@ export class SessionEngine {
     this.activeCueTrigger = null;
   }
 
-  private beginRequest(): { token: number; controller: AbortController } {
+  private beginRequest(kind: ProxyRequestKind): {
+    token: number;
+    sessionRequestScopeId: string;
+    requestId: string;
+    kind: ProxyRequestKind;
+    startedAt: number;
+    controller: AbortController;
+  } {
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
-    return { token: this.lifecycleToken, controller };
+    const sequence = ++this.requestSequence;
+    return {
+      token: this.lifecycleToken,
+      sessionRequestScopeId: this.sessionRequestScopeId,
+      requestId: `${this.sessionRequestScopeId}:${kind}:${sequence}`,
+      kind,
+      startedAt: Date.now(),
+      controller,
+    };
   }
 
   private finishRequest(controller: AbortController): void {
     this.activeRequestControllers.delete(controller);
   }
 
-  private isCurrentRequest(token: number): boolean {
-    return token === this.lifecycleToken && this._state !== 'session_end';
+  private isCurrentRequest(request: { token: number; sessionRequestScopeId: string }): boolean {
+    return (
+      request.token === this.lifecycleToken &&
+      request.sessionRequestScopeId === this.sessionRequestScopeId &&
+      this._state !== 'session_end'
+    );
   }
 
   private abortActiveRequests(): void {
@@ -252,6 +293,52 @@ export class SessionEngine {
       clearTimeout(timeout);
     }
     this.pendingTimeouts.clear();
+  }
+
+  private createSessionRequestScopeId(): string {
+    const random =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+    return `echo-${Date.now()}-${random}`;
+  }
+
+  private async displayCueAndRecordLatency(
+    request: ReturnType<SessionEngine['beginRequest']>,
+    result: ChunkResult,
+    trigger: CueTrigger,
+    silenceDetectedAt: number | null,
+    responseReceivedAt = Date.now(),
+  ): Promise<void> {
+    const displayStart = Date.now();
+    await this.callbacks.onChunkGenerated(result);
+    const displayedAt = Date.now();
+
+    const networkLatencyMs = result.networkLatencyMs ?? responseReceivedAt - request.startedAt;
+    const generationLatencyMs = result.generationLatencyMs ?? result.latencyMs ?? null;
+    const hudRenderLatencyMs = displayedAt - displayStart;
+    const e2eStart = silenceDetectedAt ?? request.startedAt;
+
+    const record: CueLatencyRecord = {
+      session_request_scope_id: request.sessionRequestScopeId,
+      request_id: request.requestId,
+      request_kind: request.kind,
+      trigger,
+      silence_detected_at: silenceDetectedAt,
+      cue_request_started_at: request.startedAt,
+      cue_response_received_at: responseReceivedAt,
+      cue_displayed_at: displayedAt,
+      network_latency_ms: networkLatencyMs,
+      generation_latency_ms: generationLatencyMs,
+      hud_render_latency_ms: hudRenderLatencyMs,
+      end_to_end_latency_ms: displayedAt - e2eStart,
+      source: result.source,
+    };
+
+    this.cueLatencyRecords.push(record);
+    console.info(
+      `[Session] Cue latency ${record.request_id}: network=${record.network_latency_ms}ms generation=${record.generation_latency_ms ?? 'n/a'}ms hud=${record.hud_render_latency_ms}ms e2e=${record.end_to_end_latency_ms}ms`,
+    );
   }
 
   /**
@@ -279,6 +366,8 @@ export class SessionEngine {
     if (this._state !== 'idle' && this._state !== 'calibrated') return;
 
     this.lifecycleToken++;
+    this.sessionRequestScopeId = this.createSessionRequestScopeId();
+    this.requestSequence = 0;
     this.abortActiveRequests();
     this.clearPendingTimeouts();
     this.sessionStartTime = Date.now();
@@ -287,6 +376,8 @@ export class SessionEngine {
     this.silenceCount = 0;
     this.silenceDurations = [];
     this.hintHistory = [];
+    this.cueLatencyRecords = [];
+    this.lastSilenceDetectedAt = null;
     this.usedHintChunks = [];
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
@@ -332,18 +423,21 @@ export class SessionEngine {
         if (this.isGenerating || this._state !== 'listening') return;
 
         this.isGenerating = true;
-        const request = this.beginRequest();
+        const request = this.beginRequest('transcription');
         try {
           const result = await evaluateSpeech(audio, {
             topic: this._topic,
             week: this.weekConfig.week,
             category: this._category,
+            clientSessionId: request.sessionRequestScopeId,
+            requestId: request.requestId,
             lastUtterance: this.lastLiveTranscript || undefined,
             usedHints: this.usedHintChunks,
             scenarioContext: this._scenarioContext || undefined,
           }, request.controller.signal);
+          const responseReceivedAt = Date.now();
 
-          if (!this.isCurrentRequest(request.token)) return;
+          if (!this.isCurrentRequest(request)) return;
 
           if (result) {
             // Forward the transcript to the UI
@@ -396,11 +490,13 @@ export class SessionEngine {
               if ((this._state as any) === 'session_end') return;
 
               this.setState('hud_flash');
-              this.callbacks.onChunkGenerated({
+              await this.displayCueAndRecordLatency(request, {
                 chunk: result.chunk,
                 source: result.source,
                 latencyMs: result.latencyMs,
-              });
+                networkLatencyMs: result.networkLatencyMs,
+                generationLatencyMs: result.generationLatencyMs,
+              }, 'speech-evaluation', null, responseReceivedAt);
 
               // Auto-clear after flash duration, then restart silence cycle
               this.scheduleTimeout(() => {
@@ -593,12 +689,15 @@ export class SessionEngine {
   private async showGrammarFeedbackIfCurrent(transcript: string): Promise<void> {
     if (this._state !== 'listening') return;
 
-    const request = this.beginRequest();
+    const request = this.beginRequest('grammar');
     try {
-      const correction = await evaluateGrammar(transcript, this._topic, request.controller.signal);
+      const correction = await evaluateGrammar(transcript, this._topic, {
+        clientSessionId: request.sessionRequestScopeId,
+        requestId: request.requestId,
+      }, request.controller.signal);
       if (
         correction &&
-        this.isCurrentRequest(request.token) &&
+        this.isCurrentRequest(request) &&
         this.hudRef &&
         this._state === 'listening'
       ) {
@@ -710,6 +809,7 @@ export class SessionEngine {
       hintHistory: this.hintHistory,
       silenceDurations: this.silenceDurations,
       assistMetrics: { ...this.assistMetrics },
+      cueLatencyRecords: [...this.cueLatencyRecords],
       transcript,
     };
 
@@ -825,6 +925,7 @@ export class SessionEngine {
 
     this.silenceCount++;
     this.silenceDurations.push(silenceDur);
+    this.lastSilenceDetectedAt = Date.now();
 
     // Record silence event to cache
     this.transcriptStore?.addSilence(silenceDur);
@@ -875,14 +976,18 @@ export class SessionEngine {
       this.emitAssistMetrics();
 
       try {
-          const request = this.beginRequest();
+          const request = this.beginRequest('cue');
           let simplified: string | null = null;
           try {
-            simplified = await simplifyHint(activeHint.text, this._topic, request.controller.signal);
+            simplified = await simplifyHint(activeHint.text, this._topic, {
+              clientSessionId: request.sessionRequestScopeId,
+              requestId: request.requestId,
+            }, request.controller.signal);
           } finally {
             this.finishRequest(request.controller);
           }
-          if (!this.isCurrentRequest(request.token)) return;
+          const responseReceivedAt = Date.now();
+          if (!this.isCurrentRequest(request)) return;
 
           if (simplified && simplified !== activeHint.text) {
           // Show simplified hint
@@ -902,7 +1007,13 @@ export class SessionEngine {
           });
 
           this.setState('hud_flash');
-          this.callbacks.onChunkGenerated({ chunk: simplified, source: 'gemini', latencyMs: 0 });
+          await this.displayCueAndRecordLatency(request, {
+            chunk: simplified,
+            source: 'gemini',
+            latencyMs: responseReceivedAt - request.startedAt,
+            networkLatencyMs: responseReceivedAt - request.startedAt,
+            generationLatencyMs: null,
+          }, 'simplified', this.lastSilenceDetectedAt, responseReceivedAt);
 
           this.scheduleTimeout(() => {
             if (this._state === 'hud_flash') {
@@ -950,7 +1061,7 @@ export class SessionEngine {
   private async generateContextualHint(trigger: CueTrigger): Promise<void> {
     this.isGenerating = true;
     this.setState('chunk_generating');
-    const request = this.beginRequest();
+    const request = this.beginRequest('cue');
 
     try {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
@@ -960,14 +1071,17 @@ export class SessionEngine {
         topic: this._topic,
         week: this.weekConfig.week,
         category: this._category,
+        clientSessionId: request.sessionRequestScopeId,
+        requestId: request.requestId,
         lastUtterance: this.lastLiveTranscript || undefined,
         usedHints: this.usedHintChunks,
         scenarioContext: this._scenarioContext || undefined,
         conversationContext,
         adaptiveDifficulty,
       }, request.controller.signal);
+      const responseReceivedAt = Date.now();
 
-      if (!this.isCurrentRequest(request.token)) return;
+      if (!this.isCurrentRequest(request)) return;
 
       if (result.chunk) {
         this.hintCount++;
@@ -985,7 +1099,14 @@ export class SessionEngine {
         this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
         this.setState('hud_flash');
-        this.callbacks.onChunkGenerated(result);
+        const silenceDetectedAt = trigger === 'manual' ? null : this.lastSilenceDetectedAt;
+        await this.displayCueAndRecordLatency(
+          request,
+          result,
+          trigger,
+          silenceDetectedAt,
+          responseReceivedAt,
+        );
 
         this.scheduleTimeout(() => {
           if (this._state === 'hud_flash') {
