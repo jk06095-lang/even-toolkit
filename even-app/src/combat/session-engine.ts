@@ -371,6 +371,16 @@ export class SessionEngine {
     this.activeCueTrigger = null;
   }
 
+  private isCurrentSpeechRecognizer(recognizer: SpeechRecognizerDriver | null): boolean {
+    if (!recognizer || this.speechRecognizer !== recognizer) return false;
+    return (
+      this._state === 'listening' ||
+      this._state === 'silence_detected' ||
+      this._state === 'chunk_generating' ||
+      this._state === 'hud_flash'
+    );
+  }
+
   private beginRequest(kind: ProxyRequestKind): {
     token: number;
     sessionRequestScopeId: string;
@@ -718,9 +728,12 @@ export class SessionEngine {
     }
 
     const isBridge = this.vad?.audioSource === 'bridge';
+    let recognizer: SpeechRecognizerDriver | null = null;
+    const isCurrentRecognizer = () => this.isCurrentSpeechRecognizer(recognizer);
 
-    this.speechRecognizer = this.speechRecognizerFactory.create({
+    recognizer = this.speechRecognizerFactory.create({
       onInterimResult: (text) => {
+        if (!isCurrentRecognizer()) return;
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, false);
         
@@ -736,6 +749,7 @@ export class SessionEngine {
         }
       },
       onFinalResult: (text) => {
+        if (!isCurrentRecognizer()) return;
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, true);
         const trimmed = text.trim();
@@ -789,6 +803,7 @@ export class SessionEngine {
         // Silence after speech
       },
       onError: (err) => {
+        if (!isCurrentRecognizer()) return;
         console.warn('[Session] Speech recognizer error:', err);
         // Retry logic for transient errors
         if (retryCount < 3 && err !== 'SECURE_ORIGIN_REQUIRED') {
@@ -803,12 +818,13 @@ export class SessionEngine {
     }, {
       cloudProcessingEnabled: this.cloudProcessingEnabled,
     });
+    this.speechRecognizer = recognizer;
 
     if (isBridge) {
       // Hybrid mode: Web Speech API for fast text + PCM buffer for evaluateSpeech
-      const started = this.speechRecognizer.startHybrid();
+      const started = recognizer.startHybrid();
       if (started) {
-        console.log(`[Session] ✓ Hybrid speech recognition active (mode: ${this.speechRecognizer.mode})`);
+        console.log(`[Session] ✓ Hybrid speech recognition active (mode: ${recognizer.mode})`);
       }
     } else {
       // Browser mode: Web Speech API only
@@ -816,7 +832,7 @@ export class SessionEngine {
         console.log('[Session] Web Speech API not available — real-time transcript disabled');
         return;
       }
-      const started = this.speechRecognizer.start();
+      const started = recognizer.start();
       if (started) {
         console.log('[Session] ✓ Browser speech recognition active (Web Speech API)');
       }

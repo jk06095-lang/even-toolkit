@@ -49,6 +49,14 @@ class FakeClock implements Clock {
     return this.intervals.size;
   }
 
+  activeTimeoutCount(): number {
+    return this.timeouts.size;
+  }
+
+  activeTimerCount(): number {
+    return this.timeouts.size + this.intervals.size;
+  }
+
   advance(ms: number): void {
     const target = this.current + ms;
 
@@ -85,6 +93,7 @@ class FakeClock implements Clock {
 
 class FakeAudioDetector implements AudioDetector {
   audioSource: string;
+  active = false;
   startCount = 0;
   stopCount = 0;
   pauseCount = 0;
@@ -102,11 +111,13 @@ class FakeAudioDetector implements AudioDetector {
 
   async start(): Promise<void> {
     this.startCount++;
+    this.active = true;
     if (this.startError) throw this.startError;
   }
 
   async stop(): Promise<void> {
     this.stopCount++;
+    this.active = false;
   }
 
   async pause(): Promise<void> {
@@ -143,6 +154,8 @@ class FakeSpeechRecognizer implements SpeechRecognizerDriver {
   speechStartCount = 0;
   speechEndCount = 0;
 
+  constructor(private readonly callbacks: HybridRecognizerCallbacks) {}
+
   start(): boolean {
     this.startCount++;
     this.mode = 'browser';
@@ -169,6 +182,18 @@ class FakeSpeechRecognizer implements SpeechRecognizerDriver {
 
   async notifySpeechEnd(): Promise<void> {
     this.speechEndCount++;
+  }
+
+  emitInterimResult(text: string): void {
+    this.callbacks.onInterimResult(text);
+  }
+
+  emitFinalResult(text: string): void {
+    this.callbacks.onFinalResult(text);
+  }
+
+  emitError(error: string): void {
+    this.callbacks.onError?.(error);
   }
 }
 
@@ -355,6 +380,62 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.clock.activeIntervalCount()).toBe(0);
     expect(harness.states[harness.states.length - 1]).toBe('session_end');
   });
+
+  it('ignores late speech recognizer callbacks after cleanup', async () => {
+    const harness = createHarness();
+    await harness.engine.start(harness.hud);
+    const recognizer = harness.recognizers[0]!;
+
+    await harness.engine.stop();
+    const hudEventCountAfterStop = harness.hud.events.length;
+
+    recognizer.emitInterimResult('late interim');
+    recognizer.emitFinalResult('late final');
+    recognizer.emitError('late error');
+
+    expect(harness.liveTranscripts).toEqual([]);
+    expect(harness.hud.events).toHaveLength(hudEventCountAfterStop);
+    expect(harness.clock.activeTimerCount()).toBe(0);
+  });
+
+  it('cleans audio, recognizers, timers, and stale callbacks across ten session cycles', async () => {
+    const sharedClock = new FakeClock();
+    const detectors: FakeAudioDetector[] = [];
+    const recognizers: FakeSpeechRecognizer[] = [];
+
+    for (let cycle = 0; cycle < 10; cycle++) {
+      const harness = createHarness({ clock: sharedClock });
+      await harness.engine.start(harness.hud);
+      const recognizer = harness.recognizers[0]!;
+
+      expect(harness.vad.active).toBe(true);
+      expect(sharedClock.activeIntervalCount()).toBe(1);
+
+      await harness.engine.stop();
+
+      expect(harness.vad.active).toBe(false);
+      expect(harness.vad.stopCount).toBe(1);
+      expect(recognizer.stopCount).toBe(1);
+      expect(sharedClock.activeTimerCount()).toBe(0);
+
+      const hudEventCountAfterStop = harness.hud.events.length;
+      recognizer.emitFinalResult(`late final ${cycle}`);
+      harness.vad.triggerSpeech();
+      await harness.vad.triggerSilence();
+
+      expect(harness.liveTranscripts).toEqual([]);
+      expect(harness.hud.events).toHaveLength(hudEventCountAfterStop);
+      expect(sharedClock.activeTimerCount()).toBe(0);
+
+      detectors.push(harness.vad);
+      recognizers.push(recognizer);
+    }
+
+    expect(detectors).toHaveLength(10);
+    expect(recognizers).toHaveLength(10);
+    expect(detectors.every((detector) => detector.startCount === 1 && detector.stopCount === 1 && !detector.active)).toBe(true);
+    expect(recognizers.every((recognizer) => recognizer.startHybridCount === 1 && recognizer.stopCount === 1)).toBe(true);
+  });
 });
 
 function createHarness(options: {
@@ -365,11 +446,13 @@ function createHarness(options: {
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
   vadStartError?: Error;
+  clock?: FakeClock;
 } = {}) {
-  const clock = new FakeClock();
+  const clock = options.clock ?? new FakeClock();
   const states: string[] = [];
   const chunks: ChunkResult[] = [];
   const logs: SessionLog[] = [];
+  const liveTranscripts: { text: string; isFinal: boolean }[] = [];
   const hud = new FakeHud();
   let vad!: FakeAudioDetector;
 
@@ -380,8 +463,8 @@ function createHarness(options: {
 
   const recognizers: FakeSpeechRecognizer[] = [];
   const speechRecognizerFactory: SpeechRecognizerFactory = {
-    create: (_callbacks: HybridRecognizerCallbacks, _options?: HybridRecognizerOptions) => {
-      const recognizer = new FakeSpeechRecognizer();
+    create: (callbacks: HybridRecognizerCallbacks, _options?: HybridRecognizerOptions) => {
+      const recognizer = new FakeSpeechRecognizer(callbacks);
       recognizers.push(recognizer);
       return recognizer;
     },
@@ -397,6 +480,9 @@ function createHarness(options: {
     onSpeechDetected: () => {},
     onSilenceStart: () => {},
     onSessionLog: (log) => logs.push(log),
+    onLiveTranscript: (text, isFinal) => {
+      liveTranscripts.push({ text, isFinal });
+    },
   };
 
   const engine = new SessionEngine(
@@ -432,6 +518,7 @@ function createHarness(options: {
     states,
     chunks,
     logs,
+    liveTranscripts,
     recognizers,
   };
 }

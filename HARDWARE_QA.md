@@ -41,6 +41,19 @@ Ten-cycle test:
 7. Repeat once with `EXIT ECHO` as the final action.
 8. Confirm audio packet callbacks, status polling, and Web Speech callbacks are not duplicated.
 
+Automated coverage added on 2026-06-19:
+
+- `session-engine-core` repeats 10 start/stop cycles with a shared fake clock.
+- Each cycle verifies VAD start/stop parity, recognizer start/stop parity, no active detector after cleanup, and zero pending timeouts or intervals.
+- Late Web Speech interim/final/error callbacks after cleanup are ignored and do not update HUD or transcript callbacks.
+- Late VAD speech/silence callbacks after cleanup do not update HUD state.
+
+Still requires real G2 validation:
+
+- Confirm `END PRACTICE` returns glasses to `READY` standby after physical G2 audio capture stops.
+- Confirm `EXIT ECHO` calls Even Hub shutdown target `1`, clears status/audio subscriptions, and leaves no active hardware capture.
+- Capture the 10-cycle hardware notes under issue #10.
+
 ## Audio source separation
 
 - With `G2 Mic` selected, Phone Mic must not open.
