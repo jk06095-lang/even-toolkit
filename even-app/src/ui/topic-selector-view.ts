@@ -1,5 +1,5 @@
 /**
- * Topic Selector View — inline topic selection before combat session.
+ * Topic Selector View — inline topic selection before live practice.
  * Shows category tabs and scenario cards with situation descriptions.
  * Uses existing design system tokens only.
  */
@@ -53,7 +53,7 @@ export function renderTopicSelector(selectedId?: string): string {
           <ul id="topic-detail-expressions" style="list-style: none; padding: 0; margin: 0;"></ul>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="btn btn-highlight btn-full" id="btn-start-scenario">Start Scenario Session</button>
+          <button class="btn btn-highlight btn-full" id="btn-start-scenario">Start Scenario Practice</button>
           <button class="btn btn-neutral btn-full" id="btn-change-topic" style="background: transparent; color: var(--color-text-dim);">Change Topic</button>
         </div>
       </div>

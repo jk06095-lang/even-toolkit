@@ -1,8 +1,8 @@
 /**
- * Combat View — Phase 2 UI
+ * Live Practice View — Phase 2 UI
  * Uses Even Realities design system tokens.
  *
- * Layout: Mode Selector -> (General Practice OR Scenario Training) -> Combat Session -> Stats
+ * Layout: Mode Selector -> (General Practice OR Scenario Practice) -> Live Practice -> Stats
  * Enhanced with: real-time waveform, expression tracking, scenario context
  */
 
@@ -21,7 +21,7 @@ export function renderCombatView(): string {
 
   return `
     <div class="phase-view" id="phase2-view">
-      <div class="phase-indicator p2">● Active Training</div>
+      <div class="phase-indicator p2">● Live Practice</div>
 
       <div class="card" id="privacy-settings-card">
         <div class="card-header">
@@ -61,17 +61,17 @@ export function renderCombatView(): string {
       <div class="card" id="mode-selector-card">
         <div class="card-header">
           <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">🎯</div>
-          <h3>Select Training Mode</h3>
+          <h3>Choose Practice Mode</h3>
         </div>
         <div style="display: flex; gap: var(--spacing-same); margin-top: var(--spacing-same);">
           <div class="mode-card" id="btn-mode-general" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
             <div style="font-size: 24px; margin-bottom: 8px;">🧠</div>
             <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">General Practice</div>
-            <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Curriculum-based random hints</div>
+            <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Curriculum-based cue practice</div>
           </div>
           <div class="mode-card" id="btn-mode-scenario" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
             <div style="font-size: 24px; margin-bottom: 8px;">🎭</div>
-            <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">Scenario Training</div>
+            <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">Scenario Practice</div>
             <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Focused idiom & situation practice</div>
           </div>
         </div>
@@ -88,7 +88,7 @@ export function renderCombatView(): string {
           <p class="text-detail" id="week-desc" style="text-align: center; color: var(--color-text-dim);"></p>
         </div>
         <div style="margin-top: var(--spacing-cross);">
-          <button class="btn btn-highlight btn-full" id="btn-start-general">Start Curriculum Session</button>
+          <button class="btn btn-highlight btn-full" id="btn-start-general">Start Curriculum Practice</button>
         </div>
       </div>
 
@@ -97,11 +97,11 @@ export function renderCombatView(): string {
         <div id="topic-selector-area"></div>
       </div>
 
-      <!-- Combat Session Card -->
+      <!-- Live Practice Card -->
       <div class="card" id="session-card" style="display: none;">
         <div class="card-header">
-          <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">⚔</div>
-          <h3>Combat Session</h3>
+          <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">LP</div>
+          <h3>Live Practice</h3>
           <span class="badge badge-neutral" id="session-status">Standby</span>
         </div>
 
@@ -110,7 +110,7 @@ export function renderCombatView(): string {
           <div class="soundwave-header" style="justify-content: space-between; width: 100%;">
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="status-dot listening" id="vad-dot" style="width: 8px; height: 8px; margin-right: 0;"></span>
-              <span class="text-detail" id="vad-label">VAD Inactive</span>
+              <span class="text-detail" id="vad-label">Mic inactive</span>
               <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;">—</span>
             </div>
             <button id="btn-toggle-audio-source" style="font-family: var(--font-display); font-size: 11px; padding: 2px 8px; height: 22px; border-radius: 11px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); background: var(--color-surface-light); color: var(--color-text-dim); cursor: pointer; transition: all 0.15s ease;">
@@ -188,33 +188,33 @@ export function renderCombatView(): string {
       <div class="card" id="live-stats-card" style="display: none;">
         <div class="card-header">
           <div class="icon" style="background: var(--color-surface-light)">📊</div>
-          <h3>Session Stats</h3>
+          <h3>Practice Stats</h3>
         </div>
         <div class="stats-grid">
           <div class="stat-item">
             <div class="value" id="stat-hints">0</div>
-            <div class="label">Hints</div>
+            <div class="label">Cues</div>
           </div>
           <div class="stat-item">
             <div class="value" style="color: var(--color-positive)" id="stat-speeches">0</div>
-            <div class="label">Speeches</div>
+            <div class="label">Turns</div>
           </div>
           <div class="stat-item">
             <div class="value" style="color: var(--color-negative)" id="stat-silences">0</div>
-            <div class="label">Silences</div>
+            <div class="label">Pauses</div>
           </div>
           <div class="stat-item">
             <div class="value" style="color: var(--phase1)" id="stat-self-rate">0%</div>
-            <div class="label">Self Rate</div>
+            <div class="label">Solo Rate</div>
           </div>
         </div>
       </div>
 
-      <!-- Hint History -->
+      <!-- Cue History -->
       <div class="card" id="hint-history-card" style="display: none;">
         <div class="card-header">
           <div class="icon" style="background: var(--color-surface-light)">💬</div>
-          <h3>Hint History</h3>
+          <h3>Cue History</h3>
         </div>
         <ul class="hint-list" id="hint-list"></ul>
       </div>

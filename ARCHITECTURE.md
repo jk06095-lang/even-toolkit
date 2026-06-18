@@ -34,8 +34,8 @@ is enabled. Event analytics are stored separately in `echo_session_events` as
 counts and flags only; they do not contain utterance text, hint text, audio, or
 request bodies.
 
-Retention is enforced on session finalization and when the Debrief export list
-opens. `Delete after session` keeps no finalized raw transcript. The Debrief
+Retention is enforced on session finalization and when the Review export list
+opens. `Delete after session` keeps no finalized raw transcript. The Review
 screen provides current-session deletion, all-transcript deletion, per-session
 delete/export, and a full local `Export my data` download.
 

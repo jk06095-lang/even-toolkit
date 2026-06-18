@@ -3,13 +3,14 @@
  *
  * Wires all Phase modules together:
  * - Phase 1: Calibration (DSP)
- * - Phase 2: Combat (VAD + ECHO API proxy + HUD)
- * - Phase 3: Debrief (JSON import)
+ * - Phase 2: Live Practice (VAD + ECHO API proxy + HUD)
+ * - Phase 3: Review (JSON import)
  * - Phase 4: Ambient (Scheduler + Echo)
  */
 
 import './style.css';
 
+import { renderAppShell } from './ui/app-shell';
 import { renderCalibrationView } from './ui/calibration-view';
 import { renderCombatView } from './ui/combat-view';
 import { renderDebriefView } from './ui/debrief-view';
@@ -19,25 +20,22 @@ import { runCalibration, loadCalibration, defaultCalibration, type CalibrationRe
 import { SessionEngine, WEEK_CONFIGS, type AssistMetrics, type AssistMode, type SessionState } from './combat/session-engine';
 import type { ChunkResult } from './combat/chunk-generator';
 import type { ChunkCategory } from './combat/fallback-chunks';
-import { importDebrief, type StoredDebrief } from './debrief/json-parser';
-import { AmbientScheduler, type PendingItem } from './ambient/scheduler';
+import { AmbientScheduler } from './ambient/scheduler';
 import { EchoDisplay } from './ambient/echo-display';
 import { HUDController, parseWearingState } from './hud/hud-controller';
-import { TranscriptStore } from './combat/transcript-store';
-import { downloadExportJSON } from './combat/transcript-export';
 import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from './combat/topic-registry';
 import { renderTopicSelector, renderScenarioGrid, fillTopicDetail } from './ui/topic-selector-view';
+import { bindDebriefEvents } from './debrief/debrief-controller';
+import { bindAmbientEvents } from './ambient/ambient-controller';
+import { bindPrivacyControls, updatePrivacySettingsUI } from './live-practice/privacy-controls';
 import {
   loadPrivacySettings,
-  savePrivacySettings,
-  RETENTION_LABELS,
   type PrivacySettings,
-  type TranscriptRetentionPolicy,
 } from './privacy/settings';
 
 // ── Global State ──
 
-let currentPhase = 2; // Start on Combat
+let currentPhase = 2; // Start on Live Practice
 let calibration: CalibrationResult | null = null;
 let session: SessionEngine | null = null;
 let hud: HUDController | null = null;
@@ -65,33 +63,7 @@ let latestAssistMetrics: AssistMetrics = {
 
 function renderApp(): void {
   const app = document.getElementById('app')!;
-  app.innerHTML = `
-    <!-- Header -->
-    <header style="padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; background: var(--color-surface); border-bottom: 1px solid var(--color-border); position: sticky; top: 0; z-index: 10;">
-      <div>
-        <h1 style="margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 500; letter-spacing: -0.6px; color: var(--color-text);">Project ECHO</h1>
-        <p style="margin: 4px 0 0; font-size: 13px; color: var(--color-text-dim);">24/7 Immersion English Education</p>
-      </div>
-      <!-- G2 Connection Badge -->
-      <div class="connection-badge" id="g2-badge" style="margin: 0;">
-        <span class="status-dot idle" id="g2-dot"></span>
-        <span id="g2-badge-text">G2 Glasses: Connecting...</span>
-      </div>
-    </header>
-
-    <div style="padding: 24px 20px; max-width: 600px; margin: 0 auto; width: 100%;">
-      <!-- Learning Flow Navigation -->
-      <nav class="phase-nav" id="phase-nav">
-        <button class="phase-tab" data-phase="1">Phase 1: Calibration</button>
-        <button class="phase-tab" data-phase="2">Phase 2: Combat</button>
-        <button class="phase-tab" data-phase="3">Phase 3: Debrief</button>
-        <button class="phase-tab" data-phase="4">Phase 4: Ambient</button>
-      </nav>
-
-      <!-- Phase Content -->
-      <main id="phase-content"></main>
-    </div>
-  `;
+  app.innerHTML = renderAppShell();
 
   // Bind phase nav
   const tabs = app.querySelectorAll('.phase-tab');
@@ -115,9 +87,9 @@ function renderApp(): void {
 // ── Phase Switching ──
 
 function switchPhase(phase: number): void {
-  // If a training session is active, ask for confirmation before leaving
+  // If a live practice session is active, ask for confirmation before leaving
   if (phase !== currentPhase && session && session.state !== 'idle') {
-    const confirmLeave = window.confirm('A training session is currently active. Are you sure you want to leave and stop the session?');
+    const confirmLeave = window.confirm('A Live Practice session is currently active. Leave and end this practice?');
     if (!confirmLeave) return;
     
     // User confirmed leaving, so stop the session first
@@ -144,11 +116,20 @@ function switchPhase(phase: number): void {
       break;
     case 3:
       content.innerHTML = renderDebriefView();
-      bindDebriefEvents();
+      bindDebriefEvents({
+        getHud: () => hud,
+      });
       break;
     case 4:
       content.innerHTML = renderAmbientView();
-      bindAmbientEvents();
+      bindAmbientEvents({
+        getHud: () => hud,
+        getEchoDisplay: () => echoDisplay,
+        getScheduler: () => ambientScheduler,
+        setScheduler: (scheduler) => {
+          ambientScheduler = scheduler;
+        },
+      });
       break;
   }
 }
@@ -367,73 +348,16 @@ function showCalibrationResult(cal: CalibrationResult): void {
 }
 
 // ═══════════════════════════════════════════
-// Phase 2: Combat
+// Phase 2: Live Practice
 // ═══════════════════════════════════════════
 
-function bindPrivacyControls(): void {
-  privacySettings = loadPrivacySettings();
-
-  const mic = document.getElementById('privacy-use-microphone') as HTMLInputElement | null;
-  const cloud = document.getElementById('privacy-cloud-processing') as HTMLInputElement | null;
-  const save = document.getElementById('privacy-save-transcripts') as HTMLInputElement | null;
-  const retention = document.getElementById('privacy-retention') as HTMLSelectElement | null;
-
-  if (!mic || !cloud || !save || !retention) return;
-
-  mic.checked = privacySettings.useMicrophone;
-  cloud.checked = privacySettings.allowCloudProcessing;
-  save.checked = privacySettings.saveTranscripts;
-  retention.value = privacySettings.transcriptRetention;
-  retention.disabled = !save.checked;
-
-  const persist = () => {
-    privacySettings = savePrivacySettings({
-      ...privacySettings,
-      useMicrophone: mic.checked,
-      allowCloudProcessing: cloud.checked,
-      saveTranscripts: save.checked,
-      transcriptRetention: retention.value as TranscriptRetentionPolicy,
-    });
-    retention.disabled = !privacySettings.saveTranscripts;
-    if (!privacySettings.saveTranscripts) {
-      TranscriptStore.clearSessionBuffer();
-    }
-    TranscriptStore.applyRetention(privacySettings.transcriptRetention);
-    updatePrivacySettingsUI();
-  };
-
-  mic.addEventListener('change', persist);
-  cloud.addEventListener('change', persist);
-  save.addEventListener('change', persist);
-  retention.addEventListener('change', persist);
-
-  updatePrivacySettingsUI();
-}
-
-function updatePrivacySettingsUI(message?: string, tone: 'normal' | 'error' | 'success' = 'normal'): void {
-  const badge = document.getElementById('privacy-settings-badge');
-  const status = document.getElementById('privacy-settings-status');
-  if (badge) {
-    badge.textContent = privacySettings.useMicrophone ? 'Ready' : 'Mic off';
-    badge.className = privacySettings.useMicrophone ? 'badge badge-success' : 'badge badge-neutral';
-  }
-  if (status) {
-    const retentionLabel = RETENTION_LABELS[privacySettings.transcriptRetention];
-    status.textContent = message ?? [
-      privacySettings.useMicrophone ? 'Microphone enabled' : 'Microphone disabled',
-      privacySettings.allowCloudProcessing ? 'cloud on' : 'cloud off',
-      privacySettings.saveTranscripts ? `saving on (${retentionLabel})` : 'saving off',
-    ].join(' | ');
-    status.style.color = tone === 'error'
-      ? 'var(--color-negative)'
-      : tone === 'success'
-        ? 'var(--color-positive)'
-        : 'var(--color-text-muted)';
-  }
-}
-
 function bindCombatEvents(): void {
-  bindPrivacyControls();
+  bindPrivacyControls({
+    getSettings: () => privacySettings,
+    setSettings: (settings) => {
+      privacySettings = settings;
+    },
+  });
 
   // Mode selection
   document.getElementById('btn-mode-general')?.addEventListener('click', () => {
@@ -644,7 +568,7 @@ function selectWeek(week: number): void {
 
   const desc = document.getElementById('week-desc');
   if (desc && config) {
-    desc.textContent = `${config.label} | Silence: ${config.silenceThresholdMs / 1000}s | Blackout: ${Math.round(config.blackoutProbability * 100)}%`;
+    desc.textContent = `${config.label} | Cue delay: ${config.silenceThresholdMs / 1000}s | Independent practice: ${Math.round(config.blackoutProbability * 100)}%`;
   }
 
   const threshLabel = document.getElementById('silence-threshold-label');
@@ -658,7 +582,7 @@ function selectWeek(week: number): void {
 async function startSession(): Promise<void> {
   privacySettings = loadPrivacySettings();
   if (!privacySettings.useMicrophone) {
-    updatePrivacySettingsUI('Enable Use microphone before starting a Combat session.', 'error');
+    updatePrivacySettingsUI(privacySettings, 'Enable Use microphone before starting Live Practice.', 'error');
     return;
   }
 
@@ -1132,12 +1056,12 @@ function handleSessionState(state: SessionState): void {
   if (status) {
     const labels: Record<SessionState, string> = {
       idle: 'Standby',
-      calibrated: 'Calibrated',
-      loading_vad: 'Initializing Mic...',
+      calibrated: 'Ready',
+      loading_vad: 'Preparing mic...',
       listening: 'Listening',
       silence_detected: 'Need a cue?',
-      chunk_generating: 'Generating...',
-      hud_flash: 'Hint Sent',
+      chunk_generating: 'Preparing cue...',
+      hud_flash: 'Cue sent',
       paused: 'Paused',
       session_end: 'Ended',
     };
@@ -1155,12 +1079,12 @@ function handleSessionState(state: SessionState): void {
 
   if (vadLabel) {
     vadLabel.textContent = state === 'listening'
-                            ? 'VAD: Active — Listening...'
-                            : state === 'loading_vad' ? 'VAD: Requesting Mic / Loading ONNX models...'
-                            : state === 'silence_detected' ? 'VAD: Need a cue?'
-                            : state === 'chunk_generating' ? 'VAD: Generating hint...'
-                            : state === 'hud_flash' ? 'VAD: Hint displayed!'
-                            : 'VAD: Inactive';
+                            ? 'Mic: Listening...'
+                            : state === 'loading_vad' ? 'Mic: Preparing...'
+                            : state === 'silence_detected' ? 'Need a cue?'
+                            : state === 'chunk_generating' ? 'Preparing cue...'
+                            : state === 'hud_flash' ? 'Cue displayed'
+                            : 'Mic inactive';
   }
 
   if (chunkDisplay && (state === 'listening' || state === 'idle')) {
@@ -1186,7 +1110,7 @@ async function handleChunkGenerated(result: ChunkResult): Promise<void> {
     chunkDisplay.style.display = 'block';
     chunkDisplay.innerHTML = `<div class="chunk-flash">${result.chunk}</div>
       <div class="text-detail" style="text-align: center; color: var(--color-text-muted); margin-top: var(--spacing-same);">
-        Source: ${result.source} | ${result.latencyMs}ms
+        Cue ready in ${result.latencyMs}ms
       </div>`;
   }
 
@@ -1214,11 +1138,11 @@ function handleSpeechDetected(): void {
   // Flash the speaking indicator on the web UI
   const vadLabel = document.getElementById('vad-label');
   if (vadLabel) {
-    vadLabel.textContent = 'VAD: Speech Detected!';
+    vadLabel.textContent = 'Voice detected';
     vadLabel.style.color = 'var(--color-positive)';
     setTimeout(() => {
       if (vadLabel && session?.state === 'listening') {
-        vadLabel.textContent = 'VAD: Active — Listening...';
+        vadLabel.textContent = 'Mic: Listening...';
         vadLabel.style.color = '';
       }
     }, 1500);
@@ -1272,290 +1196,11 @@ function updateSilenceMeter(state: SessionState): void {
 }
 
 // ═══════════════════════════════════════════
-// Phase 3: Debrief
+// Phase 3: Review
 // ═══════════════════════════════════════════
 
-function bindDebriefEvents(): void {
-  document.getElementById('btn-import-debrief')?.addEventListener('click', async () => {
-    const input = document.getElementById('debrief-input') as HTMLTextAreaElement;
-    const errorEl = document.getElementById('debrief-error')!;
-    errorEl.style.display = 'none';
-
-    try {
-      const stored = await importDebrief(input.value);
-      showDebriefResult(stored);
-
-      // HUD feedback
-      hud?.showDebrief(`Imported ${stored.report.bottleneck_chunks.length} chunks`);
-    } catch (err) {
-      errorEl.textContent = err instanceof Error ? err.message : 'Invalid JSON';
-      errorEl.style.display = 'block';
-    }
-  });
-
-  // Render cached session export list
-  renderSessionExportList();
-
-  document.getElementById('btn-export-my-data')?.addEventListener('click', () => {
-    downloadMyDataExport();
-    setSessionExportStatus('My data export downloaded.', 'success');
-  });
-
-  document.getElementById('btn-delete-current-session')?.addEventListener('click', () => {
-    const deletedSessionId = TranscriptStore.deleteLatestSession();
-    renderSessionExportList();
-    setSessionExportStatus(
-      deletedSessionId ? `Deleted current session ${deletedSessionId}.` : 'No saved session to delete.',
-      deletedSessionId ? 'success' : 'normal',
-    );
-  });
-
-  document.getElementById('btn-delete-all-transcripts')?.addEventListener('click', () => {
-    const confirmed = window.confirm('Delete all saved raw transcripts from this device?');
-    if (!confirmed) return;
-    const count = TranscriptStore.deleteAllTranscripts();
-    renderSessionExportList();
-    setSessionExportStatus(`Deleted ${count} saved transcript${count === 1 ? '' : 's'}.`, 'success');
-  });
-}
-
-function showDebriefResult(stored: StoredDebrief): void {
-  const result = document.getElementById('debrief-result');
-  if (!result) return;
-  result.style.display = 'block';
-
-  setElText('debrief-date', stored.report.session_date);
-  setElText('debrief-stress', stored.report.fsi_stress_level);
-  setElText('debrief-chunks', String(stored.report.bottleneck_chunks.length));
-  setElText('debrief-pushes', String(stored.scheduledPushes.length));
-
-  const list = document.getElementById('debrief-chunk-list');
-  if (list) {
-    list.innerHTML = stored.report.bottleneck_chunks
-      .map((c) => `<li>${c.target} <span style="color: var(--color-text-muted)">| intervals: ${c.interval.join(', ')}min</span></li>`)
-      .join('');
-  }
-}
-
-/**
- * Render the list of cached combat sessions available for export.
- */
-function renderSessionExportList(): void {
-  const listEl = document.getElementById('session-export-list');
-  const emptyEl = document.getElementById('session-export-empty');
-  if (!listEl) return;
-
-  const summaries = TranscriptStore.getSummaries();
-
-  if (summaries.length === 0) {
-    listEl.innerHTML = '';
-    if (emptyEl) emptyEl.style.display = 'block';
-    return;
-  }
-
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  listEl.innerHTML = summaries
-    .slice()
-    .reverse() // most recent first
-    .map((s) => {
-      const date = new Date(s.startTime);
-      const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-      const durationSec = s.endTime ? Math.round((s.endTime - s.startTime) / 1000) : 0;
-      const durationStr = durationSec > 60 ? `${Math.floor(durationSec / 60)}m${durationSec % 60}s` : `${durationSec}s`;
-      return `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; margin-bottom: 6px; background: var(--color-surface-light); border-radius: var(--radius); border-left: 3px solid var(--phase2);">
-          <div style="flex: 1; min-width: 0;">
-            <div class="text-normal-body" style="color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">W${s.week} · ${s.topic}</div>
-            <div class="text-detail" style="color: var(--color-text-muted);">${dateStr} · ${durationStr} · 💬${s.speechCount} 💡${s.hintCount}</div>
-          </div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-export-session="${s.sessionId}">Export</button>
-            <button class="btn btn-neutral" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-delete-session="${s.sessionId}">Delete</button>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
-
-  // Bind export buttons
-  listEl.querySelectorAll('[data-export-session]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const sessionId = (btn as HTMLElement).dataset.exportSession;
-      if (!sessionId) return;
-
-      const statusEl = document.getElementById('session-export-status');
-      if (statusEl) {
-        statusEl.style.display = 'block';
-        statusEl.textContent = 'Generating 3-stage JSON...';
-        statusEl.style.background = 'var(--color-accent-alpha)';
-        statusEl.style.color = 'var(--color-accent)';
-      }
-
-      try {
-        const sessionData = TranscriptStore.getById(sessionId);
-        if (!sessionData) throw new Error('Session not found in cache');
-
-        await downloadExportJSON(sessionData, {
-          allowCloudProcessing: loadPrivacySettings().allowCloudProcessing,
-        });
-
-        if (statusEl) {
-          statusEl.textContent = '✓ Export downloaded successfully';
-          statusEl.style.background = 'var(--color-positive-alpha)';
-          statusEl.style.color = 'var(--color-positive)';
-        }
-      } catch (err) {
-        console.error('[Export] Failed:', err);
-        if (statusEl) {
-          statusEl.textContent = `✗ Export failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
-          statusEl.style.background = 'var(--color-negative-alpha, rgba(239,68,68,0.1))';
-          statusEl.style.color = 'var(--color-negative)';
-        }
-      }
-    });
-  });
-
-  listEl.querySelectorAll('[data-delete-session]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const sessionId = (btn as HTMLElement).dataset.deleteSession;
-      if (!sessionId) return;
-      TranscriptStore.deleteSession(sessionId);
-      renderSessionExportList();
-      setSessionExportStatus(`Deleted session ${sessionId}.`, 'success');
-    });
-  });
-}
-
-function setSessionExportStatus(
-  message: string,
-  tone: 'normal' | 'success' | 'error' = 'normal',
-): void {
-  const statusEl = document.getElementById('session-export-status');
-  if (!statusEl) return;
-  statusEl.style.display = 'block';
-  statusEl.textContent = message;
-  statusEl.style.background = tone === 'error'
-    ? 'var(--color-negative-alpha, rgba(239,68,68,0.1))'
-    : tone === 'success'
-      ? 'var(--color-positive-alpha)'
-      : 'var(--color-accent-alpha)';
-  statusEl.style.color = tone === 'error'
-    ? 'var(--color-negative)'
-    : tone === 'success'
-      ? 'var(--color-positive)'
-      : 'var(--color-accent)';
-}
-
-function downloadMyDataExport(): void {
-  const exportData = TranscriptStore.exportUserData();
-  const jsonStr = JSON.stringify(exportData, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `echo_my_data_${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// ═══════════════════════════════════════════
 // Phase 4: Ambient
 // ═══════════════════════════════════════════
-
-function bindAmbientEvents(): void {
-  document.getElementById('btn-start-ambient')?.addEventListener('click', startAmbient);
-  document.getElementById('btn-stop-ambient')?.addEventListener('click', stopAmbient);
-
-  // Load pending items immediately
-  if (ambientScheduler) {
-    ambientScheduler.refresh();
-  }
-}
-
-function startAmbient(): void {
-  ambientScheduler = new AmbientScheduler({
-    onEchoPush: (chunk) => {
-      // Flash on HUD
-      echoDisplay?.flash(chunk, 2000);
-
-      // Visual feedback on web UI
-      console.log(`[Ambient Echo] ${chunk}`);
-    },
-    onScheduleUpdate: (pending) => {
-      updatePendingList(pending);
-    },
-  });
-
-  if (echoDisplay && hud) {
-    echoDisplay.setHUD(hud);
-  }
-
-  ambientScheduler.start();
-
-  // UI
-  const btnStart = document.getElementById('btn-start-ambient');
-  const btnStop = document.getElementById('btn-stop-ambient');
-  const status = document.getElementById('ambient-status');
-
-  if (btnStart) btnStart.style.display = 'none';
-  if (btnStop) btnStop.style.display = 'flex';
-  if (status) {
-    status.textContent = 'Active';
-    status.className = 'badge badge-positive';
-  }
-}
-
-function stopAmbient(): void {
-  ambientScheduler?.stop();
-  ambientScheduler = null;
-
-  const btnStart = document.getElementById('btn-start-ambient');
-  const btnStop = document.getElementById('btn-stop-ambient');
-  const status = document.getElementById('ambient-status');
-
-  if (btnStart) btnStart.style.display = 'flex';
-  if (btnStop) btnStop.style.display = 'none';
-  if (status) {
-    status.textContent = 'Inactive';
-    status.className = 'badge badge-neutral';
-  }
-}
-
-function updatePendingList(items: PendingItem[]): void {
-  const container = document.getElementById('pending-list') as HTMLUListElement;
-  const empty = document.getElementById('pending-empty');
-  const count = document.getElementById('pending-count');
-
-  if (!container) return;
-
-  if (count) count.textContent = String(items.length);
-
-  if (items.length === 0) {
-    container.style.display = 'none';
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-
-  container.style.display = 'block';
-  if (empty) empty.style.display = 'none';
-
-  container.innerHTML = items
-    .slice(0, 10) // show max 10
-    .map((item) => {
-      const mins = Math.ceil(item.timeUntilMs / 60000);
-      const timeStr = mins > 60 ? `${Math.round(mins / 60)}h` : `${mins}m`;
-      return `<li class="schedule-item">
-        <span class="time">⏰ ${timeStr}</span>
-        <span class="chunk">${item.chunk}</span>
-      </li>`;
-    })
-    .join('');
-}
-
-// ── Helpers ──
 
 function setElText(id: string, text: string): void {
   const el = document.getElementById(id);

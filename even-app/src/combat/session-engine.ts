@@ -66,8 +66,8 @@ export interface WeekConfig {
 export const WEEK_CONFIGS: Record<number, WeekConfig> = {
   1: { week: 1, silenceThresholdMs: 5000, hintFlashDurationMs: 2000, blackoutProbability: 0,    label: 'Cognitive Break' },
   2: { week: 2, silenceThresholdMs: 5000, hintFlashDurationMs: 1800, blackoutProbability: 0,    label: 'Chunk Expansion' },
-  3: { week: 3, silenceThresholdMs: 2000, hintFlashDurationMs: 1500, blackoutProbability: 0,    label: 'Stress Inoculation' },
-  4: { week: 4, silenceThresholdMs: 2000, hintFlashDurationMs: 1200, blackoutProbability: 0.4,  label: 'Blackout Protocol' },
+  3: { week: 3, silenceThresholdMs: 2000, hintFlashDurationMs: 1500, blackoutProbability: 0,    label: 'Reduced Guidance' },
+  4: { week: 4, silenceThresholdMs: 2000, hintFlashDurationMs: 1200, blackoutProbability: 0.4,  label: 'Independent Practice' },
 };
 
 export interface SessionLog {

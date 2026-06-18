@@ -1,12 +1,12 @@
 # Privacy
 
 Project ECHO is data-minimizing by default. Microphone use, cloud processing,
-and raw transcript saving are separate user controls in the Combat privacy
+and raw transcript saving are separate user controls in the Live Practice privacy
 settings card.
 
 ## Current Client Behavior
 
-- `Use microphone` is off by default. A Combat session will not start until the
+- `Use microphone` is off by default. A Live Practice session will not start until the
   user enables microphone use.
 - `Cloud processing` is off by default. When it is off, the client does not send
   audio, transcript text, cue requests, grammar requests, or session handoff
@@ -31,7 +31,7 @@ not keep a finalized raw transcript.
 
 ## Delete And Export Controls
 
-The Debrief screen provides:
+The Review screen provides:
 
 - `Export my data`: downloads privacy settings, saved raw transcripts, and
   transcript-free event analytics.

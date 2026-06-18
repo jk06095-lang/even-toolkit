@@ -1,5 +1,5 @@
 /**
- * Ambient Scheduler — Phase 4 spaced repetition engine.
+ * Echo Reminders scheduler — Phase 4 spaced repetition engine.
  *
  * Polls IndexedDB for pending pushes and fires HUD display
  * events at the scheduled times (forgetting curve intervals).
