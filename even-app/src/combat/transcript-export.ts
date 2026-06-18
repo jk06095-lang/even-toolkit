@@ -60,6 +60,13 @@ export interface SessionExportJSON {
   stage_3_handoff: ExportStage3;
 }
 
+export interface GenerateExportOptions {
+  allowCloudProcessing?: boolean;
+  requestScopeId?: string;
+  requestId?: string;
+  signal?: AbortSignal;
+}
+
 // ── Stage Builders ──
 
 function buildStage1(session: SessionTranscript): ExportStage1 {
@@ -136,7 +143,7 @@ function buildStage2(session: SessionTranscript): ExportStage2 {
 async function buildStage3(
   stage1: ExportStage1,
   stage2: ExportStage2,
-  allowCloudProcessing = true,
+  options: GenerateExportOptions = {},
 ): Promise<ExportStage3> {
   // Fallback (no API or failure)
   const fallback: ExportStage3 = {
@@ -147,18 +154,25 @@ async function buildStage3(
     gem_instruction: `주제: ${stage1.topic}, Week ${stage1.week}. 발화 ${stage2.speech_count}회, 힌트 ${stage2.hint_count}회. 추가 분석이 필요합니다.`,
   };
 
-  if (!allowCloudProcessing || !isEchoApiConfigured()) return fallback;
+  if (!options.allowCloudProcessing || !isEchoApiConfigured() || options.signal?.aborted) {
+    return fallback;
+  }
 
   try {
-    const requestId = `${stage1.session_id}:session-analysis:${Date.now()}`;
+    const requestScopeId = options.requestScopeId ?? stage1.session_id;
+    const requestId = options.requestId ?? `${requestScopeId}:session-analysis:${Date.now()}`;
     console.info(`[Export] Session analysis request ${requestId}`);
     const response = await requestSessionAnalysis<ExportStage3 | string>({
       task: 'session_handoff',
-      clientSessionId: stage1.session_id,
+      clientSessionId: requestScopeId,
       requestId,
       stage_1_raw: stage1,
       stage_2_analysis: stage2,
-    });
+    }, options.signal);
+
+    if (options.signal?.aborted) {
+      return fallback;
+    }
 
     const parsed =
       typeof response === 'string'
@@ -174,7 +188,9 @@ async function buildStage3(
       gem_instruction: parsed.gem_instruction || fallback.gem_instruction,
     };
   } catch (err) {
-    console.warn('[Export] Stage 3 ECHO API failed, using fallback:', err);
+    if (!options.signal?.aborted) {
+      console.warn('[Export] Stage 3 ECHO API failed, using fallback:', err);
+    }
     return fallback;
   }
 }
@@ -187,11 +203,14 @@ async function buildStage3(
  */
 export async function generateExportJSON(
   session: SessionTranscript,
-  options: { allowCloudProcessing?: boolean } = {},
+  options: GenerateExportOptions = {},
 ): Promise<SessionExportJSON> {
   const stage1 = buildStage1(session);
   const stage2 = buildStage2(session);
-  const stage3 = await buildStage3(stage1, stage2, options.allowCloudProcessing ?? true);
+  const stage3 = await buildStage3(stage1, stage2, {
+    ...options,
+    allowCloudProcessing: options.allowCloudProcessing ?? true,
+  });
 
   // Attach scenario-specific Gem prompt if available
   // category field stores the scenario ID from topic-registry
@@ -214,7 +233,7 @@ export async function generateExportJSON(
  */
 export async function downloadExportJSON(
   session: SessionTranscript,
-  options: { allowCloudProcessing?: boolean } = {},
+  options: GenerateExportOptions = {},
 ): Promise<void> {
   const exportData = await generateExportJSON(session, options);
   const jsonStr = JSON.stringify(exportData, null, 2);

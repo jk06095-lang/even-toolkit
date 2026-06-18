@@ -29,9 +29,15 @@ export interface SpeechRecognizerCallbacks {
 
 export type RecognizerMode = 'browser' | 'bridge';
 
+export interface SpeechRecognizerOptions {
+  clientSessionId?: string;
+  createRequestId?: (kind: 'transcription') => string;
+}
+
 export class SpeechRecognizer {
   private recognition: any = null;
   private callbacks: SpeechRecognizerCallbacks;
+  private readonly options: SpeechRecognizerOptions;
   private _active = false;
   private _mode: RecognizerMode = 'browser';
   private restartTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -45,8 +51,9 @@ export class SpeechRecognizer {
   private interimTranscribing = false;
   private requestControllers = new Set<AbortController>();
 
-  constructor(callbacks: SpeechRecognizerCallbacks) {
+  constructor(callbacks: SpeechRecognizerCallbacks, options: SpeechRecognizerOptions = {}) {
     this.callbacks = callbacks;
+    this.options = options;
   }
 
   private beginRequest(): AbortController {
@@ -215,6 +222,8 @@ export class SpeechRecognizer {
 
       const response = await requestTranscription({
         task: 'transcribe',
+        clientSessionId: this.options.clientSessionId,
+        requestId: this.options.createRequestId?.('transcription'),
         language: 'en-US',
         audio: {
           mimeType: 'audio/wav',
@@ -261,6 +270,8 @@ export class SpeechRecognizer {
 
       const response = await requestTranscription({
         task: 'transcribe',
+        clientSessionId: this.options.clientSessionId,
+        requestId: this.options.createRequestId?.('transcription'),
         language: 'en-US',
         audio: {
           mimeType: 'audio/wav',

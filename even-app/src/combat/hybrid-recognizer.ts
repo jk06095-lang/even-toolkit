@@ -48,6 +48,8 @@ export type HybridMode = 'browser' | 'bridge' | 'hybrid';
 
 export interface HybridRecognizerOptions {
   cloudProcessingEnabled?: boolean;
+  clientSessionId?: string;
+  createRequestId?: (kind: 'transcription') => string;
 }
 
 // ── HybridRecognizer ──
@@ -77,10 +79,14 @@ export class HybridRecognizer {
   private interimTranscribing = false;
   private requestControllers = new Set<AbortController>();
   private readonly cloudProcessingEnabled: boolean;
+  private readonly clientSessionId?: string;
+  private readonly createRequestId?: (kind: 'transcription') => string;
 
   constructor(callbacks: HybridRecognizerCallbacks, options: HybridRecognizerOptions = {}) {
     this.callbacks = callbacks;
     this.cloudProcessingEnabled = options.cloudProcessingEnabled ?? true;
+    this.clientSessionId = options.clientSessionId;
+    this.createRequestId = options.createRequestId;
   }
 
   private beginRequest(): AbortController {
@@ -456,6 +462,8 @@ export class HybridRecognizer {
 
       const response = await requestTranscription({
         task: 'transcribe',
+        clientSessionId: this.clientSessionId,
+        requestId: this.createRequestId?.('transcription'),
         language: 'en-US',
         audio: {
           mimeType: 'audio/wav',
@@ -499,6 +507,8 @@ export class HybridRecognizer {
 
       const response = await requestTranscription({
         task: 'transcribe',
+        clientSessionId: this.clientSessionId,
+        requestId: this.createRequestId?.('transcription'),
         language: 'en-US',
         audio: {
           mimeType: 'audio/wav',

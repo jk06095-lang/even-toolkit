@@ -393,6 +393,16 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.states).toEqual(['loading_vad']);
   });
 
+  it('passes session-scoped transcription metadata to the live recognizer', async () => {
+    const harness = createHarness();
+
+    await harness.engine.start(harness.hud);
+
+    const options = harness.recognizerOptions[0]!;
+    expect(options.clientSessionId).toBe('echo-1000-test-scope');
+    expect(options.createRequestId?.('transcription')).toBe('echo-1000-test-scope:transcription:1');
+  });
+
   it('stops audio detector and recognizer during cleanup', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
@@ -487,8 +497,10 @@ function createHarness(options: {
   };
 
   const recognizers: FakeSpeechRecognizer[] = [];
+  const recognizerOptions: HybridRecognizerOptions[] = [];
   const speechRecognizerFactory: SpeechRecognizerFactory = {
-    create: (callbacks: HybridRecognizerCallbacks, _options?: HybridRecognizerOptions) => {
+    create: (callbacks: HybridRecognizerCallbacks, options?: HybridRecognizerOptions) => {
+      recognizerOptions.push(options ?? {});
       const recognizer = new FakeSpeechRecognizer(callbacks);
       recognizers.push(recognizer);
       return recognizer;
@@ -545,6 +557,7 @@ function createHarness(options: {
     logs,
     liveTranscripts,
     recognizers,
+    recognizerOptions,
   };
 }
 

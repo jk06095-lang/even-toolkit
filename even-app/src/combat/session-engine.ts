@@ -391,15 +391,19 @@ export class SessionEngine {
   } {
     const controller = new AbortController();
     this.activeRequestControllers.add(controller);
-    const sequence = ++this.requestSequence;
     return {
       token: this.lifecycleToken,
       sessionRequestScopeId: this.sessionRequestScopeId,
-      requestId: `${this.sessionRequestScopeId}:${kind}:${sequence}`,
+      requestId: this.createRequestId(kind),
       kind,
       startedAt: this.clock.now(),
       controller,
     };
+  }
+
+  private createRequestId(kind: ProxyRequestKind): string {
+    const sequence = ++this.requestSequence;
+    return `${this.sessionRequestScopeId}:${kind}:${sequence}`;
   }
 
   private finishRequest(controller: AbortController): void {
@@ -845,6 +849,8 @@ export class SessionEngine {
       },
     }, {
       cloudProcessingEnabled: this.cloudProcessingEnabled,
+      clientSessionId: this.sessionRequestScopeId,
+      createRequestId: (kind) => this.createRequestId(kind),
     });
     this.speechRecognizer = recognizer;
 
