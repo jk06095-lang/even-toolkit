@@ -329,7 +329,11 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     await harness.engine.start(harness.hud);
 
     const request = harness.engine.requestManualCue();
+    expect(harness.cueProvider.signals[0]?.aborted).toBe(false);
+
     await harness.engine.stop();
+    expect(harness.cueProvider.signals[0]?.aborted).toBe(true);
+
     deferredCue.resolve({
       chunk: 'Too late',
       source: 'gemini',
@@ -340,6 +344,26 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.chunks).toEqual([]);
     expect(harness.logs).toHaveLength(1);
     expect(harness.states[harness.states.length - 1]).toBe('session_end');
+  });
+
+  it('aborts delayed cue generation and keeps the HUD paused when pause interrupts proxy work', async () => {
+    const harness = createHarness({ rejectChunkOnAbort: true });
+    await harness.engine.start(harness.hud);
+
+    const request = harness.engine.requestManualCue();
+    expect(harness.states[harness.states.length - 1]).toBe('chunk_generating');
+    expect(harness.cueProvider.signals[0]?.aborted).toBe(false);
+
+    await harness.engine.pause();
+    await request;
+
+    expect(harness.cueProvider.signals[0]?.aborted).toBe(true);
+    expect(harness.vad.pauseCount).toBe(1);
+    expect(harness.recognizers[0]?.stopCount).toBe(1);
+    expect(harness.chunks).toEqual([]);
+    expect(harness.clock.activeTimerCount()).toBe(0);
+    expect(harness.states[harness.states.length - 1]).toBe('paused');
+    expect(harness.hud.events[harness.hud.events.length - 1]).toBe('showPaused');
   });
 
   it('does not duplicate silence countdown timers across pause and resume', async () => {
@@ -447,6 +471,7 @@ function createHarness(options: {
   pendingChunk?: Promise<ChunkResult>;
   vadStartError?: Error;
   clock?: FakeClock;
+  rejectChunkOnAbort?: boolean;
 } = {}) {
   const clock = options.clock ?? new FakeClock();
   const states: string[] = [];
@@ -527,13 +552,25 @@ function createCueProvider(options: {
   chunkResult?: ChunkResult;
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
+  rejectChunkOnAbort?: boolean;
 }) {
   const provider = {
     generateCalls: 0,
     requests: [] as ChunkRequest[],
-    async generateChunk(req: ChunkRequest): Promise<ChunkResult> {
+    signals: [] as AbortSignal[],
+    async generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
       this.generateCalls++;
       this.requests.push(req);
+      if (signal) this.signals.push(signal);
+      if (options.rejectChunkOnAbort) {
+        return new Promise<ChunkResult>((_resolve, reject) => {
+          if (signal?.aborted) {
+            reject(new Error('aborted cue'));
+            return;
+          }
+          signal?.addEventListener('abort', () => reject(new Error('aborted cue')), { once: true });
+        });
+      }
       if (options.pendingChunk) return options.pendingChunk;
       if (options.chunkResults) {
         return options.chunkResults[this.generateCalls - 1] ?? options.chunkResults[options.chunkResults.length - 1]!;
@@ -555,7 +592,7 @@ function createCueProvider(options: {
     },
   };
 
-  return provider as CueProvider & { generateCalls: number; requests: ChunkRequest[] };
+  return provider as CueProvider & { generateCalls: number; requests: ChunkRequest[]; signals: AbortSignal[] };
 }
 
 function deferred<T>() {

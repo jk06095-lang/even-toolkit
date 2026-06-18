@@ -988,7 +988,12 @@ export class SessionEngine {
    * Pause the session temporarily.
    */
   async pause(): Promise<void> {
-    if (this._state !== 'listening' && this._state !== 'silence_detected' && this._state !== 'hud_flash') return;
+    if (
+      this._state !== 'listening' &&
+      this._state !== 'silence_detected' &&
+      this._state !== 'chunk_generating' &&
+      this._state !== 'hud_flash'
+    ) return;
     
     this.lifecycleToken++;
     this.abortActiveRequests();
@@ -1282,8 +1287,10 @@ export class SessionEngine {
         this.setState('listening');
       }
     } catch {
-      this.setState('listening');
-      this.resetTranscriptActivity();
+      if (this.isCurrentRequest(request)) {
+        this.setState('listening');
+        this.resetTranscriptActivity();
+      }
     } finally {
       this.finishRequest(request.controller);
       this.isGenerating = false;

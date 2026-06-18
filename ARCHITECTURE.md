@@ -100,6 +100,10 @@ VAD, HUD, clock, random, and cue providers so Week 4 blackout, late responses,
 cue clearing, pause/resume timers, and audio cleanup run without G2 hardware or
 network calls.
 
+The core regression suite also covers pausing while cue generation is still in
+flight. That path aborts the active cue request, leaves the engine in `paused`,
+and prevents abort rejections or delayed responses from showing a cue later.
+
 ## Assist modes
 
 - `Manual Assist` is the default for every new practice session.

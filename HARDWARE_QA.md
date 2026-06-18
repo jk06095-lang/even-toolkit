@@ -80,6 +80,16 @@ Still requires real G2 validation:
 - Confirm console/session metadata shows request ID, request scope, network latency, generation latency, HUD rendering latency, and end-to-end latency.
 - Confirm debug logs do not print raw transcript text as part of latency metadata.
 
+Automated coverage added on 2026-06-19:
+
+- `session-engine-core` verifies `END PRACTICE` aborts an in-flight cue request and ignores its delayed response.
+- `session-engine-core` verifies Pause during cue generation aborts the cue request, keeps the engine paused, leaves no pending timers, and does not update HUD/cue callbacks.
+
+Still requires real G2 validation:
+
+- Repeat delayed cue tests through the physical G2 HUD pause menu and phone controls.
+- Confirm `EXIT ECHO` follows the same delayed-response guard while shutting down the Even Hub page container.
+
 ## Privacy controls QA
 
 - With default settings, confirm Live Practice does not start until `Use microphone` is enabled.
