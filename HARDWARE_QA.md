@@ -112,6 +112,17 @@ Still requires real G2 validation:
 - Dismiss two auto cues and confirm the phone UI shows `Assist: Auto paused`.
 - Confirm auto cue count never exceeds 3 in one session.
 
+Automated coverage added on 2026-06-19:
+
+- `session-engine-core` verifies Manual Assist does not auto-generate cues during silence.
+- `hud-controller` verifies active-session G2 cue/dismiss gestures map to `request-cue` and `dismiss-cue`.
+- `hud-controller` verifies the pause menu keeps `END PRACTICE` and `EXIT ECHO` as distinct actions.
+
+Still requires real G2 validation:
+
+- Confirm physical double-click, swipe, and select gestures produce the same actions on device.
+- Confirm the phone UI displays Manual/Auto status and Auto-paused state during the same hardware run.
+
 ## Simplified HUD QA
 
 - Standby screen shows `READY` only.
@@ -121,6 +132,16 @@ Still requires real G2 validation:
 - Cue display shows `CUE` plus one short phrase only.
 - Pause/menu flow never overlaps transcript, cue history, or status metrics.
 - Resume returns to `LISTENING`; End Practice returns to `READY`.
+
+Automated coverage added on 2026-06-19:
+
+- `hud-controller` verifies live G2 rendering is limited to `READY`, `LISTENING`, `CUE`, and `PAUSED`.
+- `hud-controller` verifies transcript text, grammar feedback, and achievement detail do not render on the live G2 surface.
+- `hud-controller` verifies long cues are clipped to a glanceable phrase.
+
+Still requires real G2 validation:
+
+- Confirm READY, LISTENING, CUE, PAUSED, and the pause menu render without overlap on the physical glasses or Even Hub simulator.
 
 ## Metrics to capture
 
