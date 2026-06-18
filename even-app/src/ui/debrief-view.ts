@@ -1,16 +1,16 @@
 /**
- * Review View — Phase 3 UI
+ * Review View - Phase 3 UI
  * Uses Even Realities design system tokens.
  */
 
 export function renderDebriefView(): string {
   return `
     <div class="phase-view" id="phase3-view">
-      <div class="phase-indicator p3">● Phase 3 — Review</div>
+      <div class="phase-indicator p3">Review</div>
 
       <div class="card">
         <div class="card-header">
-          <div class="icon" style="background: var(--phase3-alpha); color: var(--phase3)">📋</div>
+          <div class="icon" style="background: var(--phase3-alpha); color: var(--phase3)">IM</div>
           <h3>Import Practice Report</h3>
         </div>
 
@@ -35,25 +35,25 @@ export function renderDebriefView(): string {
 
       <div class="card" id="debrief-result" style="display: none;">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-positive-alpha); color: var(--color-positive)">✓</div>
+          <div class="icon" style="background: var(--color-positive-alpha); color: var(--color-positive)">OK</div>
           <h3>Import Successful</h3>
         </div>
 
         <div class="stats-grid" style="margin-bottom: var(--spacing-cross);">
           <div class="stat-item">
-            <div class="value" id="debrief-date" style="color: var(--phase3)">—</div>
+            <div class="value" id="debrief-date" style="color: var(--phase3)"></div>
             <div class="label">Date</div>
           </div>
           <div class="stat-item">
-            <div class="value" id="debrief-stress" style="color: var(--color-negative)">—</div>
+            <div class="value" id="debrief-stress" style="color: var(--color-negative)"></div>
             <div class="label">Intensity</div>
           </div>
           <div class="stat-item">
-            <div class="value" id="debrief-chunks">—</div>
+            <div class="value" id="debrief-chunks"></div>
             <div class="label">Phrases</div>
           </div>
           <div class="stat-item">
-            <div class="value" id="debrief-pushes" style="color: var(--phase4)">—</div>
+            <div class="value" id="debrief-pushes" style="color: var(--phase4)"></div>
             <div class="label">Pushes</div>
           </div>
         </div>
@@ -64,7 +64,7 @@ export function renderDebriefView(): string {
 
       <div class="card" id="session-export-card">
         <div class="card-header">
-          <div class="icon" style="background: var(--phase3-alpha); color: var(--phase3)">📤</div>
+          <div class="icon" style="background: var(--phase3-alpha); color: var(--phase3)">EX</div>
           <h3>Export Practice Review</h3>
         </div>
 

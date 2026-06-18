@@ -1,10 +1,16 @@
 /**
- * Topic Selector View — inline topic selection before live practice.
+ * Topic Selector View - inline topic selection before live practice.
  * Shows category tabs and scenario cards with situation descriptions.
  * Uses existing design system tokens only.
  */
 
-import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getCategories, type TopicCategory, type TopicScenario } from '../combat/topic-registry';
+import {
+  CATEGORY_META,
+  getCategories,
+  getScenariosByCategory,
+  type TopicCategory,
+  type TopicScenario,
+} from '../combat/topic-registry';
 
 /**
  * Render the full topic selector (categories + scenario cards).
@@ -12,7 +18,6 @@ import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getCategories, type T
  */
 export function renderTopicSelector(selectedId?: string): string {
   const categories = getCategories();
-  const firstCat = categories[0] ?? 'daily';
 
   const categoryTabs = categories
     .map((cat) => {
@@ -25,7 +30,7 @@ export function renderTopicSelector(selectedId?: string): string {
     <div id="topic-selector">
       <div class="card">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-surface-light)">🎯</div>
+          <div class="icon" style="background: var(--color-surface-light)">SC</div>
           <h3>Choose Your Scenario</h3>
         </div>
 
@@ -71,9 +76,9 @@ export function renderScenarioGrid(category: TopicCategory, selectedId?: string)
       const isSelected = s.id === selectedId;
       const border = isSelected ? 'border: 2px solid var(--phase2);' : 'border: 1px solid var(--color-border);';
       return `
-        <div class="topic-scenario-card" data-scenario="${s.id}" 
-             style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px; 
-                    background: var(--color-surface-light); border-radius: var(--radius); cursor: pointer; 
+        <div class="topic-scenario-card" data-scenario="${s.id}"
+             style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 6px;
+                    background: var(--color-surface-light); border-radius: var(--radius); cursor: pointer;
                     ${border} transition: border-color 0.15s ease;">
           <span style="font-size: 22px; flex-shrink: 0;">${s.emoji}</span>
           <div style="flex: 1; min-width: 0;">
@@ -114,7 +119,7 @@ export function fillTopicDetail(scenario: TopicScenario): void {
   if (exprList) {
     exprList.innerHTML = scenario.keyExpressions
       .map((expr) => `<li style="padding: 4px 0; color: var(--color-text); font-size: 13px; border-bottom: 1px solid var(--color-border);">
-        <span style="color: var(--phase2); margin-right: 6px;">▸</span>${expr}
+        <span style="color: var(--phase2); margin-right: 6px;">-</span>${expr}
       </li>`)
       .join('');
   }

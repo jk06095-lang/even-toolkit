@@ -61,7 +61,8 @@ The Vite warning remains because `voice-runtime` is still above 500 kB. This is
 accepted for now because the remaining large chunk is isolated to the required
 local VAD/ONNX runtime. Reducing it further would require a behavior-affecting
 lazy-load change to the session/audio lifecycle and should be handled as a
-separate performance task after device QA.
+separate performance task after device QA. Follow-up tracking: GitHub issue
+#12.
 
 ## Verification
 

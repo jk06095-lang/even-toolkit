@@ -1,5 +1,5 @@
 /**
- * Live Practice View — Phase 2 UI
+ * Live Practice View - Phase 2 UI
  * Uses Even Realities design system tokens.
  *
  * Layout: Mode Selector -> (General Practice OR Scenario Practice) -> Live Practice -> Stats
@@ -11,7 +11,7 @@ import { WEEK_CONFIGS } from '../combat/session-engine';
 export function renderCombatView(): string {
   const weekOptions = Object.values(WEEK_CONFIGS)
     .map((w) => `<button class="week-btn" data-week="${w.week}">W${w.week}</button>`)
-    .join('');  // Generate 8 bars for each side (symmetric around center mic)
+    .join('');
   const leftBars = Array.from({ length: 8 }, (_, i) =>
     `<div class="sw-bar" id="sw-l${7 - i}"></div>`
   ).join('');
@@ -21,7 +21,7 @@ export function renderCombatView(): string {
 
   return `
     <div class="phase-view" id="phase2-view">
-      <div class="phase-indicator p2">● Live Practice</div>
+      <div class="phase-indicator p2">Live Practice</div>
 
       <div class="card" id="privacy-settings-card">
         <div class="card-header">
@@ -60,17 +60,17 @@ export function renderCombatView(): string {
       <!-- Mode Selector -->
       <div class="card" id="mode-selector-card">
         <div class="card-header">
-          <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">🎯</div>
+          <div class="icon" style="background: var(--phase2-alpha); color: var(--phase2)">LP</div>
           <h3>Choose Practice Mode</h3>
         </div>
         <div style="display: flex; gap: var(--spacing-same); margin-top: var(--spacing-same);">
           <div class="mode-card" id="btn-mode-general" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
-            <div style="font-size: 24px; margin-bottom: 8px;">🧠</div>
+            <div style="font-size: 24px; margin-bottom: 8px;">GP</div>
             <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">General Practice</div>
             <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Curriculum-based cue practice</div>
           </div>
           <div class="mode-card" id="btn-mode-scenario" style="flex: 1; padding: 16px; background: var(--color-surface-light); border: 2px solid transparent; border-radius: var(--radius); cursor: pointer; text-align: center; transition: border-color 0.2s ease;">
-            <div style="font-size: 24px; margin-bottom: 8px;">🎭</div>
+            <div style="font-size: 24px; margin-bottom: 8px;">SP</div>
             <div class="text-normal-body" style="font-weight: 600; color: var(--color-text);">Scenario Practice</div>
             <div class="text-detail" style="color: var(--color-text-muted); margin-top: 4px;">Focused idiom & situation practice</div>
           </div>
@@ -81,7 +81,7 @@ export function renderCombatView(): string {
       <div id="general-practice-area" style="display: none;">
         <div class="card">
           <div class="card-header">
-            <div class="icon" style="background: var(--color-surface-light)">📅</div>
+            <div class="icon" style="background: var(--color-surface-light)">WK</div>
             <h3>Curriculum Week</h3>
           </div>
           <div class="week-selector" id="week-selector">${weekOptions}</div>
@@ -111,15 +111,15 @@ export function renderCombatView(): string {
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="status-dot listening" id="vad-dot" style="width: 8px; height: 8px; margin-right: 0;"></span>
               <span class="text-detail" id="vad-label">Mic inactive</span>
-              <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;">—</span>
+              <span class="text-detail" id="audio-source-label" style="color: var(--color-text-muted); background: var(--color-surface-light); padding: 2px 6px; border-radius: 3px; display: none;"></span>
             </div>
             <button id="btn-toggle-audio-source" style="font-family: var(--font-display); font-size: 11px; padding: 2px 8px; height: 22px; border-radius: 11px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); background: var(--color-surface-light); color: var(--color-text-dim); cursor: pointer; transition: all 0.15s ease;">
-              <span>🔄 Switch Mic</span>
+              <span>Switch Mic</span>
             </button>
           </div>
           <div class="soundwave-bars">
             ${leftBars}
-            <div class="soundwave-mic" id="sw-mic">🎙</div>
+            <div class="soundwave-mic" id="sw-mic">MIC</div>
             ${rightBars}
           </div>
           <div class="soundwave-status" id="soundwave-status">Waiting for audio...</div>
@@ -134,7 +134,7 @@ export function renderCombatView(): string {
               <button class="assist-mode-btn" data-assist-mode="auto" style="font-family: var(--font-display); font-size: 11px; padding: 5px 9px; border: 0; border-left: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-dim); cursor: pointer;">Auto</button>
             </div>
           </div>
-          <div class="text-detail" id="assist-metrics-label" style="color: var(--color-text-muted); margin-top: 6px;">Manual 0 · Auto 0 · Dismissed 0</div>
+          <div class="text-detail" id="assist-metrics-label" style="color: var(--color-text-muted); margin-top: 6px;">Manual 0 / Auto 0 / Dismissed 0</div>
         </div>
 
         <!-- Live Transcript -->
@@ -150,7 +150,7 @@ export function renderCombatView(): string {
         <div id="transcript-display" style="display: none; background: var(--color-surface-light); padding: 10px 12px; border-radius: var(--radius); margin-bottom: var(--spacing-same); border-left: 3px solid var(--color-positive); transition: all 0.2s ease;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
             <span class="text-detail" style="color: var(--color-text-dim);">Recognized:</span>
-            <span class="text-detail" id="speech-timing" style="color: var(--color-text-muted); font-family: var(--font-mono);">—</span>
+            <span class="text-detail" id="speech-timing" style="color: var(--color-text-muted); font-family: var(--font-mono);"></span>
           </div>
           <span id="transcript-text" class="text-normal-body" style="color: var(--color-text); font-style: italic;"></span>
         </div>
@@ -187,7 +187,7 @@ export function renderCombatView(): string {
       <!-- Live Stats -->
       <div class="card" id="live-stats-card" style="display: none;">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-surface-light)">📊</div>
+          <div class="icon" style="background: var(--color-surface-light)">ST</div>
           <h3>Practice Stats</h3>
         </div>
         <div class="stats-grid">
@@ -213,7 +213,7 @@ export function renderCombatView(): string {
       <!-- Cue History -->
       <div class="card" id="hint-history-card" style="display: none;">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-surface-light)">💬</div>
+          <div class="icon" style="background: var(--color-surface-light)">CH</div>
           <h3>Cue History</h3>
         </div>
         <ul class="hint-list" id="hint-list"></ul>
