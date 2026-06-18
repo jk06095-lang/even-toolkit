@@ -1,0 +1,67 @@
+# ECHO API Proxy
+
+Project ECHO must never ship provider API keys in the browser client or `.ehpk`.
+The app calls a server-side proxy, and only the proxy calls the AI provider.
+
+## Endpoints
+
+- `POST /v1/cue`
+- `POST /v1/transcribe`
+- `POST /v1/session-analysis`
+- `GET /healthz`
+
+The deploy-ready reference implementation lives in `echo-api-proxy/server.mjs`.
+It uses Node 20 built-in `http` and `fetch`, returns safe JSON errors, and logs
+only request id, method, path, status, and latency. It does not log request
+bodies, raw transcripts, or audio payloads.
+
+## Environment
+
+Use `echo-api-proxy/.env.example` as the deployment template.
+
+Required:
+
+- `GEMINI_API_KEY`: provider key kept on the server only.
+- `ECHO_PROXY_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call
+  the proxy.
+
+Recommended:
+
+- `GEMINI_MODEL=gemini-1.5-flash`
+- `ECHO_PROXY_PROVIDER_TIMEOUT_MS=20000`
+- `ECHO_PROXY_MAX_BODY_BYTES=6000000`
+
+Client build:
+
+- `VITE_ECHO_API_BASE_URL=https://api.project-echo.app`
+- Do not set `VITE_GEMINI_API_KEY`.
+- Do not point `VITE_ECHO_API_BASE_URL` at `generativelanguage.googleapis.com`
+  or a `192.168.*` development host for release builds.
+
+Manifest:
+
+- `even-app/app.json` must whitelist the deployed proxy origin.
+- The current production origin is `https://api.project-echo.app`.
+
+## Deployment Checklist
+
+1. Deploy `echo-api-proxy/server.mjs` to the server/runtime that owns
+   `https://api.project-echo.app`.
+2. Set `GEMINI_API_KEY` in the server secret manager only.
+3. Set `ECHO_PROXY_ALLOWED_ORIGINS` to the final ECHO app origins.
+4. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
+   origin.
+5. Build and package the app with `cd even-app && npm run verify`.
+6. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
+   provider hostnames, SDK imports, and development IPs.
+7. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+   artifact.
+8. Confirm proxy logs do not contain request bodies, raw transcript text, or
+   audio base64 payloads.
+
+## Safe Failure Behavior
+
+When the proxy is missing, slow, blocked by CORS, or returns a non-2xx response,
+the client treats it as unavailable. Cue generation falls back to local static
+templates, and transcription/session analysis paths fail safely without exposing
+provider details to the browser.

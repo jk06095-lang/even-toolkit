@@ -44,6 +44,7 @@ describe('release safety checks', () => {
     expect(permissionNames).not.toContain('location');
 
     const networkPermission = appJson.permissions.find((permission) => permission.name === 'network');
+    expect(networkPermission?.whitelist ?? []).toContain('https://api.project-echo.app');
     expect(networkPermission?.whitelist ?? []).not.toContain('https://generativelanguage.googleapis.com');
     expect((networkPermission?.whitelist ?? []).some((host) => host.includes('192.168.'))).toBe(false);
   });

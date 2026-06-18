@@ -18,6 +18,11 @@ The client uses three proxy endpoints:
 
 The client does not import provider SDKs or read provider API keys from Vite environment variables.
 
+The deploy-ready Node reference proxy lives in `echo-api-proxy/server.mjs`.
+Deployment and key-rotation steps are documented in `docs/echo-api-proxy.md`.
+Proxy logs must not include request bodies, raw transcript text, or audio
+payloads unless a future explicit retention control enables that behavior.
+
 ## Audio modes
 
 - `G2 Mic`: G2 PCM -> VAD -> ECHO API proxy STT
@@ -44,3 +49,6 @@ npm run verify
 ```
 
 This runs tests, typecheck, build, and `.ehpk` packaging.
+
+Before release, also search `even-app/dist` and `even-app/echo.ehpk` for
+provider keys, direct Gemini hostnames, SDK imports, and development IPs.

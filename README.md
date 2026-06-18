@@ -9,6 +9,13 @@
 - AI cue policy, proxy-first API boundary, and local fallback design
 - Hardware usability testing plan and release-safety checks
 
+## Project ECHO Proxy
+
+Project ECHO uses a server-side API proxy for cue generation, transcription,
+and session analysis. See [docs/echo-api-proxy.md](./docs/echo-api-proxy.md)
+for deployment environment variables, key-rotation requirements, and release
+artifact checks.
+
 ## Built with
 
 - Even Hub SDK
