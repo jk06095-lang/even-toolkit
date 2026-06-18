@@ -26,6 +26,18 @@ export type SessionState =
   | 'paused'
   | 'session_end';
 
+export type AssistMode = 'manual' | 'auto';
+type CueTrigger = 'manual' | 'auto' | 'speech-evaluation' | 'simplified';
+
+export interface AssistMetrics {
+  manual_request_count: number;
+  auto_trigger_count: number;
+  cue_dismissed_count: number;
+  false_trigger_count: number;
+  cue_used_count: number;
+  auto_assist_paused: boolean;
+}
+
 export interface WeekConfig {
   week: number;
   silenceThresholdMs: number;
@@ -53,6 +65,7 @@ export interface SessionLog {
   selfResponseRate: number; // % of times user spoke without hint
   hintHistory: { chunk: string; source: string; timestamp: number }[];
   silenceDurations: number[];
+  assistMetrics: AssistMetrics;
   /** Full transcript saved to cache — available for export */
   transcript?: SessionTranscript;
 }
@@ -73,6 +86,8 @@ export interface SessionCallbacks {
   onHintUsageResult?: (result: { hint: string; status: 'used' | 'missed' | 'simplified'; simplifiedTo?: string }) => void;
   /** Fired at session end with full analysis */
   onSessionAnalysis?: (analysis: SessionAnalysis) => void;
+  /** Fired when assist mode metrics change */
+  onAssistMetrics?: (metrics: AssistMetrics) => void;
 }
 
 // ── Engine ──
@@ -111,6 +126,19 @@ export class SessionEngine {
   private lifecycleToken = 0;
   private activeRequestControllers = new Set<AbortController>();
   private pendingTimeouts = new Set<ReturnType<typeof setTimeout>>();
+  private assistMode: AssistMode = 'manual';
+  private assistMetrics: AssistMetrics = {
+    manual_request_count: 0,
+    auto_trigger_count: 0,
+    cue_dismissed_count: 0,
+    false_trigger_count: 0,
+    cue_used_count: 0,
+    auto_assist_paused: false,
+  };
+  private autoDismissStreak = 0;
+  private readonly maxAutoTriggersPerSession = 3;
+  private activeCueTrigger: CueTrigger | null = null;
+  private cueVisible = false;
 
   constructor(week: number, callbacks: SessionCallbacks, preferredAudioSource: 'bridge' | 'browser' = 'bridge') {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
@@ -122,6 +150,8 @@ export class SessionEngine {
   get state(): SessionState { return this._state; }
   get topic(): string { return this._topic; }
   get week(): number { return this.weekConfig.week; }
+  get currentAssistMode(): AssistMode { return this.assistMode; }
+  get currentAssistMetrics(): AssistMetrics { return { ...this.assistMetrics }; }
   get stats() {
     return {
       hints: this.hintCount,
@@ -136,6 +166,44 @@ export class SessionEngine {
   private setState(state: SessionState): void {
     this._state = state;
     this.callbacks.onStateChange(state);
+  }
+
+  setAssistMode(mode: AssistMode): void {
+    this.assistMode = mode;
+    if (mode === 'manual') {
+      this.assistMetrics.auto_assist_paused = false;
+      this.autoDismissStreak = 0;
+    }
+    this.emitAssistMetrics();
+  }
+
+  private emitAssistMetrics(): void {
+    this.callbacks.onAssistMetrics?.({ ...this.assistMetrics });
+  }
+
+  private resetAssistMetrics(): void {
+    this.assistMetrics = {
+      manual_request_count: 0,
+      auto_trigger_count: 0,
+      cue_dismissed_count: 0,
+      false_trigger_count: 0,
+      cue_used_count: 0,
+      auto_assist_paused: false,
+    };
+    this.autoDismissStreak = 0;
+    this.activeCueTrigger = null;
+    this.cueVisible = false;
+    this.emitAssistMetrics();
+  }
+
+  private markCueVisible(trigger: CueTrigger): void {
+    this.activeCueTrigger = trigger;
+    this.cueVisible = true;
+  }
+
+  private clearDisplayedCue(): void {
+    this.cueVisible = false;
+    this.activeCueTrigger = null;
   }
 
   private beginRequest(): { token: number; controller: AbortController } {
@@ -210,6 +278,7 @@ export class SessionEngine {
     this.usedHintChunks = [];
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
+    this.resetAssistMetrics();
 
     // Initialize transcript cache
     this.transcriptStore = new TranscriptStore(
@@ -300,6 +369,7 @@ export class SessionEngine {
             if (result.chunk) {
               this.hintCount++;
               this.usedHintChunks.push(result.chunk);
+              this.markCueVisible('speech-evaluation');
               this.hintHistory.push({
                 chunk: result.chunk,
                 source: result.source,
@@ -322,6 +392,7 @@ export class SessionEngine {
               // Auto-clear after flash duration, then restart silence cycle
               this.scheduleTimeout(() => {
                 if (this._state === 'hud_flash') {
+                  this.cueVisible = false;
                   this.setState('listening');
                   this.resetTranscriptActivity();
                   // Restore gauge on glasses
@@ -446,6 +517,9 @@ export class SessionEngine {
               hint: activeHint.text,
               status: 'used',
             });
+            this.assistMetrics.cue_used_count++;
+            this.autoDismissStreak = 0;
+            this.emitAssistMetrics();
             if (this.hudRef) {
               this.hudRef.showGoodJob();
             }
@@ -622,6 +696,7 @@ export class SessionEngine {
         : 0,
       hintHistory: this.hintHistory,
       silenceDurations: this.silenceDurations,
+      assistMetrics: { ...this.assistMetrics },
       transcript,
     };
 
@@ -687,6 +762,41 @@ export class SessionEngine {
     }
   }
 
+  async requestManualCue(): Promise<void> {
+    if (this._state === 'paused' || this._state === 'session_end' || this._state === 'loading_vad') return;
+    if (this.isGenerating) return;
+
+    this.assistMetrics.manual_request_count++;
+    this.emitAssistMetrics();
+    await this.generateContextualHint('manual');
+  }
+
+  dismissActiveCue(): boolean {
+    if (!this.cueVisible) {
+      return false;
+    }
+
+    const dismissedAutoCue = this.activeCueTrigger === 'auto';
+    this.assistMetrics.cue_dismissed_count++;
+
+    if (dismissedAutoCue) {
+      this.assistMetrics.false_trigger_count++;
+      this.autoDismissStreak++;
+      if (this.autoDismissStreak >= 2) {
+        this.assistMetrics.auto_assist_paused = true;
+      }
+    }
+
+    this.analyzer?.clearActiveHint();
+    this.clearDisplayedCue();
+    this.clearPendingTimeouts();
+    this.setState('listening');
+    this.resetTranscriptActivity();
+    this.hudRef?.showListening();
+    this.emitAssistMetrics();
+    return true;
+  }
+
   // ── Internal Handlers ──
 
   private async handleSilenceThreshold(): Promise<void> {
@@ -706,6 +816,39 @@ export class SessionEngine {
     // Record silence event to cache
     this.transcriptStore?.addSilence(silenceDur);
 
+    if (this.assistMode === 'manual') {
+      if (this.analyzer?.getActiveHint()) {
+        const activeHint = this.analyzer.getActiveHint()!;
+        this.analyzer.resolveActiveHint('missed');
+        this.transcriptStore?.addHintMissed(activeHint.text);
+        this.clearDisplayedCue();
+        this.callbacks.onHintUsageResult?.({
+          hint: activeHint.text,
+          status: 'missed',
+        });
+      }
+
+      this.setState('silence_detected');
+      this.callbacks.onSilenceStart();
+      this.scheduleTimeout(() => {
+        if (this._state === 'silence_detected') {
+          this.setState('listening');
+        }
+      }, 1000);
+      return;
+    }
+
+    if (this.assistMetrics.auto_assist_paused || this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
+      this.setState('silence_detected');
+      this.callbacks.onSilenceStart();
+      this.scheduleTimeout(() => {
+        if (this._state === 'silence_detected') {
+          this.setState('listening');
+        }
+      }, 1000);
+      return;
+    }
+
     // Check if user missed the active hint (silence = they didn't use it)
     if (this.analyzer?.getActiveHint()) {
       const activeHint = this.analyzer.getActiveHint()!;
@@ -715,6 +858,8 @@ export class SessionEngine {
       // Try to simplify the missed hint
       this.isGenerating = true;
       this.setState('chunk_generating');
+      this.assistMetrics.auto_trigger_count++;
+      this.emitAssistMetrics();
 
       try {
           const request = this.beginRequest();
@@ -733,6 +878,7 @@ export class SessionEngine {
 
           this.hintCount++;
           this.usedHintChunks.push(simplified);
+          this.markCueVisible('simplified');
           this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: Date.now() });
           this.transcriptStore?.addHint(simplified, 'gemini_eval');
 
@@ -747,6 +893,7 @@ export class SessionEngine {
 
           this.scheduleTimeout(() => {
             if (this._state === 'hud_flash') {
+              this.cueVisible = false;
               this.setState('listening');
               this.resetTranscriptActivity();
               this.hudRef?.showListening();
@@ -754,7 +901,7 @@ export class SessionEngine {
           }, this.weekConfig.hintFlashDurationMs);
         } else {
           // Simplification failed — generate a new contextual hint
-          await this.generateContextualHint();
+          await this.generateContextualHint('auto');
         }
       } catch {
         this.setState('listening');
@@ -767,6 +914,8 @@ export class SessionEngine {
 
     this.setState('silence_detected');
     this.callbacks.onSilenceStart();
+    this.assistMetrics.auto_trigger_count++;
+    this.emitAssistMetrics();
 
     // Week 4 blackout check
     if (Math.random() < this.weekConfig.blackoutProbability) {
@@ -779,13 +928,13 @@ export class SessionEngine {
     }
 
     // Generate a contextual hint using TranscriptAnalyzer data
-    await this.generateContextualHint();
+    await this.generateContextualHint('auto');
   }
 
   /**
    * Generate a hint using conversation context and adaptive difficulty.
    */
-  private async generateContextualHint(): Promise<void> {
+  private async generateContextualHint(trigger: CueTrigger): Promise<void> {
     this.isGenerating = true;
     this.setState('chunk_generating');
     const request = this.beginRequest();
@@ -810,6 +959,7 @@ export class SessionEngine {
       if (result.chunk) {
         this.hintCount++;
         this.usedHintChunks.push(result.chunk);
+        this.markCueVisible(trigger);
         this.hintHistory.push({
           chunk: result.chunk,
           source: result.source,
@@ -826,6 +976,7 @@ export class SessionEngine {
 
         this.scheduleTimeout(() => {
           if (this._state === 'hud_flash') {
+            this.cueVisible = false;
             this.setState('listening');
             this.resetTranscriptActivity();
             this.hudRef?.showListening();
@@ -854,6 +1005,7 @@ export class SessionEngine {
     if (this.hudRef) {
       this.hudRef.showListening();
     }
+    this.cueVisible = false;
 
     // If user spoke while in silence/hint state, count as self-response
     if (this._state === 'silence_detected' || this._state === 'listening') {

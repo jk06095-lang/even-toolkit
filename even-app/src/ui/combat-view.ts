@@ -91,6 +91,18 @@ export function renderCombatView(): string {
           <div class="soundwave-status" id="soundwave-status">Waiting for audio...</div>
         </div>
 
+        <!-- Assist Mode -->
+        <div id="assist-mode-panel" style="display: none; background: var(--color-surface-light); border: 1px solid var(--color-border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: var(--spacing-same);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+            <span class="text-detail" id="assist-mode-label" style="color: var(--color-text-dim);">Assist: Manual</span>
+            <div style="display: inline-flex; border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden;">
+              <button class="assist-mode-btn active" data-assist-mode="manual" style="font-family: var(--font-display); font-size: 11px; padding: 5px 9px; border: 0; background: var(--phase2); color: white; cursor: pointer;">Manual</button>
+              <button class="assist-mode-btn" data-assist-mode="auto" style="font-family: var(--font-display); font-size: 11px; padding: 5px 9px; border: 0; border-left: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-dim); cursor: pointer;">Auto</button>
+            </div>
+          </div>
+          <div class="text-detail" id="assist-metrics-label" style="color: var(--color-text-muted); margin-top: 6px;">Manual 0 · Auto 0 · Dismissed 0</div>
+        </div>
+
         <!-- Live Transcript -->
         <div id="live-transcript-container" style="display: none; background: var(--color-accent-alpha); padding: 10px 12px; border-radius: var(--radius); margin-bottom: var(--spacing-same); border-left: 3px solid var(--color-accent); min-height: 36px; transition: all 0.15s ease;">
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
@@ -132,6 +144,7 @@ export function renderCombatView(): string {
 
         <!-- Action Buttons -->
         <div style="margin-top: var(--spacing-cross); display: flex; gap: var(--spacing-same);">
+          <button class="btn btn-highlight btn-full" id="btn-request-cue">Cue</button>
           <button class="btn btn-neutral btn-full" id="btn-pause-session">Pause</button>
           <button class="btn btn-danger btn-full" id="btn-stop-session">End Practice</button>
         </div>

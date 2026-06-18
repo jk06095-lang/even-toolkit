@@ -37,7 +37,7 @@ const H = 288;
 
 export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
 export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
-export type HUDAction = 'resume' | 'end-practice' | 'exit-echo';
+export type HUDAction = 'resume' | 'end-practice' | 'exit-echo' | 'request-cue' | 'dismiss-cue';
 
 export function parseWearingState(status: any): WearingState {
   const rawWearing =
@@ -913,9 +913,19 @@ export class HUDController {
     if (!this._isSessionActive && !this._isInterruptMenuVisible) return;
 
     switch (action.type) {
+      case 'REQUEST_CUE':
+        if (this._isInterruptMenuVisible) {
+          this.hideInterruptMenu();
+        } else {
+          this._onActionCallback?.('request-cue');
+        }
+        break;
       case 'GO_BACK':
-      case 'DOUBLE_CLICK': // Double-tap also toggles menu
-        this.toggleInterruptMenu();
+        if (this._isInterruptMenuVisible) {
+          this.hideInterruptMenu();
+        } else {
+          this.toggleInterruptMenu();
+        }
         break;
       case 'HIGHLIGHT_MOVE':
         if (this._isInterruptMenuVisible) {
@@ -923,6 +933,8 @@ export class HUDController {
           const delta = action.direction === 'down' ? 1 : -1;
           this._menuSelectedIndex = (this._menuSelectedIndex + delta + itemCount) % itemCount;
           this.updateInterruptMenu();
+        } else {
+          this._onActionCallback?.('dismiss-cue');
         }
         break;
       case 'SELECT_HIGHLIGHTED':
@@ -931,6 +943,8 @@ export class HUDController {
           const selectedAction = actions[this._menuSelectedIndex] ?? 'resume';
           this.hideInterruptMenu();
           this._onActionCallback?.(selectedAction);
+        } else {
+          this.showInterruptMenu();
         }
         break;
     }

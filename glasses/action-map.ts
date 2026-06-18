@@ -22,7 +22,7 @@ function mapEvent(event: { eventType?: number; currentSelectItemIndex?: number }
       return { type: 'SELECT_HIGHLIGHTED' };
     case OsEventTypeList.DOUBLE_CLICK_EVENT:
       if (!tryConsumeTap('double')) return null;
-      return { type: 'GO_BACK' };
+      return { type: 'REQUEST_CUE' };
     case OsEventTypeList.SCROLL_TOP_EVENT:
       if (shouldIgnoreScroll('prev')) return null;
       return { type: 'HIGHLIGHT_MOVE', direction: 'up' };

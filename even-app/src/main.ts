@@ -16,7 +16,7 @@ import { renderDebriefView } from './ui/debrief-view';
 import { renderAmbientView } from './ui/ambient-view';
 
 import { runCalibration, loadCalibration, defaultCalibration, type CalibrationResult } from './dsp/calibration';
-import { SessionEngine, WEEK_CONFIGS, type SessionState } from './combat/session-engine';
+import { SessionEngine, WEEK_CONFIGS, type AssistMetrics, type AssistMode, type SessionState } from './combat/session-engine';
 import type { ChunkResult } from './combat/chunk-generator';
 import type { ChunkCategory } from './combat/fallback-chunks';
 import { importDebrief, type StoredDebrief } from './debrief/json-parser';
@@ -43,6 +43,15 @@ let currentActiveHint: string | null = null;
 let currentMode: 'general' | 'scenario' | null = null;
 let preferredAudioSource: 'bridge' | 'browser' = (localStorage.getItem('preferredAudioSource') as 'bridge' | 'browser') || 'bridge';
 let endingPracticePromise: Promise<void> | null = null;
+let selectedAssistMode: AssistMode = 'manual';
+let latestAssistMetrics: AssistMetrics = {
+  manual_request_count: 0,
+  auto_trigger_count: 0,
+  cue_dismissed_count: 0,
+  false_trigger_count: 0,
+  cue_used_count: 0,
+  auto_assist_paused: false,
+};
 
 // ── App Shell ──
 
@@ -152,7 +161,11 @@ async function initHUD(): Promise<void> {
     // Handle actions from the glasses touchpad
     hud.onAction(async (action) => {
       console.log('[App] Action from HUD:', action);
-      if (action === 'end-practice') {
+      if (action === 'request-cue') {
+        await requestManualCue();
+      } else if (action === 'dismiss-cue') {
+        dismissCue();
+      } else if (action === 'end-practice') {
         await endPracticeSession();
       } else if (action === 'exit-echo') {
         await exitEcho();
@@ -398,6 +411,9 @@ function bindCombatEvents(): void {
   document.getElementById('btn-stop-session')?.addEventListener('click', () => {
     endPracticeSession();
   });
+  document.getElementById('btn-request-cue')?.addEventListener('click', () => {
+    requestManualCue();
+  });
   
   document.getElementById('btn-pause-session')?.addEventListener('click', async () => {
     if (!session) return;
@@ -413,6 +429,15 @@ function bindCombatEvents(): void {
       btnPause.classList.remove('btn-neutral');
       btnPause.classList.add('btn-highlight');
     }
+  });
+
+  document.querySelectorAll('.assist-mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = ((btn as HTMLElement).dataset.assistMode as AssistMode | undefined) ?? 'manual';
+      selectedAssistMode = mode;
+      session?.setAssistMode(mode);
+      updateAssistModeUI();
+    });
   });
 
   // Initialize toggle button text on render
@@ -752,7 +777,10 @@ async function startSession(): Promise<void> {
         console.log(`[Main] Top missed: ${analysis.topMissedExpressions.join(', ')}`);
       }
     },
+    onAssistMetrics: updateAssistMetricsUI,
   }, preferredAudioSource);
+
+  session.setAssistMode(selectedAssistMode);
 
   session.setTopic(
     topicLabel,
@@ -859,6 +887,17 @@ async function endPracticeSession(options: { returnToStandby?: boolean } = {}): 
     if (audioLabel) audioLabel.style.display = 'none';
     const transcriptDisplay = document.getElementById('transcript-display');
     if (transcriptDisplay) transcriptDisplay.style.display = 'none';
+
+    selectedAssistMode = 'manual';
+    latestAssistMetrics = {
+      manual_request_count: 0,
+      auto_trigger_count: 0,
+      cue_dismissed_count: 0,
+      false_trigger_count: 0,
+      cue_used_count: 0,
+      auto_assist_paused: false,
+    };
+    updateAssistModeUI();
   })();
 
   try {
@@ -878,11 +917,13 @@ function toggleSessionUI(active: boolean): void {
   const btnStartGen = document.getElementById('btn-start-general') as HTMLButtonElement;
   const btnStartScen = document.getElementById('btn-start-scenario') as HTMLButtonElement;
   const modeSelector = document.getElementById('mode-selector-card');
+  const btnCue = document.getElementById('btn-request-cue') as HTMLButtonElement;
   const btnStop = document.getElementById('btn-stop-session') as HTMLButtonElement;
   const btnPause = document.getElementById('btn-pause-session') as HTMLButtonElement;
   const statsCard = document.getElementById('live-stats-card');
   const historyCard = document.getElementById('hint-history-card');
   const sessionCard = document.getElementById('session-card');
+  const assistPanel = document.getElementById('assist-mode-panel');
 
   if (btnStartGen) btnStartGen.style.display = active ? 'none' : 'block';
   if (btnStartScen) btnStartScen.style.display = active ? 'none' : 'block';
@@ -897,6 +938,8 @@ function toggleSessionUI(active: boolean): void {
   }
 
   if (sessionCard) sessionCard.style.display = active ? 'block' : 'none';
+  if (assistPanel) assistPanel.style.display = active ? 'block' : 'none';
+  if (btnCue) btnCue.style.display = active ? 'flex' : 'none';
   if (btnStop) btnStop.style.display = active ? 'flex' : 'none';
   if (btnPause) {
     btnPause.style.display = active ? 'flex' : 'none';
@@ -906,6 +949,71 @@ function toggleSessionUI(active: boolean): void {
   }
   if (statsCard) statsCard.style.display = active ? 'block' : 'none';
   if (historyCard) historyCard.style.display = active ? 'block' : 'none';
+  updateAssistModeUI();
+}
+
+async function requestManualCue(): Promise<void> {
+  if (!session) return;
+  await session.requestManualCue();
+  latestAssistMetrics = session.currentAssistMetrics;
+  updateAssistModeUI();
+}
+
+function dismissCue(): void {
+  if (!session) return;
+  const dismissed = session.dismissActiveCue();
+  if (!dismissed) return;
+
+  currentActiveHint = null;
+  hideChunkDisplay();
+  latestAssistMetrics = session.currentAssistMetrics;
+  updateAssistModeUI();
+}
+
+function hideChunkDisplay(): void {
+  const chunkDisplay = document.getElementById('chunk-display');
+  if (chunkDisplay) {
+    chunkDisplay.style.display = 'none';
+    chunkDisplay.innerHTML = '';
+  }
+}
+
+function updateAssistMetricsUI(metrics: AssistMetrics): void {
+  latestAssistMetrics = metrics;
+  updateAssistModeUI();
+}
+
+function updateAssistModeUI(): void {
+  document.querySelectorAll('.assist-mode-btn').forEach((btn) => {
+    const button = btn as HTMLButtonElement;
+    const active = button.dataset.assistMode === selectedAssistMode;
+    button.classList.toggle('active', active);
+    button.style.background = active ? 'var(--phase2)' : 'var(--color-surface)';
+    button.style.color = active ? 'white' : 'var(--color-text-dim)';
+  });
+
+  const label = document.getElementById('assist-mode-label');
+  if (label) {
+    label.textContent =
+      selectedAssistMode === 'auto'
+        ? latestAssistMetrics.auto_assist_paused
+          ? 'Assist: Auto paused'
+          : 'Assist: Auto'
+        : 'Assist: Manual';
+    label.style.color =
+      selectedAssistMode === 'auto' && !latestAssistMetrics.auto_assist_paused
+        ? 'var(--phase2)'
+        : 'var(--color-text-dim)';
+  }
+
+  const metricsLabel = document.getElementById('assist-metrics-label');
+  if (metricsLabel) {
+    metricsLabel.textContent =
+      `Manual ${latestAssistMetrics.manual_request_count} · ` +
+      `Auto ${latestAssistMetrics.auto_trigger_count} · ` +
+      `Dismissed ${latestAssistMetrics.cue_dismissed_count} · ` +
+      `Used ${latestAssistMetrics.cue_used_count}`;
+  }
 }
 
 function handleSessionState(state: SessionState): void {
@@ -935,7 +1043,7 @@ function handleSessionState(state: SessionState): void {
       calibrated: 'Calibrated',
       loading_vad: 'Initializing Mic...',
       listening: 'Listening',
-      silence_detected: 'Silence!',
+      silence_detected: 'Need a cue?',
       chunk_generating: 'Generating...',
       hud_flash: 'Hint Sent',
       paused: 'Paused',
@@ -944,7 +1052,7 @@ function handleSessionState(state: SessionState): void {
     status.textContent = labels[state] ?? state;
     status.className = state === 'listening' ? 'badge badge-positive' :
                        state === 'loading_vad' ? 'badge badge-accent' :
-                       state === 'silence_detected' ? 'badge badge-negative' :
+                       state === 'silence_detected' ? 'badge badge-accent' :
                        state === 'hud_flash' ? 'badge badge-accent' : 
                        state === 'paused' ? 'badge badge-neutral' : 'badge badge-neutral';
   }
@@ -957,7 +1065,7 @@ function handleSessionState(state: SessionState): void {
     vadLabel.textContent = state === 'listening'
                             ? 'VAD: Active — Listening...'
                             : state === 'loading_vad' ? 'VAD: Requesting Mic / Loading ONNX models...'
-                            : state === 'silence_detected' ? 'VAD: Silence Detected!'
+                            : state === 'silence_detected' ? 'VAD: Need a cue?'
                             : state === 'chunk_generating' ? 'VAD: Generating hint...'
                             : state === 'hud_flash' ? 'VAD: Hint displayed!'
                             : 'VAD: Inactive';
@@ -1009,6 +1117,7 @@ function handleChunkGenerated(result: ChunkResult): void {
 
 function handleSpeechDetected(): void {
   hud?.showListening();
+  hideChunkDisplay();
 
   // Flash the speaking indicator on the web UI
   const vadLabel = document.getElementById('vad-label');

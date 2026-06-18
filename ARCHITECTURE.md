@@ -24,6 +24,16 @@ The client does not import provider SDKs or read provider API keys from Vite env
 - `Phone Mic`: browser microphone -> Web Speech or ECHO API proxy STT
 - `Hybrid Experiment`: reserved for explicit future opt-in, not automatic fallback
 
+## Assist modes
+
+- `Manual Assist` is the default for every new practice session.
+- In Manual Assist, a cue is generated only after an explicit user request from the G2 double click or phone `Cue` button.
+- In Manual Assist, silence is recorded as an event but does not automatically call the cue endpoint.
+- `Auto Assist` is explicit opt-in from the phone UI.
+- Auto Assist is capped at 3 automatic interventions per session.
+- Swiping while a cue is visible dismisses it. Two dismissed auto cues pause Auto Assist for the rest of the session.
+- Speech start immediately clears the visible cue from the HUD while preserving local usage tracking for the next final transcript.
+
 ## Release checks
 
 Use:

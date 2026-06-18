@@ -47,6 +47,18 @@ Ten-cycle test:
 - With `Phone Mic` selected, G2 PCM is not required.
 - If G2 Mic fails, the app must ask the user to select Phone Mic instead of switching silently.
 
+## Assist mode QA
+
+- Start a new practice session and confirm the phone UI shows `Assist: Manual`.
+- Stay silent past the threshold and confirm no cue appears automatically.
+- Double click on G2 and confirm a cue appears.
+- Press `Cue` on the phone and confirm the same manual cue path works in simulator/browser checks.
+- Swipe while a cue is visible and confirm it disappears.
+- Start speaking while a cue is visible and confirm the cue clears immediately.
+- Switch to `Auto`, stay silent past the threshold, and confirm an auto cue appears.
+- Dismiss two auto cues and confirm the phone UI shows `Assist: Auto paused`.
+- Confirm auto cue count never exceeds 3 in one session.
+
 ## Metrics to capture
 
 - G2 mic success rate

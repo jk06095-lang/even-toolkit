@@ -235,6 +235,14 @@ export class TranscriptAnalyzer {
     return this.activeHint;
   }
 
+  /**
+   * Clear the active hint without marking it as used or missed.
+   * Used when the user explicitly dismisses a cue.
+   */
+  clearActiveHint(): void {
+    this.activeHint = null;
+  }
+
   // ── Context helpers ──
 
   /**

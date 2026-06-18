@@ -108,12 +108,13 @@ export interface IMUData {
 
 // ── Glass action types ──
 
-export type GlassActionType = 'HIGHLIGHT_MOVE' | 'SELECT_HIGHLIGHTED' | 'GO_BACK';
+export type GlassActionType = 'HIGHLIGHT_MOVE' | 'SELECT_HIGHLIGHTED' | 'GO_BACK' | 'REQUEST_CUE';
 
 export type GlassAction =
   | { type: 'HIGHLIGHT_MOVE'; direction: 'up' | 'down' }
   | { type: 'SELECT_HIGHLIGHTED' }
-  | { type: 'GO_BACK' };
+  | { type: 'GO_BACK' }
+  | { type: 'REQUEST_CUE' };
 
 export interface GlassNavState {
   highlightedIndex: number;
