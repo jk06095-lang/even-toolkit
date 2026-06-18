@@ -7,6 +7,9 @@ import path from 'node:path';
 const appRoot = process.cwd();
 const assetsDir = path.resolve(appRoot, 'dist', 'assets');
 const indexHtmlPath = path.resolve(appRoot, 'dist', 'index.html');
+const args = process.argv.slice(2);
+const checkMode = args.includes('--check');
+const INITIAL_JS_LIMIT_BYTES = 500 * 1024;
 
 function formatKb(bytes) {
   return `${(bytes / 1024).toFixed(2)} kB`;
@@ -81,9 +84,55 @@ function printMarkdown(rows) {
   }
 }
 
+function checkPolicy(rows) {
+  const errors = [];
+  const initialJsRows = rows.filter((row) => row.kind === 'js' && row.isInitial);
+  const largestInitialJs = initialJsRows[0] ?? null;
+  const oversizeInitialJs = initialJsRows.filter((row) => row.bytes > INITIAL_JS_LIMIT_BYTES);
+  const voiceRuntimeRows = rows.filter((row) => /^voice-runtime[-.].*\.js$/i.test(row.name));
+  const runtimeRows = rows.filter((row) =>
+    /^voice-runtime[-.].*\.js$/i.test(row.name) ||
+    /^ort-wasm.*\.wasm$/i.test(row.name)
+  );
+
+  for (const row of oversizeInitialJs) {
+    errors.push(
+      `initial JS chunk ${row.name} is ${formatKb(row.bytes)}, above ${formatKb(INITIAL_JS_LIMIT_BYTES)}`,
+    );
+  }
+
+  for (const row of runtimeRows.filter((runtimeRow) => runtimeRow.isInitial)) {
+    errors.push(`runtime asset ${row.name} is loaded initially; it must remain on demand`);
+  }
+
+  if (voiceRuntimeRows.length === 0) {
+    errors.push('voice-runtime JS chunk was not found; lazy-load evidence cannot be verified');
+  }
+
+  if (errors.length > 0) {
+    for (const error of errors) {
+      console.error(`[bundle:check] ${error}`);
+    }
+    process.exit(1);
+  }
+
+  const runtimeSummary = runtimeRows
+    .map((row) => `${row.name}:${row.isInitial ? 'initial' : 'on demand'}`)
+    .join(', ');
+  const largestInitialSummary = largestInitialJs
+    ? `${largestInitialJs.name} ${formatKb(largestInitialJs.bytes)}`
+    : 'none';
+
+  console.info(`[bundle:check] passed: largest initial JS ${largestInitialSummary}; runtime assets ${runtimeSummary}`);
+}
+
 try {
   const rows = await readAssetRows();
-  printMarkdown(rows);
+  if (checkMode) {
+    checkPolicy(rows);
+  } else {
+    printMarkdown(rows);
+  }
 } catch (error) {
   console.error(`[bundle:report] ${error instanceof Error ? error.message : String(error)}`);
   console.error('[bundle:report] Run `npm run build` before generating the bundle report.');

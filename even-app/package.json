@@ -13,8 +13,9 @@
     "sim": "npx evenhub-simulator http://localhost:5173",
     "qa:summarize-export": "node scripts/summarize-qa-export.mjs",
     "bundle:report": "node scripts/report-bundle-size.mjs",
+    "bundle:check": "node scripts/report-bundle-size.mjs --check",
     "pack": "npm run sync-version && npx evenhub pack app.json dist -o echo.ehpk",
-    "verify": "npm run test && npm run build && npm run pack"
+    "verify": "npm run test && npm run build && npm run bundle:check && npm run pack"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "0.0.10",

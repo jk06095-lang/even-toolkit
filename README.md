@@ -25,7 +25,7 @@ filled in.
 
 Run `npm run verify:all` before release or hardware QA. It verifies the root
 TypeScript build, the Project ECHO pilot/VAD and hardware QA evidence templates,
-ECHO API proxy smoke tests, and ECHO app test/build/package gate. Final pilot
+ECHO API proxy smoke tests, and ECHO app test/build/bundle/package gate. Final pilot
 manifests should pass
 `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json`
 and final hardware QA manifests should pass

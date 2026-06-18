@@ -168,6 +168,7 @@ Run this after any change to `@ricky0123/vad-web`, `onnxruntime-web`, VAD
 initialization, or audio source switching.
 
 - Build the app and run `cd even-app && npm run bundle:report`.
+- Run `cd even-app && npm run bundle:check`; this is also included in `npm run verify:all`.
 - Confirm the report marks `voice-runtime-*` and ONNX/WASM runtime assets as `on demand`.
 - Confirm `dist/index.html` does not preload a `voice-runtime-*` chunk.
 - Confirm the largest initial JS chunk remains under the Vite warning threshold.

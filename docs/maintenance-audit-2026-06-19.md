@@ -69,6 +69,11 @@ before/after chunk evidence for #12. The report distinguishes initial chunks
 from on-demand chunks so the voice runtime can remain large without being
 preloaded on app startup.
 
+`cd even-app && npm run bundle:check` enforces the same policy automatically:
+initial JS chunks must stay under 500 kB, `voice-runtime-*` must not be
+preloaded by `dist/index.html`, and ONNX/WASM runtime assets must remain
+on demand.
+
 Follow-up `a01285d` added the report command. A later #12 pass moved
 `@ricky0123/vad-web` and `onnxruntime-web` behind the explicit Phone Mic path;
 `bundle:report` now marks `voice-runtime-*` and the ONNX/WASM runtime as
