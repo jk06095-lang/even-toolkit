@@ -16,6 +16,13 @@ and session analysis. See [docs/echo-api-proxy.md](./docs/echo-api-proxy.md)
 for deployment environment variables, key-rotation requirements, and release
 artifact checks.
 
+## Project ECHO Evidence
+
+Real-device validation is tracked in [RESEARCH.md](./RESEARCH.md) and
+[HARDWARE_QA.md](./HARDWARE_QA.md). Portfolio claims should link to the
+completed G2 case study and video evidence only after the pilot scorecard is
+filled in.
+
 ## Built with
 
 - Even Hub SDK
