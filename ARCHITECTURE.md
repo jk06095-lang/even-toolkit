@@ -39,6 +39,19 @@ payloads unless a future explicit retention control enables that behavior.
 - Swiping while a cue is visible dismisses it. Two dismissed auto cues pause Auto Assist for the rest of the session.
 - Speech start immediately clears the visible cue from the HUD while preserving local usage tracking for the next final transcript.
 
+## G2 HUD contract
+
+During live conversation, the G2 display renders only one of four states:
+
+- `READY`
+- `LISTENING`
+- `CUE`
+- `PAUSED`
+
+Transcript text, grammar feedback, hint history, expression usage, silence
+stats, debrief details, and review planning stay on the phone UI or exported
+session data. A `CUE` is clipped to a short glanceable phrase.
+
 ## Release checks
 
 Use:

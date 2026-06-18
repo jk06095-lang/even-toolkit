@@ -59,6 +59,16 @@ Ten-cycle test:
 - Dismiss two auto cues and confirm the phone UI shows `Assist: Auto paused`.
 - Confirm auto cue count never exceeds 3 in one session.
 
+## Simplified HUD QA
+
+- Standby screen shows `READY` only.
+- Normal live speech shows `LISTENING` only.
+- Live transcript, grammar corrections, hint history, expression usage, silence
+  stats, and debrief details remain on the phone UI, not on G2.
+- Cue display shows `CUE` plus one short phrase only.
+- Pause/menu flow never overlaps transcript, cue history, or status metrics.
+- Resume returns to `LISTENING`; End Practice returns to `READY`.
+
 ## Metrics to capture
 
 - G2 mic success rate

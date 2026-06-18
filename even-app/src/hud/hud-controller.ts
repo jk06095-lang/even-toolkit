@@ -25,9 +25,6 @@ import {
   OsEventTypeList,
 } from '@evenrealities/even_hub_sdk';
 
-import { buildChatDisplay, type ChatLine } from '@toolkit/glasses/glass-chat-display';
-import { renderTextPageLines } from '@toolkit/glasses/types';
-import { renderTimerLines, renderTimerCompact } from '@toolkit/glasses/timer-display';
 import { buildScrollableList } from '@toolkit/glasses/glass-display-builders';
 import { mapGlassEvent } from '@toolkit/glasses/action-map';
 
@@ -38,6 +35,7 @@ const H = 288;
 export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
 export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
 export type HUDAction = 'resume' | 'end-practice' | 'exit-echo' | 'request-cue' | 'dismiss-cue';
+export type CombatHUDState = 'READY' | 'LISTENING' | 'CUE' | 'PAUSED';
 
 export function parseWearingState(status: any): WearingState {
   const rawWearing =
@@ -76,7 +74,6 @@ export class HUDController {
   private audioListeners: Array<(pcm: Uint8Array) => void> = [];
   private unsubscribeEvents?: () => void;
   private audioPacketCount = 0;
-  private lastVolumeBars = '';
   private statusListeners: Array<(status: any) => void> = [];
   private statusPollingTimer: any = null;
 
@@ -310,263 +307,126 @@ export class HUDController {
 
   // ── Phase 2: Combat ──
   
-  private _lastTranscript = '';
   private _combatInitialized = false;
-  private _chatLines: ChatLine[] = [];
-  private _currentTopic = 'TRAINING';
-  private _actionBarState = 'Ready';
+  private _combatHudState: CombatHUDState = 'READY';
+  private _combatHudDetail = '';
+  private _lastCombatFrame = '';
 
   /**
-   * Set the current topic for the combat header.
+   * Topic details stay on the phone UI. The G2 live HUD only renders
+   * READY, LISTENING, CUE, or PAUSED.
    */
-  setCombatTopic(topic: string) {
-    this._currentTopic = topic.toUpperCase();
+  setCombatTopic(_topic: string) {
+    // Intentionally no-op for the simplified live HUD.
+  }
+
+  private async setCombatHudState(state: CombatHUDState, detail = ''): Promise<void> {
+    this._mode = 'combat';
+    this._combatInitialized = true;
+    this._combatHudState = state;
+    this._combatHudDetail = state === 'CUE' ? this.toGlanceableCue(detail) : '';
+    await this.renderCombatHud();
+  }
+
+  private async renderCombatHud(): Promise<void> {
+    if (!this._combatInitialized || this._isInterruptMenuVisible) return;
+
+    const content = this.buildCombatHudFrame(this._combatHudState, this._combatHudDetail);
+    if (content === this._lastCombatFrame) return;
+
+    this._lastCombatFrame = content;
+    await this.showText(content);
   }
 
   private async updateCombatChat(): Promise<void> {
-    if (!this._combatInitialized) return;
-    const displayData = buildChatDisplay({
-      title: this._currentTopic,
-      actionBar: this._actionBarState,
-      chatLines: this._chatLines,
-      scrollOffset: 0,
-      contentSlots: 7,
-      maxChars: 44,
-    });
-    const content = renderTextPageLines(displayData.lines);
-    // Container ID 2 is 'main' in showText() layout
-    await this.quickUpdate(2, 'main', content);
+    await this.renderCombatHud();
+  }
+
+  private buildCombatHudFrame(state: CombatHUDState, detail: string): string {
+    if (state === 'CUE') {
+      return [
+        '',
+        '',
+        '       CUE',
+        '',
+        `  ${detail || 'Try again'}`,
+      ].join('\n');
+    }
+
+    return [
+      '',
+      '',
+      '',
+      `       ${state}`,
+      '',
+    ].join('\n');
+  }
+
+  private toGlanceableCue(value: string): string {
+    const compact = this.sanitizeTextForG2(value)
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (compact.length <= 50) return compact;
+
+    const clipped = compact.slice(0, 47);
+    const lastSpace = clipped.lastIndexOf(' ');
+    return `${(lastSpace > 20 ? clipped.slice(0, lastSpace) : clipped).trim()}...`;
   }
 
   async initCombatDisplay(): Promise<void> {
-    this._mode = 'combat';
-    this._combatInitialized = false;
-    this._lastTranscript = '';
-    this._chatLines = [{ type: 'system', text: 'System ready. Start speaking...' }];
-    this._actionBarState = '████████████████';
-    
-    // Switch to single-text container layout for chat display
-    await this.showText('Initializing chat...');
-    this._combatInitialized = true;
-    await this.updateCombatChat();
+    this._lastCombatFrame = '';
+    await this.setCombatHudState('READY');
   }
 
   async showListening(): Promise<void> {
-    this._mode = 'combat';
-    if (!this._combatInitialized) {
-      await this.initCombatDisplay();
-      return;
-    }
-    this._actionBarState = renderTimerCompact({ running: true, remaining: 0, total: 0 }).replace('--', 'LISTENING');
-    await this.updateCombatChat();
+    await this.setCombatHudState('LISTENING');
   }
 
-  async showLiveTranscript(text: string): Promise<void> {
-    if (this._isInterruptMenuVisible) return; // Don't overwrite menu
-    if (!this._combatInitialized) return;
-    const sanitized = this.sanitizeTextForG2(text);
-    if (sanitized === this._lastTranscript) return;
-    this._lastTranscript = sanitized;
-
-    // Update or add the transcript line
-    const lastLine = this._chatLines[this._chatLines.length - 1];
-    if (lastLine && lastLine.type === 'prompt') {
-      lastLine.text = sanitized;
-    } else {
-      this._chatLines.push({ type: 'prompt', text: sanitized });
-    }
-
-    // Keep history brief
-    if (this._chatLines.length > 20) this._chatLines.shift();
-    
-    await this.updateCombatChat();
+  async showLiveTranscript(_text: string): Promise<void> {
+    // Transcript detail is intentionally phone-only during live conversation.
   }
 
-  async showSpeechActive(volume: number = 0): Promise<void> {
-    this._mode = 'combat';
-    const bars = this.volumeToBars(volume);
-    if (bars === this.lastVolumeBars) return;
-    this.lastVolumeBars = bars;
-    
-    if (this._combatInitialized) {
-      this._actionBarState = `${bars} SPEAKING`;
-      await this.updateCombatChat();
-    }
+  async showSpeechActive(_volume: number = 0): Promise<void> {
+    await this.showListening();
   }
 
-  async showSilenceCountdown(secondsLeft: number, thresholdSeconds: number): Promise<void> {
-    this._mode = 'combat';
-    if (!this._combatInitialized) return;
-    
-    // Generate precise unicode timer bar for the action bar
-    const timerBar = renderTimerLines({ running: true, remaining: secondsLeft, total: thresholdSeconds }, 12)[1];
-    this._actionBarState = `${timerBar} ${secondsLeft}s`;
-    await this.updateCombatChat();
+  async showSilenceCountdown(_secondsLeft: number, _thresholdSeconds: number): Promise<void> {
+    await this.showListening();
   }
 
-  async showSilenceWarning(seconds: number): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      this._actionBarState = `! SILENCE: ${seconds}s`;
-      await this.updateCombatChat();
-    } else {
-      await this.showText(`\n\n  ○ SILENCE: ${seconds}s`);
-    }
+  async showSilenceWarning(_seconds: number): Promise<void> {
+    await this.showListening();
   }
 
   async flashChunk(chunk: string): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      // Add depth spacing
-      this._chatLines.push({ type: 'text', text: '' });
-      const lineIdx = this._chatLines.length;
-      // Start slightly indented
-      this._chatLines.push({ type: 'tool', text: `  ▶ ${chunk}` });
-      this._chatLines.push({ type: 'text', text: '' });
-      
-      this._actionBarState = `▶ HINT DELIVERED`;
-      await this.updateCombatChat();
-      
-      // Depth focus animation: slide left to bring to foreground
-      setTimeout(() => {
-        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'tool') {
-          this._chatLines[lineIdx].text = `▶ ${chunk}`;
-          this.updateCombatChat();
-        }
-      }, 150);
-      
-    } else {
-      await this.showText(`\n  ▶ ${chunk}`);
-    }
+    await this.setCombatHudState('CUE', chunk);
   }
 
-  async showGrammarFeedback(correction: string): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      this._chatLines.push({ type: 'text', text: '' });
-      const lineIdx = this._chatLines.length;
-      this._chatLines.push({ type: 'system', text: `  ▲ ${correction}` });
-      this._chatLines.push({ type: 'text', text: '' });
-      
-      this._actionBarState = `GRAMMAR ALERT`;
-      await this.updateCombatChat();
-      
-      setTimeout(() => {
-        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
-          this._chatLines[lineIdx].text = `▲ ${correction}`;
-          this.updateCombatChat();
-        }
-      }, 150);
-      
-      setTimeout(async () => {
-        if (this._actionBarState === `GRAMMAR ALERT`) {
-          this._actionBarState = 'LISTENING';
-          await this.updateCombatChat();
-        }
-      }, 3000);
-    } else {
-      await this.showText(`\n  ▲ ${correction}`);
-    }
+  async showGrammarFeedback(_correction: string): Promise<void> {
+    // Grammar feedback stays on the phone UI and session export.
   }
 
   async showSpeedUp(chunk: string): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      this._chatLines.push({ type: 'error', text: `SPEED UP! ${chunk}` });
-      await this.updateCombatChat();
-    } else {
-      await this.showText(`\n  ▲ SPEED UP!\n  ${chunk}`);
-    }
+    await this.setCombatHudState('CUE', chunk);
   }
 
   async showBlackout(): Promise<void> {
-    this._mode = 'combat';
-    await this.showText('');
-    this._combatInitialized = false;
+    await this.showListening();
   }
 
   async showGoodJob(): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      // Add depth spacing
-      this._chatLines.push({ type: 'text', text: '' });
-      const lineIdx = this._chatLines.length;
-      // Start far away (highly indented)
-      this._chatLines.push({ type: 'system', text: '    ★ PATTERN ACQUIRED ★' });
-      this._chatLines.push({ type: 'text', text: '' });
-      
-      this._actionBarState = `★ GREAT JOB`;
-      await this.updateCombatChat();
-      
-      // Depth popup animation: expand outwards to user's face
-      setTimeout(() => {
-        if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
-          this._chatLines[lineIdx].text = '  ★ PATTERN ACQUIRED ★';
-          this.updateCombatChat();
-          
-          setTimeout(() => {
-            if (this._chatLines[lineIdx] && this._chatLines[lineIdx].type === 'system') {
-              this._chatLines[lineIdx].text = '★ PATTERN ACQUIRED ★';
-              this.updateCombatChat();
-            }
-          }, 100);
-        }
-      }, 100);
-      
-      setTimeout(async () => {
-        if (this._actionBarState === `★ GREAT JOB`) {
-          this._actionBarState = 'LISTENING';
-          await this.updateCombatChat();
-        }
-      }, 2000);
-    } else {
-      await this.showText('\n  ★ KEEP GOING!');
-    }
+    // Achievement detail stays on the phone UI and session history.
   }
 
   async showPaused(): Promise<void> {
-    this._mode = 'combat';
-    if (this._combatInitialized) {
-      this._actionBarState = '‖ PAUSED';
-      await this.updateCombatChat();
-    } else {
-      await this.showText('\n  ‖ PAUSED');
-    }
+    await this.setCombatHudState('PAUSED');
   }
-
-  /**
-   * Convert a 0.0–1.0 volume level to visual bars for the glasses display.
-   */
-  private volumeToBars(volume: number): string {
-    const levels = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    const numBars = 8;
-    let bars = '';
-    for (let i = 0; i < numBars; i++) {
-      const threshold = (i + 1) / numBars;
-      if (volume >= threshold) {
-        bars += levels[Math.min(levels.length - 1, Math.floor(volume * (levels.length - 1)))];
-      } else if (volume >= threshold - 0.15) {
-        bars += levels[Math.max(0, Math.floor(volume * (levels.length - 1)) - 2)];
-      } else {
-        bars += '▁';
-      }
-    }
-    return bars;
-  }
-
   // ── Phase 3: Debrief ──
 
-  async showDebrief(status: string): Promise<void> {
-    this._mode = 'debrief';
-    const lines = [
-      '  ★ DEBRIEF',
-      '  ━━━━━━━━━━━━━━━━━━━━━━━━━━━',
-      '',
-      `  ${status}`,
-    ];
-    await this.showText(lines.join('\n'));
+  async showDebrief(_status: string): Promise<void> {
+    await this.enterStandby();
   }
-
   // ── Phase 4: Ambient ──
 
   async showAmbientEcho(chunk: string): Promise<void> {
@@ -599,42 +459,9 @@ export class HUDController {
   async showStandbyScreen(): Promise<void> {
     this._mode = 'standby';
     this._isStandby = true;
-
-    // Build status indicators
-    const connStr = this._connected ? '● Connected' : '○ Disconnected';
-    const micStr = this._micReady ? '♪ Mic OK' : '♪ Mic --';
-    const battStr = this._batteryLevel !== undefined
-      ? `${this.batteryIcon(this._batteryLevel)} ${this._batteryLevel}%`
-      : '';
-
-    // Build the status line (compact, single row)
-    const statusParts = [connStr, micStr];
-    if (battStr) statusParts.push(battStr);
-    const statusLine = statusParts.join('  ');
-
-    // Current time (HH:MM)
-    const now = new Date();
-    const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
-    const lines = [
-      '',
-      '',
-      '',
-      '       ★ PROJECT ECHO',
-      '       Ready to Go',
-      '',
-      `  ${statusLine}`,
-      `  ${timeStr}`,
-    ];
-
-    await this.showText(lines.join('\n'));
-    console.log('[HUD] Standby screen displayed');
+    await this.showText(['', '', '', '       READY', ''].join('\n'));
+    console.log('[HUD] Ready screen displayed');
   }
-
-  /**
-   * Enter standby mode — called when G2 is connected but no session is active.
-   * Single render, no loop.
-   */
   async enterStandby(): Promise<void> {
     if (this._isSessionActive) return; // Don't override active session
     if (!this._ready || !this._startupDone) return;
