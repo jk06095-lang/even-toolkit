@@ -5,12 +5,11 @@
  * Manages Week-based progression and collects session analytics.
  */
 
-import { VADManager } from './vad-manager';
+import { VADManager, type VADConfig } from './vad-manager';
 import { generateChunk, evaluateSpeech, evaluateGrammar, simplifyHint, type ChunkResult } from './chunk-generator';
 import type { ChunkCategory } from './fallback-chunks';
-import type { HUDController } from '../hud/hud-controller';
 import type { VadCalibration } from '../dsp/calibration';
-import { HybridRecognizer } from './hybrid-recognizer';
+import { HybridRecognizer, type HybridMode, type HybridRecognizerCallbacks, type HybridRecognizerOptions } from './hybrid-recognizer';
 import { TranscriptStore, type SessionTranscript, type TranscriptStoreOptions } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
 
@@ -109,15 +108,118 @@ export interface SessionCallbacks {
   onAssistMetrics?: (metrics: AssistMetrics) => void;
 }
 
+export interface GlassDisplay {
+  initCombatDisplay: () => void | Promise<void>;
+  showSpeechActive: (volume?: number) => void | Promise<void>;
+  showLiveTranscript: (text: string) => void | Promise<void>;
+  showGrammarFeedback: (correction: string) => void | Promise<void>;
+  showSilenceCountdown: (secondsLeft: number, thresholdSeconds: number) => void | Promise<void>;
+  showListening: () => void | Promise<void>;
+  showPaused: () => void | Promise<void>;
+  showGoodJob: () => void | Promise<void>;
+}
+
+export interface AudioDetector {
+  audioSource: string;
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+  pause: () => Promise<void>;
+  resume: () => Promise<void>;
+  updateThreshold: (ms: number) => void;
+  simulateSilenceRestart: () => void;
+}
+
+export type AudioDetectorFactory = (config: VADConfig) => AudioDetector;
+
+export interface SpeechRecognizerDriver {
+  mode: HybridMode;
+  start: () => boolean;
+  startHybrid: () => boolean;
+  stop: () => void;
+  feedPCM: (samples: Float32Array) => void;
+  notifySpeechStart: () => void;
+  notifySpeechEnd: () => Promise<void> | void;
+}
+
+export interface SpeechRecognizerFactory {
+  create: (
+    callbacks: HybridRecognizerCallbacks,
+    options?: HybridRecognizerOptions,
+  ) => SpeechRecognizerDriver;
+  isWebSpeechSupported: () => boolean;
+}
+
+export interface Clock {
+  now: () => number;
+  setTimeout: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clearTimeout: (handle: ReturnType<typeof setTimeout>) => void;
+  setInterval: (callback: () => void, delayMs: number) => ReturnType<typeof setInterval>;
+  clearInterval: (handle: ReturnType<typeof setInterval>) => void;
+}
+
+export interface Random {
+  next: () => number;
+  uuid?: () => string;
+}
+
+export interface CueProvider {
+  generateChunk: typeof generateChunk;
+  evaluateSpeech: typeof evaluateSpeech;
+  evaluateGrammar: typeof evaluateGrammar;
+  simplifyHint: typeof simplifyHint;
+}
+
 export interface SessionEngineOptions {
   cloudProcessingEnabled?: boolean;
   transcriptOptions?: TranscriptStoreOptions;
+  audioDetectorFactory?: AudioDetectorFactory;
+  speechRecognizerFactory?: SpeechRecognizerFactory;
+  cueProvider?: CueProvider;
+  clock?: Clock;
+  random?: Random;
+  transcriptStoreFactory?: (
+    week: number,
+    topic: string,
+    category: string,
+    options?: TranscriptStoreOptions,
+  ) => TranscriptStore;
+  transcriptAnalyzerFactory?: (week: number) => TranscriptAnalyzer;
 }
+
+const systemClock: Clock = {
+  now: () => Date.now(),
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeout: (handle) => clearTimeout(handle),
+  setInterval: (callback, delayMs) => setInterval(callback, delayMs),
+  clearInterval: (handle) => clearInterval(handle),
+};
+
+const systemRandom: Random = {
+  next: () => Math.random(),
+  uuid: () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return Math.random().toString(36).slice(2);
+  },
+};
+
+const defaultCueProvider: CueProvider = {
+  generateChunk,
+  evaluateSpeech,
+  evaluateGrammar,
+  simplifyHint,
+};
+
+const defaultSpeechRecognizerFactory: SpeechRecognizerFactory = {
+  create: (callbacks, options) => new HybridRecognizer(callbacks, options),
+  isWebSpeechSupported: () => HybridRecognizer.isWebSpeechSupported(),
+};
 
 // ── Engine ──
 
 export class SessionEngine {
-  private vad: VADManager | null = null;
+  private vad: AudioDetector | null = null;
   private weekConfig: WeekConfig;
   private callbacks: SessionCallbacks;
   private _state: SessionState = 'idle';
@@ -137,10 +239,10 @@ export class SessionEngine {
   private lastSilenceStart = 0;
   private selfResponses = 0;
   private isGenerating = false;
-  private hudRef: HUDController | null = null;
+  private hudRef: GlassDisplay | null = null;
   private silenceCountdownInterval: ReturnType<typeof setInterval> | null = null;
   private lastVolume = 0;
-  private speechRecognizer: HybridRecognizer | null = null;
+  private speechRecognizer: SpeechRecognizerDriver | null = null;
   private lastLiveTranscript = '';
   private transcriptStore: TranscriptStore | null = null;
   private analyzer: TranscriptAnalyzer | null = null;
@@ -150,6 +252,18 @@ export class SessionEngine {
   private vadCalibration: VadCalibration | null = null;
   private cloudProcessingEnabled = true;
   private transcriptOptions: TranscriptStoreOptions = {};
+  private audioDetectorFactory: AudioDetectorFactory = (config) => new VADManager(config);
+  private speechRecognizerFactory: SpeechRecognizerFactory = defaultSpeechRecognizerFactory;
+  private cueProvider: CueProvider = defaultCueProvider;
+  private clock: Clock = systemClock;
+  private random: Random = systemRandom;
+  private transcriptStoreFactory = (
+    week: number,
+    topic: string,
+    category: string,
+    options?: TranscriptStoreOptions,
+  ) => new TranscriptStore(week, topic, category, options);
+  private transcriptAnalyzerFactory = (week: number) => new TranscriptAnalyzer(week);
   private lifecycleToken = 0;
   private sessionRequestScopeId = '';
   private requestSequence = 0;
@@ -184,6 +298,13 @@ export class SessionEngine {
     this.vadCalibration = vadCalibration ?? null;
     this.cloudProcessingEnabled = options.cloudProcessingEnabled ?? true;
     this.transcriptOptions = options.transcriptOptions ?? {};
+    this.audioDetectorFactory = options.audioDetectorFactory ?? this.audioDetectorFactory;
+    this.speechRecognizerFactory = options.speechRecognizerFactory ?? this.speechRecognizerFactory;
+    this.cueProvider = options.cueProvider ?? this.cueProvider;
+    this.clock = options.clock ?? this.clock;
+    this.random = options.random ?? this.random;
+    this.transcriptStoreFactory = options.transcriptStoreFactory ?? this.transcriptStoreFactory;
+    this.transcriptAnalyzerFactory = options.transcriptAnalyzerFactory ?? this.transcriptAnalyzerFactory;
   }
 
   /** Whether VAD is running in simulation (keyboard) mode */
@@ -266,7 +387,7 @@ export class SessionEngine {
       sessionRequestScopeId: this.sessionRequestScopeId,
       requestId: `${this.sessionRequestScopeId}:${kind}:${sequence}`,
       kind,
-      startedAt: Date.now(),
+      startedAt: this.clock.now(),
       controller,
     };
   }
@@ -291,7 +412,7 @@ export class SessionEngine {
   }
 
   private scheduleTimeout(callback: () => void, delayMs: number): void {
-    const timeout = setTimeout(() => {
+    const timeout = this.clock.setTimeout(() => {
       this.pendingTimeouts.delete(timeout);
       callback();
     }, delayMs);
@@ -300,17 +421,14 @@ export class SessionEngine {
 
   private clearPendingTimeouts(): void {
     for (const timeout of this.pendingTimeouts) {
-      clearTimeout(timeout);
+      this.clock.clearTimeout(timeout);
     }
     this.pendingTimeouts.clear();
   }
 
   private createSessionRequestScopeId(): string {
-    const random =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : Math.random().toString(36).slice(2);
-    return `echo-${Date.now()}-${random}`;
+    const random = this.random.uuid?.() ?? this.random.next().toString(36).slice(2);
+    return `echo-${this.clock.now()}-${random}`;
   }
 
   private async displayCueAndRecordLatency(
@@ -318,13 +436,14 @@ export class SessionEngine {
     result: ChunkResult,
     trigger: CueTrigger,
     silenceDetectedAt: number | null,
-    responseReceivedAt = Date.now(),
+    responseReceivedAt?: number,
   ): Promise<void> {
-    const displayStart = Date.now();
+    const responseAt = responseReceivedAt ?? this.clock.now();
+    const displayStart = this.clock.now();
     await this.callbacks.onChunkGenerated(result);
-    const displayedAt = Date.now();
+    const displayedAt = this.clock.now();
 
-    const networkLatencyMs = result.networkLatencyMs ?? responseReceivedAt - request.startedAt;
+    const networkLatencyMs = result.networkLatencyMs ?? responseAt - request.startedAt;
     const generationLatencyMs = result.generationLatencyMs ?? result.latencyMs ?? null;
     const hudRenderLatencyMs = displayedAt - displayStart;
     const e2eStart = silenceDetectedAt ?? request.startedAt;
@@ -336,7 +455,7 @@ export class SessionEngine {
       trigger,
       silence_detected_at: silenceDetectedAt,
       cue_request_started_at: request.startedAt,
-      cue_response_received_at: responseReceivedAt,
+      cue_response_received_at: responseAt,
       cue_displayed_at: displayedAt,
       network_latency_ms: networkLatencyMs,
       generation_latency_ms: generationLatencyMs,
@@ -380,7 +499,7 @@ export class SessionEngine {
     this.requestSequence = 0;
     this.abortActiveRequests();
     this.clearPendingTimeouts();
-    this.sessionStartTime = Date.now();
+    this.sessionStartTime = this.clock.now();
     this.hintCount = 0;
     this.speechCount = 0;
     this.silenceCount = 0;
@@ -394,7 +513,7 @@ export class SessionEngine {
     this.resetAssistMetrics();
 
     // Initialize transcript cache
-    this.transcriptStore = new TranscriptStore(
+    this.transcriptStore = this.transcriptStoreFactory(
       this.weekConfig.week,
       this._topic,
       this._scenarioId || this._category,
@@ -402,11 +521,11 @@ export class SessionEngine {
     );
 
     // Initialize transcript analyzer for hint tracking
-    this.analyzer = new TranscriptAnalyzer(this.weekConfig.week);
+    this.analyzer = this.transcriptAnalyzerFactory(this.weekConfig.week);
 
-    this.vad = new VADManager({
+    this.vad = this.audioDetectorFactory({
       silenceThresholdMs: this.weekConfig.silenceThresholdMs,
-      hud,
+      hud: hud as any,
       preferredSource: this.preferredAudioSource,
       calibration: this.vadCalibration,
 
@@ -440,7 +559,7 @@ export class SessionEngine {
         this.isGenerating = true;
         const request = this.beginRequest('transcription');
         try {
-          const result = await evaluateSpeech(audio, {
+          const result = await this.cueProvider.evaluateSpeech(audio, {
             topic: this._topic,
             week: this.weekConfig.week,
             category: this._category,
@@ -451,7 +570,7 @@ export class SessionEngine {
             usedHints: this.usedHintChunks,
             scenarioContext: this._scenarioContext || undefined,
           }, request.controller.signal);
-          const responseReceivedAt = Date.now();
+          const responseReceivedAt = this.clock.now();
 
           if (!this.isCurrentRequest(request)) return;
 
@@ -496,7 +615,7 @@ export class SessionEngine {
               this.hintHistory.push({
                 chunk: result.chunk,
                 source: result.source,
-                timestamp: Date.now(),
+                timestamp: this.clock.now(),
               });
 
               // Record hint to cache
@@ -600,7 +719,7 @@ export class SessionEngine {
 
     const isBridge = this.vad?.audioSource === 'bridge';
 
-    this.speechRecognizer = new HybridRecognizer({
+    this.speechRecognizer = this.speechRecognizerFactory.create({
       onInterimResult: (text) => {
         this.lastLiveTranscript = text;
         this.callbacks.onLiveTranscript?.(text, false);
@@ -674,7 +793,7 @@ export class SessionEngine {
         // Retry logic for transient errors
         if (retryCount < 3 && err !== 'SECURE_ORIGIN_REQUIRED') {
           console.log(`[Session] Will retry speech recognizer in 2s (attempt ${retryCount + 1}/3)`);
-          setTimeout(() => {
+          this.scheduleTimeout(() => {
             if (this._state === 'listening' || this._state === 'silence_detected') {
               this.startSpeechRecognizer(retryCount + 1);
             }
@@ -693,7 +812,7 @@ export class SessionEngine {
       }
     } else {
       // Browser mode: Web Speech API only
-      if (!HybridRecognizer.isWebSpeechSupported()) {
+      if (!this.speechRecognizerFactory.isWebSpeechSupported()) {
         console.log('[Session] Web Speech API not available — real-time transcript disabled');
         return;
       }
@@ -705,7 +824,7 @@ export class SessionEngine {
   }
 
   private resetTranscriptActivity(): void {
-    this.lastTranscriptActivityTime = Date.now();
+    this.lastTranscriptActivityTime = this.clock.now();
     this.vad?.simulateSilenceRestart();
   }
 
@@ -715,7 +834,7 @@ export class SessionEngine {
 
     const request = this.beginRequest('grammar');
     try {
-      const correction = await evaluateGrammar(transcript, this._topic, {
+      const correction = await this.cueProvider.evaluateGrammar(transcript, this._topic, {
         clientSessionId: request.sessionRequestScopeId,
         requestId: request.requestId,
         allowCloudProcessing: this.cloudProcessingEnabled,
@@ -743,9 +862,9 @@ export class SessionEngine {
   private startSilenceCountdown(): void {
     this.stopSilenceCountdown();
     this.showingCountdown = false;
-    this.silenceCountdownInterval = setInterval(() => {
+    this.silenceCountdownInterval = this.clock.setInterval(() => {
       if (this._state !== 'listening' || !this.vad || !this.hudRef) return;
-      const silenceMs = Date.now() - this.lastTranscriptActivityTime;
+      const silenceMs = this.clock.now() - this.lastTranscriptActivityTime;
       const thresholdMs = this.weekConfig.silenceThresholdMs;
       const secondsLeft = Math.max(0, Math.ceil((thresholdMs - silenceMs) / 1000));
       const thresholdSeconds = Math.ceil(thresholdMs / 1000);
@@ -762,7 +881,7 @@ export class SessionEngine {
 
   private stopSilenceCountdown(): void {
     if (this.silenceCountdownInterval) {
-      clearInterval(this.silenceCountdownInterval);
+      this.clock.clearInterval(this.silenceCountdownInterval);
       this.silenceCountdownInterval = null;
     }
   }
@@ -787,7 +906,7 @@ export class SessionEngine {
       this.vad = null;
     }
 
-    const endTime = Date.now();
+    const endTime = this.clock.now();
     const avgSilence = this.silenceDurations.length > 0
       ? this.silenceDurations.reduce((a, b) => a + b, 0) / this.silenceDurations.length
       : 0;
@@ -942,7 +1061,7 @@ export class SessionEngine {
     if (this._state !== 'listening') return;
 
     // Double check silence duration based on last transcript activity
-    const silenceDur = Date.now() - this.lastTranscriptActivityTime;
+    const silenceDur = this.clock.now() - this.lastTranscriptActivityTime;
     if (silenceDur < this.weekConfig.silenceThresholdMs - 200) {
       console.log(`[Session] Ignored VAD silence threshold. Actual silence since transcript: ${silenceDur}ms`);
       return;
@@ -950,7 +1069,7 @@ export class SessionEngine {
 
     this.silenceCount++;
     this.silenceDurations.push(silenceDur);
-    this.lastSilenceDetectedAt = Date.now();
+    this.lastSilenceDetectedAt = this.clock.now();
 
     // Record silence event to cache
     this.transcriptStore?.addSilence(silenceDur);
@@ -1004,7 +1123,7 @@ export class SessionEngine {
           const request = this.beginRequest('cue');
           let simplified: string | null = null;
           try {
-            simplified = await simplifyHint(activeHint.text, this._topic, {
+            simplified = await this.cueProvider.simplifyHint(activeHint.text, this._topic, {
               clientSessionId: request.sessionRequestScopeId,
               requestId: request.requestId,
               allowCloudProcessing: this.cloudProcessingEnabled,
@@ -1012,7 +1131,7 @@ export class SessionEngine {
           } finally {
             this.finishRequest(request.controller);
           }
-          const responseReceivedAt = Date.now();
+          const responseReceivedAt = this.clock.now();
           if (!this.isCurrentRequest(request)) return;
 
           if (simplified && simplified !== activeHint.text) {
@@ -1023,7 +1142,7 @@ export class SessionEngine {
           this.hintCount++;
           this.usedHintChunks.push(simplified);
           this.markCueVisible('simplified');
-          this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: Date.now() });
+          this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: this.clock.now() });
           this.transcriptStore?.addHint(simplified, 'gemini_eval');
 
           this.callbacks.onHintUsageResult?.({
@@ -1068,7 +1187,7 @@ export class SessionEngine {
     this.emitAssistMetrics();
 
     // Week 4 blackout check
-    if (Math.random() < this.weekConfig.blackoutProbability) {
+    if (this.random.next() < this.weekConfig.blackoutProbability) {
       this.scheduleTimeout(() => {
         if (this._state === 'silence_detected') {
           this.setState('listening');
@@ -1093,7 +1212,7 @@ export class SessionEngine {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
       const conversationContext = this.analyzer?.getConversationContext() ?? undefined;
 
-      const result = await generateChunk({
+      const result = await this.cueProvider.generateChunk({
         topic: this._topic,
         week: this.weekConfig.week,
         category: this._category,
@@ -1106,7 +1225,7 @@ export class SessionEngine {
         conversationContext,
         adaptiveDifficulty,
       }, request.controller.signal);
-      const responseReceivedAt = Date.now();
+      const responseReceivedAt = this.clock.now();
 
       if (!this.isCurrentRequest(request)) return;
 
@@ -1117,7 +1236,7 @@ export class SessionEngine {
         this.hintHistory.push({
           chunk: result.chunk,
           source: result.source,
-          timestamp: Date.now(),
+          timestamp: this.clock.now(),
         });
 
         // Register with TranscriptAnalyzer for tracking

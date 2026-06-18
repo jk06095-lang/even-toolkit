@@ -84,6 +84,22 @@ Cue latency records include:
 Latency records are stored as metadata only. They do not include raw transcript
 text, audio payloads, or cue request bodies.
 
+## SessionEngine dependency injection
+
+`SessionEngine` owns the core session state machine, but hardware and external
+services enter through injected interfaces:
+
+- `AudioDetector` / `AudioDetectorFactory` for VAD and mic lifecycle.
+- `SpeechRecognizerFactory` for live speech recognition startup and cleanup.
+- `CueProvider` for cue, speech evaluation, grammar, and simplification calls.
+- `GlassDisplay` for the G2 HUD contract.
+- `Clock` and `Random` for timers, latency, request scopes, and blackout tests.
+
+The default dependencies preserve production behavior. Tests can inject fake
+VAD, HUD, clock, random, and cue providers so Week 4 blackout, late responses,
+cue clearing, pause/resume timers, and audio cleanup run without G2 hardware or
+network calls.
+
 ## Assist modes
 
 - `Manual Assist` is the default for every new practice session.

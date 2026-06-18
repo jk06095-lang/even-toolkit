@@ -48,4 +48,23 @@ describe('release safety checks', () => {
     expect(networkPermission?.whitelist ?? []).not.toContain('https://generativelanguage.googleapis.com');
     expect((networkPermission?.whitelist ?? []).some((host) => host.includes('192.168.'))).toBe(false);
   });
+
+  it('keeps packaged artifacts free of direct provider credentials and development hosts', () => {
+    const artifactPaths = [
+      path.join(appRoot, 'echo.ehpk'),
+      ...(existsSync(path.join(appRoot, 'dist')) ? walkFiles(path.join(appRoot, 'dist')) : []),
+    ].filter((file) => existsSync(file));
+
+    expect(artifactPaths.length).toBeGreaterThan(0);
+
+    const artifactText = artifactPaths
+      .map((file) => readFileSync(file).toString('latin1'))
+      .join('\n');
+
+    expect(artifactText).not.toContain('VITE_GEMINI_API_KEY');
+    expect(artifactText).not.toContain('@google/genai');
+    expect(artifactText).not.toContain('generativelanguage.googleapis.com');
+    expect(artifactText).not.toContain('192.168.0.17');
+    expect(artifactText).not.toMatch(/AIza[0-9A-Za-z_-]{20,}/);
+  });
 });
