@@ -7,28 +7,17 @@
   "permissions": [
     {
       "name": "phone-microphone",
-      "desc": "Required for voice input as a backup to glasses hardware."
+      "desc": "Optional voice input when the user explicitly selects Phone Mic."
     },
     {
       "name": "g2-microphone",
       "desc": "Required for real-time English speech recognition and coaching."
     },
     {
-      "name": "location",
-      "desc": "Required for secure Bluetooth connection with G2 hardware."
-    },
-    {
-      "name": "camera",
-      "desc": "Required for vision-assisted features and sensor stability."
-    },
-
-    {
       "name": "network",
-      "desc": "Required for Gemini AI English coaching and local development assets.",
+      "desc": "Required for ECHO API proxy requests.",
       "whitelist": [
-        "https://generativelanguage.googleapis.com",
-        "http://192.168.0.17:5173",
-        "http://192.168.0.17:5174"
+        "https://api.project-echo.app"
       ]
     }
   ],

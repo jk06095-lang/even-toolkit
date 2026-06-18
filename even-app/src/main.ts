@@ -3,7 +3,7 @@
  *
  * Wires all Phase modules together:
  * - Phase 1: Calibration (DSP)
- * - Phase 2: Combat (VAD + Gemini + HUD)
+ * - Phase 2: Combat (VAD + ECHO API proxy + HUD)
  * - Phase 3: Debrief (JSON import)
  * - Phase 4: Ambient (Scheduler + Echo)
  */
@@ -22,7 +22,7 @@ import type { ChunkCategory } from './combat/fallback-chunks';
 import { importDebrief, type StoredDebrief } from './debrief/json-parser';
 import { AmbientScheduler, type PendingItem } from './ambient/scheduler';
 import { EchoDisplay } from './ambient/echo-display';
-import { HUDController } from './hud/hud-controller';
+import { HUDController, parseWearingState } from './hud/hud-controller';
 import { TranscriptStore } from './combat/transcript-store';
 import { downloadExportJSON } from './combat/transcript-export';
 import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from './combat/topic-registry';
@@ -179,13 +179,12 @@ async function initHUD(): Promise<void> {
     badge.classList.toggle('connected', isConnected);
     
     if (isConnected) {
-      const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-      let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
-      
-      // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
-      isWearing = true;
-      
-      const wearStr = isWearing ? ' (Wearing)' : ' (Not Wearing)';
+      const wearingState = parseWearingState(status);
+      const wearStr = {
+        wearing: ' (● Wearing)',
+        'not-wearing': ' (○ Not wearing)',
+        unavailable: ' (— Wear status unavailable)',
+      }[wearingState];
       const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
       badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;
       

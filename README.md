@@ -1,5 +1,20 @@
 # even-toolkit
 
+## My role
+
+- Product concept and UX architecture for Project ECHO
+- G2 HUD interaction design for glanceable English practice
+- TypeScript implementation of the ECHO companion app
+- Audio/VAD integration for G2 and phone microphone modes
+- AI cue policy, proxy-first API boundary, and local fallback design
+- Hardware usability testing plan and release-safety checks
+
+## Built with
+
+- Even Hub SDK
+- even-toolkit, MIT License
+- Original toolkit foundations credited in [CREDITS.md](./CREDITS.md)
+
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-yellow?style=flat&logo=buy-me-a-coffee)](https://buymeacoffee.com/f3tch)
 
 Design system & component library for **Even Realities G2** smart glasses apps.

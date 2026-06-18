@@ -3,65 +3,16 @@
  *
  * Three operating modes:
  * 1. **browser** — Web Speech API only (phone/computer mic).
- * 2. **bridge**  — PCM → Gemini transcription only (G2 glasses mic).
+ * 2. **bridge**  — PCM → ECHO API transcription only (G2 glasses mic).
  * 3. **hybrid**  — Web Speech API for instant text *and* PCM buffer
- *    accumulation (for downstream `evaluateSpeech`), but Gemini interim
+ *    accumulation (for downstream `evaluateSpeech`), but proxy interim
  *    transcription is skipped because Web Speech already provides text.
  *
  * Language: English (en-US)
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { float32ToWav } from '@toolkit/stt/audio/pcm-utils';
-
-// ── Gemini setup ──
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-
-let sharedAI: GoogleGenAI | null = null;
-function getAI(): GoogleGenAI {
-  if (!sharedAI) sharedAI = new GoogleGenAI({ apiKey: API_KEY });
-  return sharedAI;
-}
-
-/**
- * Call Gemini with automatic model fallback.
- * Tries each model in order; falls through on any error.
- */
-async function callGeminiWithFallback(
-  contents: any,
-  config: any,
-  models: string[] = [
-    'gemini-flash-lite-latest',
-    'gemini-2.5-flash',
-    'gemini-3.1-flash-lite',
-  ],
-): Promise<any> {
-  const genai = getAI();
-  let lastError: unknown = null;
-
-  for (const model of models) {
-    try {
-      console.log(`[HybridRecognizer Gemini] Attempting call with model: ${model}`);
-      const response = await genai.models.generateContent({
-        model,
-        contents,
-        config,
-      });
-      console.log(`[HybridRecognizer Gemini] Success with model: ${model}`);
-      return response;
-    } catch (err: any) {
-      console.warn(
-        `[HybridRecognizer Gemini] Model ${model} failed:`,
-        err.message || err,
-      );
-      lastError = err;
-      continue;
-    }
-  }
-
-  throw lastError ?? new Error('All models failed');
-}
+import { isEchoApiConfigured, requestTranscription } from '../services/echo-api';
 
 // ── Helpers ──
 
@@ -98,7 +49,7 @@ export type HybridMode = 'browser' | 'bridge' | 'hybrid';
 // ── HybridRecognizer ──
 
 /**
- * Wraps Web Speech API and Bridge PCM → Gemini transcription into a single
+ * Wraps Web Speech API and Bridge PCM → ECHO API transcription into a single
  * recognizer that can run in browser-only, bridge-only, or hybrid mode.
  */
 export class HybridRecognizer {
@@ -158,7 +109,7 @@ export class HybridRecognizer {
    * Start in **hybrid** mode:
    * - Web Speech API supplies fast interim/final text.
    * - PCM buffer still accumulates via {@link feedPCM} for downstream use.
-   * - Gemini interim transcription is **not** run (Web Speech covers it).
+   * - Proxy interim transcription is **not** run (Web Speech covers it).
    *
    * Falls back to bridge-only mode if Web Speech API is unavailable.
    * @returns `true` if started successfully.
@@ -184,7 +135,7 @@ export class HybridRecognizer {
   }
 
   /**
-   * Start in **bridge-only** mode (PCM → Gemini transcription).
+   * Start in **bridge-only** mode (PCM → ECHO API transcription).
    * Call {@link feedPCM} to supply audio from the G2 glasses mic.
    * @returns `true` if started successfully.
    */
@@ -198,13 +149,13 @@ export class HybridRecognizer {
     this.lastInterimSampleCount = 0;
     this.interimTranscribing = false;
 
-    if (!API_KEY) {
-      console.warn('[HybridRecognizer] No Gemini API key — bridge transcription disabled');
-      this.callbacks.onError?.('No API key for bridge transcription');
+    if (!isEchoApiConfigured()) {
+      console.warn('[HybridRecognizer] ECHO API proxy is not configured');
+      this.callbacks.onError?.('ECHO_API_NOT_CONFIGURED');
       return false;
     }
 
-    console.log('[HybridRecognizer] Started in BRIDGE mode (PCM → Gemini)');
+    console.log('[HybridRecognizer] Started in BRIDGE mode (PCM via ECHO API proxy)');
     return true;
   }
 
@@ -214,7 +165,7 @@ export class HybridRecognizer {
    * Feed raw PCM audio data from the G2 glasses mic.
    * Audio is accepted in **bridge** and **hybrid** modes.
    *
-   * In bridge-only mode interim Gemini transcriptions fire every ~1.0 s.
+   * In bridge-only mode interim proxy transcriptions fire every ~1.0 s.
    * In hybrid mode the buffer accumulates silently (Web Speech handles text).
    */
   feedPCM(samples: Float32Array): void {
@@ -237,7 +188,7 @@ export class HybridRecognizer {
       }
     }
 
-    // Bridge-only: trigger interim Gemini transcription every 16 000 samples (1.0 s)
+    // Bridge-only: trigger interim proxy transcription every 16 000 samples (1.0 s)
     if (this._mode === 'bridge') {
       const samplesSinceLast = this.pcmBufferLength - this.lastInterimSampleCount;
       if (this.isSpeaking && !this.interimTranscribing && samplesSinceLast >= 16_000) {
@@ -247,7 +198,7 @@ export class HybridRecognizer {
         this.transcribeInterim(merged);
       }
     }
-    // hybrid mode: no Gemini interim — Web Speech API provides text
+    // hybrid mode: no proxy interim — Web Speech API provides text
   }
 
   // ── VAD notifications ──
@@ -274,7 +225,7 @@ export class HybridRecognizer {
   /**
    * Notify that VAD detected speech end.
    *
-   * - **bridge mode**: triggers final Gemini transcription of the accumulated
+     * - **bridge mode**: triggers final proxy transcription of the accumulated
    *   PCM segment.
    * - **hybrid mode**: no-op (Web Speech API already delivered final text).
    */
@@ -284,7 +235,7 @@ export class HybridRecognizer {
     this.isSpeaking = false;
     this.callbacks.onSpeechEnd();
 
-    // Only run Gemini final transcription in bridge-only mode
+    // Only run proxy final transcription in bridge-only mode
     if (this._mode === 'bridge') {
       if (this.pcmBufferLength < 1600) {
         // < 0.1 s at 16 kHz — too short
@@ -447,7 +398,7 @@ export class HybridRecognizer {
     return merged;
   }
 
-  // ── Private: Gemini transcription (bridge mode only) ──
+  // ── Private: proxy transcription (bridge mode only) ──
 
   /** Final transcription of a complete speech segment. */
   private async transcribeWithGemini(audio: Float32Array): Promise<void> {
@@ -460,17 +411,16 @@ export class HybridRecognizer {
       const wavBlob = float32ToWav(audio, 16_000);
       const base64 = await blobToBase64(wavBlob);
 
-      const response = await callGeminiWithFallback(
-        [
-          {
-            text: 'Transcribe the following English speech audio. Return ONLY the transcript text, nothing else.',
-          },
-          { inlineData: { mimeType: 'audio/wav', data: base64 } },
-        ],
-        { maxOutputTokens: 100, temperature: 0.1 },
-      );
+      const response = await requestTranscription({
+        task: 'transcribe',
+        language: 'en-US',
+        audio: {
+          mimeType: 'audio/wav',
+          data: base64,
+        },
+      });
 
-      const text: string = (response.text?.trim() ?? '') as string;
+      const text = extractTranscript(response);
       if (text && text.length > 1) {
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
@@ -483,7 +433,7 @@ export class HybridRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[HybridRecognizer] Gemini transcription failed:', err);
+      console.warn('[HybridRecognizer] ECHO API transcription failed:', err);
     } finally {
       this.bridgeTranscribing = false;
     }
@@ -499,17 +449,16 @@ export class HybridRecognizer {
       const wavBlob = float32ToWav(audio, 16_000);
       const base64 = await blobToBase64(wavBlob);
 
-      const response = await callGeminiWithFallback(
-        [
-          {
-            text: 'Transcribe the following spoken English audio so far. Return ONLY the transcribed text, nothing else. If there is no speech, return an empty string.',
-          },
-          { inlineData: { mimeType: 'audio/wav', data: base64 } },
-        ],
-        { maxOutputTokens: 100, temperature: 0.1 },
-      );
+      const response = await requestTranscription({
+        task: 'transcribe',
+        language: 'en-US',
+        audio: {
+          mimeType: 'audio/wav',
+          data: base64,
+        },
+      });
 
-      const text: string = (response.text?.trim() ?? '') as string;
+      const text = extractTranscript(response);
       if (text && text.length > 1) {
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
@@ -522,9 +471,18 @@ export class HybridRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[HybridRecognizer] Gemini interim transcription failed:', err);
+      console.warn('[HybridRecognizer] ECHO API interim transcription failed:', err);
     } finally {
       this.interimTranscribing = false;
     }
   }
+}
+
+function extractTranscript(response: unknown): string {
+  if (typeof response === 'string') return response.trim();
+  if (!response || typeof response !== 'object') return '';
+
+  const record = response as Record<string, unknown>;
+  const value = record.transcript ?? record.text;
+  return typeof value === 'string' ? value.trim() : '';
 }

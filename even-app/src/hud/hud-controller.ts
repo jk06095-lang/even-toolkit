@@ -36,12 +36,41 @@ const W = 576;
 const H = 288;
 
 export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
+export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
+
+export function parseWearingState(status: any): WearingState {
+  const rawWearing =
+    status?.isWearing ??
+    status?.wearing ??
+    status?.is_wearing ??
+    status?.wearingStatus ??
+    status?.wearState ??
+    status?.isWear ??
+    status?.wearStatus ??
+    status?.wearingState ??
+    status?.wear;
+
+  if (rawWearing === undefined || rawWearing === null || rawWearing === '') {
+    return 'unavailable';
+  }
+
+  const normalized = String(rawWearing).toLowerCase();
+  return rawWearing === true ||
+    rawWearing === 1 ||
+    rawWearing === '1' ||
+    normalized === 'true' ||
+    normalized === 'yes' ||
+    normalized === 'wearing'
+    ? 'wearing'
+    : 'not-wearing';
+}
 
 export class HUDController {
   private bridge: EvenAppBridge | null = null;
   private _ready = false;
   private _mode: HUDMode = 'off';
   private _connected = false;
+  private _wearingState: WearingState = 'unavailable';
   private _startupDone = false;
   private audioListeners: Array<(pcm: Uint8Array) => void> = [];
   private unsubscribeEvents?: () => void;
@@ -65,6 +94,7 @@ export class HUDController {
   get ready(): boolean { return this._ready; }
   get mode(): HUDMode { return this._mode; }
   get connected(): boolean { return this._connected; }
+  get wearingState(): WearingState { return this._wearingState; }
 
   /**
    * Initialize the bridge connection to G2 glasses.
@@ -223,19 +253,8 @@ export class HUDController {
       this._batteryLevel = status.batteryLevel;
     }
 
-    // Robust Wear Status Detection
-    // We check multiple possible field names because firmware/SDK variants might differ
-    const rawWearing = status.isWearing ?? status.wearing ?? status.is_wearing ?? status.wearingStatus ?? status.wearState ?? status.isWear ?? status.wearStatus ?? status.wearingState ?? status.wear;
-    let isWearing = rawWearing === true || rawWearing === 1 || rawWearing === '1' || String(rawWearing).toLowerCase() === 'true' || String(rawWearing).toLowerCase() === 'yes';
-    
-    // WORKAROUND: Force wearing to true if connected, due to G2 sensor returning false
-    if (this._connected) {
-      isWearing = true;
-    }
-    
-    if (isWearing) {
-      console.log('[HUD] Device IS being worn');
-    }
+    this._wearingState = parseWearingState(status);
+    console.log(`[HUD] Wear Status: ${this._wearingState}`);
     
     // Notify app-level listeners (for main.ts UI)
     for (const cb of this.statusListeners) {

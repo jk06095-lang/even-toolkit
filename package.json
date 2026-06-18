@@ -433,14 +433,17 @@
     "even-hub"
   ],
   "author": "fabioglimb",
+  "contributors": [
+    "jk06095-lang"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fabioglimb/even-toolkit"
+    "url": "https://github.com/jk06095-lang/even-toolkit"
   },
-  "homepage": "https://github.com/fabioglimb/even-toolkit#readme",
+  "homepage": "https://github.com/jk06095-lang/even-toolkit#readme",
   "bugs": {
-    "url": "https://github.com/fabioglimb/even-toolkit/issues"
+    "url": "https://github.com/jk06095-lang/even-toolkit/issues"
   },
   "dependencies": {
     "@evenrealities/evenhub-cli": "^0.1.13",

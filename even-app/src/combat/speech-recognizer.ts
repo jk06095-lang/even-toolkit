@@ -4,52 +4,15 @@
  * Two modes:
  * 1. BROWSER MODE (Web Speech API) — Uses phone/computer microphone directly.
  *    Provides instant interim transcription.
- * 2. BRIDGE MODE (PCM → Gemini) — Receives raw PCM from G2 glasses mic,
- *    accumulates audio segments, and sends to Gemini for transcription.
+ * 2. BRIDGE MODE (PCM → ECHO API) — Receives raw PCM from G2 glasses mic,
+ *    accumulates audio segments, and sends them to the ECHO API proxy.
  *    Provides near-real-time transcription when speech segments end.
  *
  * Language: English (en-US)
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { float32ToWav } from '@toolkit/stt/audio/pcm-utils';
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-
-let sharedAI: GoogleGenAI | null = null;
-function getAI(): GoogleGenAI {
-  if (!sharedAI) sharedAI = new GoogleGenAI({ apiKey: API_KEY });
-  return sharedAI;
-}
-
-async function callGeminiWithFallback(
-  contents: any,
-  config: any,
-  models: string[] = ['gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
-): Promise<any> {
-  const genai = getAI();
-  let lastError = null;
-
-  for (const model of models) {
-    try {
-      console.log(`[SpeechRecognizer Gemini] Attempting call with model: ${model}`);
-      const response = await genai.models.generateContent({
-        model,
-        contents,
-        config,
-      });
-      console.log(`[SpeechRecognizer Gemini] Success with model: ${model}`);
-      return response;
-    } catch (err: any) {
-      console.warn(`[SpeechRecognizer Gemini] Model ${model} failed:`, err.message || err);
-      lastError = err;
-      // Fallback on transient/quota errors
-      continue;
-    }
-  }
-
-  throw lastError || new Error('All models failed');
-}
+import { isEchoApiConfigured, requestTranscription } from '../services/echo-api';
 
 export interface SpeechRecognizerCallbacks {
   /** Fired continuously as user speaks — partial/interim text */
@@ -112,7 +75,7 @@ export class SpeechRecognizer {
   }
 
   /**
-   * Start in bridge mode (PCM → Gemini transcription).
+   * Start in bridge mode (PCM → ECHO API transcription).
    * Call feedPCM() to feed audio data from the G2 glasses mic.
    */
   startBridge(): boolean {
@@ -123,13 +86,13 @@ export class SpeechRecognizer {
     this.isSpeaking = false;
     this.bridgeTranscribing = false;
 
-    if (!API_KEY) {
-      console.warn('[SpeechRecognizer] No Gemini API key — bridge transcription disabled');
-      this.callbacks.onError?.('No API key for bridge transcription');
+    if (!isEchoApiConfigured()) {
+      console.warn('[SpeechRecognizer] ECHO API proxy is not configured');
+      this.callbacks.onError?.('ECHO_API_NOT_CONFIGURED');
       return false;
     }
 
-    console.log('[SpeechRecognizer] Started in BRIDGE mode (PCM → Gemini)');
+    console.log('[SpeechRecognizer] Started in BRIDGE mode (PCM via ECHO API proxy)');
     return true;
   }
 
@@ -214,12 +177,12 @@ export class SpeechRecognizer {
     this.pcmBuffer = [];
     this.pcmBufferLength = 0;
 
-    // Send to Gemini for transcription
+    // Send to the ECHO API proxy for transcription.
     await this.transcribeWithGemini(merged);
   }
 
   /**
-   * Transcribe audio via Gemini API.
+   * Transcribe audio via the ECHO API proxy.
    */
   private async transcribeWithGemini(audio: Float32Array): Promise<void> {
     if (this.bridgeTranscribing) return; // Don't overlap
@@ -231,20 +194,18 @@ export class SpeechRecognizer {
       const wavBlob = float32ToWav(audio, 16000);
       const base64 = await blobToBase64(wavBlob);
 
-      const response = await callGeminiWithFallback(
-        [
-          { text: 'Transcribe the following English speech audio. Return ONLY the transcript text, nothing else.' },
-          { inlineData: { mimeType: 'audio/wav', data: base64 } },
-        ],
-        {
-          maxOutputTokens: 100,
-          temperature: 0.1,
-        }
-      );
+      const response = await requestTranscription({
+        task: 'transcribe',
+        language: 'en-US',
+        audio: {
+          mimeType: 'audio/wav',
+          data: base64,
+        },
+      });
 
-      const text = response.text?.trim() ?? '';
+      const text = extractTranscript(response);
       if (text && text.length > 1) {
-        // Filter out meta-commentary from Gemini
+        // Filter out meta-commentary from the transcription service.
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
           .replace(/^["']|["']$/g, '')
@@ -256,7 +217,7 @@ export class SpeechRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[SpeechRecognizer] Gemini transcription failed:', err);
+      console.warn('[SpeechRecognizer] ECHO API transcription failed:', err);
     } finally {
       this.bridgeTranscribing = false;
     }
@@ -274,20 +235,18 @@ export class SpeechRecognizer {
       const wavBlob = float32ToWav(audio, 16000);
       const base64 = await blobToBase64(wavBlob);
 
-      const response = await callGeminiWithFallback(
-        [
-          { text: 'Transcribe the following spoken English audio so far. Return ONLY the transcribed text, nothing else. If there is no speech, return an empty string.' },
-          { inlineData: { mimeType: 'audio/wav', data: base64 } },
-        ],
-        {
-          maxOutputTokens: 100,
-          temperature: 0.1,
-        }
-      );
+      const response = await requestTranscription({
+        task: 'transcribe',
+        language: 'en-US',
+        audio: {
+          mimeType: 'audio/wav',
+          data: base64,
+        },
+      });
 
-      const text = response.text?.trim() ?? '';
+      const text = extractTranscript(response);
       if (text && text.length > 1) {
-        // Filter out meta-commentary from Gemini
+        // Filter out meta-commentary from the transcription service.
         const clean = text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
           .replace(/^["']|["']$/g, '')
@@ -300,7 +259,7 @@ export class SpeechRecognizer {
         }
       }
     } catch (err) {
-      console.warn('[SpeechRecognizer] Gemini interim transcription failed:', err);
+      console.warn('[SpeechRecognizer] ECHO API interim transcription failed:', err);
     } finally {
       this.interimTranscribing = false;
     }
@@ -450,4 +409,13 @@ function blobToBase64(blob: Blob): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+}
+
+function extractTranscript(response: unknown): string {
+  if (typeof response === 'string') return response.trim();
+  if (!response || typeof response !== 'object') return '';
+
+  const record = response as Record<string, unknown>;
+  const value = record.transcript ?? record.text;
+  return typeof value === 'string' ? value.trim() : '';
 }

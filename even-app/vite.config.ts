@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import fs from 'node:fs';
 import path from 'path';
+
+const appJsonPath = path.resolve(__dirname, 'app.json');
 
 export default defineConfig({
   plugins: [
@@ -10,6 +13,8 @@ export default defineConfig({
         server.middlewares.use((req, res, next) => {
           if (req.url === '/app.json') {
             res.setHeader('Content-Type', 'application/json');
+            res.end(fs.readFileSync(appJsonPath, 'utf8'));
+            return;
           }
           next();
         });
@@ -35,6 +40,10 @@ export default defineConfig({
         },
         {
           src: 'node_modules/onnxruntime-web/dist/*.mjs',
+          dest: './',
+        },
+        {
+          src: 'app.json',
           dest: './',
         },
       ],

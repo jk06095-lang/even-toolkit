@@ -1,58 +1,18 @@
 /**
- * Transcript Export — generates 3-stage JSON for Gemini Gem handoff.
+ * Transcript Export — generates 3-stage JSON for coaching handoff.
  *
  * Structure:
  *   stage_1_raw      — raw session transcript entries
  *   stage_2_analysis — computed statistics and patterns
- *   stage_3_handoff  — Gemini-generated coaching recommendations (fixed schema)
+ *   stage_3_handoff  — proxy-generated coaching recommendations (fixed schema)
  *
- * The stage_3 uses Gemini API with `responseMimeType: "application/json"`
- * and a strict `responseSchema` to guarantee output format consistency.
+ * The stage_3 calls the ECHO API proxy. If the proxy is unavailable, the
+ * export remains usable with computed-only fallback recommendations.
  */
 
-import { GoogleGenAI } from '@google/genai';
-import type { SessionTranscript, TranscriptEntry } from './transcript-store';
+import { isEchoApiConfigured, requestSessionAnalysis } from '../services/echo-api';
+import type { SessionTranscript } from './transcript-store';
 import { getScenarioById } from './topic-registry';
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string;
-
-let ai: GoogleGenAI | null = null;
-
-function getAI(): GoogleGenAI {
-  if (!ai) {
-    ai = new GoogleGenAI({ apiKey: API_KEY });
-  }
-  return ai;
-}
-
-async function callGeminiWithFallback(
-  contents: any,
-  config: any,
-  models: string[] = ['gemini-flash-lite-latest', 'gemini-2.5-flash', 'gemini-3.1-flash-lite']
-): Promise<any> {
-  const genai = getAI();
-  let lastError = null;
-
-  for (const model of models) {
-    try {
-      console.log(`[Export Gemini] Attempting call with model: ${model}`);
-      const response = await genai.models.generateContent({
-        model,
-        contents,
-        config,
-      });
-      console.log(`[Export Gemini] Success with model: ${model}`);
-      return response;
-    } catch (err: any) {
-      console.warn(`[Export Gemini] Model ${model} failed:`, err.message || err);
-      lastError = err;
-      // Fallback on rate limit / availability issues
-      continue;
-    }
-  }
-
-  throw lastError || new Error('All models failed');
-}
 
 // ── Export Types (strict, never changes) ──
 
@@ -170,7 +130,7 @@ function buildStage2(session: SessionTranscript): ExportStage2 {
 }
 
 /**
- * Generate stage 3 via Gemini API with strict JSON schema.
+ * Generate stage 3 via the ECHO API proxy.
  * Falls back to a computed-only version if API fails.
  */
 async function buildStage3(
@@ -186,80 +146,19 @@ async function buildStage3(
     gem_instruction: `주제: ${stage1.topic}, Week ${stage1.week}. 발화 ${stage2.speech_count}회, 힌트 ${stage2.hint_count}회. 추가 분석이 필요합니다.`,
   };
 
-  if (!API_KEY) return fallback;
-
-  // Build a concise summary for the API
-  const speechSample = stage2.speech_texts.slice(0, 10).join(' | ');
-  const hintSample = stage2.hint_texts.slice(0, 10).join(' | ');
-
-  const userPrompt = [
-    `Session Analysis:`,
-    `- Topic: ${stage1.topic} (Week ${stage1.week})`,
-    `- Duration: ${stage2.total_duration_sec}s`,
-    `- User speeches: ${stage2.speech_count}, Hints given: ${stage2.hint_count}, Silences: ${stage2.silence_count}`,
-    `- Self-response rate: ${stage2.self_response_rate}%`,
-    `- Avg silence: ${stage2.avg_silence_ms}ms`,
-    ``,
-    `User said: ${speechSample || '(no speech recorded)'}`,
-    `Hints given: ${hintSample || '(none)'}`,
-    ``,
-    `Analyze this learner's English conversation session and provide coaching recommendations.`,
-  ].join('\n');
-
-  const systemPrompt = `You are an English conversation coach analyzing a practice session from smart glasses.
-Analyze the session data and provide structured coaching recommendations.
-All fields must be filled. The gem_instruction field must be written in Korean (한국어).
-Be specific and actionable in your recommendations.`;
+  if (!isEchoApiConfigured()) return fallback;
 
   try {
-    const response = await callGeminiWithFallback(
-      userPrompt,
-      {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: 500,
-        temperature: 0.3,
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'OBJECT',
-          properties: {
-            weak_areas: {
-              type: 'ARRAY',
-              items: { type: 'STRING' },
-              description: 'Up to 5 identified weak areas in English conversation. Each item is a short phrase.',
-            },
-            recommended_chunks: {
-              type: 'ARRAY',
-              items: { type: 'STRING' },
-              description: 'Up to 5 suggested English practice phrases (3-5 words each).',
-            },
-            difficulty_assessment: {
-              type: 'STRING',
-              description: 'One-line assessment like "Ready for Week 3" or "Needs more Week 2 practice".',
-            },
-            next_session_focus: {
-              type: 'STRING',
-              description: 'One-sentence coaching directive for the next session.',
-            },
-            gem_instruction: {
-              type: 'STRING',
-              description: 'Coaching handoff instruction written in Korean (한국어). Summarize learner state and next steps.',
-            },
-          },
-          required: [
-            'weak_areas',
-            'recommended_chunks',
-            'difficulty_assessment',
-            'next_session_focus',
-            'gem_instruction',
-          ],
-        } as any,
-      }
-    );
+    const response = await requestSessionAnalysis<ExportStage3 | string>({
+      task: 'session_handoff',
+      stage_1_raw: stage1,
+      stage_2_analysis: stage2,
+    });
 
-    const text = response.text?.trim() ?? '';
-    if (!text) return fallback;
-
-    const parsed = JSON.parse(text) as ExportStage3;
+    const parsed =
+      typeof response === 'string'
+        ? (JSON.parse(response) as ExportStage3)
+        : response;
 
     // Validate and cap arrays
     return {
@@ -270,7 +169,7 @@ Be specific and actionable in your recommendations.`;
       gem_instruction: parsed.gem_instruction || fallback.gem_instruction,
     };
   } catch (err) {
-    console.warn('[Export] Stage 3 Gemini API failed, using fallback:', err);
+    console.warn('[Export] Stage 3 ECHO API failed, using fallback:', err);
     return fallback;
   }
 }

@@ -6,12 +6,10 @@
  * and fires a threshold callback when the user has been silent
  * for too long (Week-specific threshold).
  *
- * AUDIO SOURCE PRIORITY:
- * 1. G2 Bridge (glasses mic) — if HUD connected
- * 2. Browser MicVAD — automatic fallback if Bridge fails
- *
- * The Bridge→MicVAD fallback ensures audio ALWAYS works even when
- * the glasses are connected for display but mic data isn't flowing.
+ * AUDIO SOURCE POLICY:
+ * - G2 Bridge opens only when the user selected the G2 source.
+ * - Browser MicVAD opens only when the user selected Phone Mic.
+ * - The app does not silently fall back from G2 to Phone Mic.
  */
 
 import { MicVAD, FrameProcessor, Message } from '@ricky0123/vad-web';
@@ -99,20 +97,28 @@ export class VADManager {
     const isConnected = hasHUD && this.config.hud!.connected;
     const preferBridge = this.config.preferredSource !== 'browser';
     
-    if (isConnected && preferBridge) {
-      console.log('[VAD] HUD connected & bridge preferred — attempting Bridge mode');
+    if (preferBridge) {
+      if (!isConnected) {
+        console.warn('[VAD] G2 microphone selected, but glasses are not connected.');
+        this.setState('error');
+        throw new Error('G2 microphone unavailable. Select Phone Mic to use the phone microphone.');
+      }
+
+      console.log('[VAD] HUD connected & bridge selected — attempting Bridge mode');
       const bridgeSuccess = await this.tryBridgeMode();
       if (bridgeSuccess) {
         this.finishStart('bridge');
         return;
       }
-      console.warn('[VAD] Bridge mode failed to stream audio — falling back to browser microphone');
-    } else {
-      const reason = !hasHUD ? 'no HUD controller' : (!isConnected ? 'glasses not Bluetooth connected' : 'browser mic preferred');
-      console.log(`[VAD] Skipping Bridge mode (${reason}) — using browser microphone`);
+
+      console.warn('[VAD] Bridge mode failed to stream audio. Phone Mic requires explicit user selection.');
+      this.setState('error');
+      throw new Error('G2 microphone unavailable. Select Phone Mic to use the phone microphone.');
     }
 
-    // Browser MicVAD (primary or fallback)
+    console.log('[VAD] Phone Mic selected — using browser microphone');
+
+    // Browser MicVAD only runs when explicitly selected.
     const micSuccess = await this.tryMicMode();
     if (micSuccess) {
       this.finishStart('browser');
