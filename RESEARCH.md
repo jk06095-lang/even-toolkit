@@ -75,8 +75,10 @@ npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.js
 
 The final command intentionally fails if the manifest still has `TBD`, missing
 numeric metrics, fewer than 5 participants, missing A/B/C runs, missing VAD
-environment results, missing real G2 video evidence, or README links not marked
-as updated.
+environment results, missing real G2 video evidence, non-link case-study/video
+references, or README links not marked as updated. Case-study links must be
+`https://` URLs or repo paths such as `docs/project-echo-case-study.ko.md`; video
+evidence must be an `https://` URL or a repo path to a video file.
 
 ## UX Metrics
 

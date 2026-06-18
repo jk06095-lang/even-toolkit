@@ -47,6 +47,10 @@ const PLACEHOLDER_PATTERNS = [
   /^https?:\/\/example\.com/i,
 ];
 
+const CASE_STUDY_EXTENSIONS = ['md', 'html', 'pdf'];
+const ARCHITECTURE_EXTENSIONS = ['md', 'html', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
+
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
 const verbose = args.includes('--verbose');
@@ -130,6 +134,46 @@ function validateText(object, key, pointer, options = {}) {
   if (options.includes && !value.includes(options.includes)) {
     addError(fieldPointer, `must include ${options.includes}`);
   }
+}
+
+function validateEvidenceLink(object, key, pointer, options = {}) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || isPlaceholder(value)) {
+    addError(fieldPointer, 'must be filled with a non-placeholder evidence link or repo path');
+    return;
+  }
+
+  const extensions = options.extensions ?? CASE_STUDY_EXTENSIONS;
+  if (!looksLikeEvidenceLink(value, extensions)) {
+    addError(
+      fieldPointer,
+      `must be an https URL or repo path ending in one of: ${extensions.join(', ')}`,
+    );
+  }
+}
+
+function looksLikeEvidenceLink(value, extensions) {
+  const trimmed = value.trim();
+  if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  if (/^http:\/\//i.test(trimmed)) return false;
+
+  const escapedExtensions = extensions.map((extension) => extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const relativePathPattern = new RegExp(
+    `^(?:\\.{1,2}/)?[A-Za-z0-9_.\\-/]+\\.(${escapedExtensions.join('|')})$`,
+    'i',
+  );
+  return relativePathPattern.test(trimmed);
 }
 
 function validateBooleanTrue(object, key, pointer) {
@@ -218,7 +262,9 @@ function validateRun(run, pointer) {
   if (validateObject(run.artifacts, `${pointer}.artifacts`)) {
     validateText(run.artifacts, 'qaExportPath', `${pointer}.artifacts`);
     validateText(run.artifacts, 'observerNotesPath', `${pointer}.artifacts`);
-    validateText(run.artifacts, 'videoEvidence', `${pointer}.artifacts`);
+    validateEvidenceLink(run.artifacts, 'videoEvidence', `${pointer}.artifacts`, {
+      extensions: VIDEO_EXTENSIONS,
+    });
   }
 }
 
@@ -347,10 +393,14 @@ function validateManifest(manifestObject) {
   validateAggregate(manifestObject);
 
   if (validateObject(manifestObject.caseStudy, 'caseStudy')) {
-    validateText(manifestObject.caseStudy, 'koreanCaseStudyUrl', 'caseStudy');
-    validateText(manifestObject.caseStudy, 'englishCaseStudyUrl', 'caseStudy');
-    validateText(manifestObject.caseStudy, 'architectureDiagramUrl', 'caseStudy');
-    validateText(manifestObject.caseStudy, 'realG2VideoUrl', 'caseStudy');
+    validateEvidenceLink(manifestObject.caseStudy, 'koreanCaseStudyUrl', 'caseStudy');
+    validateEvidenceLink(manifestObject.caseStudy, 'englishCaseStudyUrl', 'caseStudy');
+    validateEvidenceLink(manifestObject.caseStudy, 'architectureDiagramUrl', 'caseStudy', {
+      extensions: ARCHITECTURE_EXTENSIONS,
+    });
+    validateEvidenceLink(manifestObject.caseStudy, 'realG2VideoUrl', 'caseStudy', {
+      extensions: VIDEO_EXTENSIONS,
+    });
     validateBooleanTrue(manifestObject.caseStudy, 'readmeLinksUpdated', 'caseStudy');
   }
 }
