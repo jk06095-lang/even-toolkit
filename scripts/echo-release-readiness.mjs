@@ -1,0 +1,242 @@
+#!/usr/bin/env node
+import { existsSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+
+const repoRoot = process.cwd();
+const checks = [];
+
+function addCheck(name, status, detail, issue = '') {
+  checks.push({ name, status, detail, issue });
+}
+
+function commandForNpm(args) {
+  if (process.platform === 'win32') {
+    return {
+      command: 'cmd.exe',
+      args: ['/d', '/s', '/c', 'npm', ...args],
+    };
+  }
+
+  return { command: 'npm', args };
+}
+
+function runNpm(args, options = {}) {
+  return new Promise((resolve) => {
+    const invocation = commandForNpm(args);
+    const child = spawn(invocation.command, invocation.args, {
+      cwd: repoRoot,
+      shell: false,
+      env: { ...process.env, ...options.env },
+    });
+
+    let output = '';
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.on('error', (error) => {
+      resolve({ code: 1, output: error.message });
+    });
+    child.on('exit', (code) => {
+      resolve({ code: code ?? 1, output });
+    });
+  });
+}
+
+function readJson(filePath) {
+  return JSON.parse(readFileSync(filePath, 'utf8'));
+}
+
+function hasFinalReadmeLinks(readmeText) {
+  const requiredMarkers = [
+    'project-echo-case-study-ko',
+    'project-echo-case-study-en',
+    'project-echo-real-g2-video',
+  ];
+  return requiredMarkers.every((marker) => readmeText.includes(marker));
+}
+
+async function validateFinalManifest({
+  label,
+  filePath,
+  npmScript,
+  issue,
+  missingDetail,
+}) {
+  const absolutePath = path.resolve(repoRoot, filePath);
+  if (!existsSync(absolutePath)) {
+    addCheck(label, 'blocked', missingDetail, issue);
+    return false;
+  }
+
+  const result = await runNpm(['run', npmScript, '--', filePath]);
+  if (result.code !== 0) {
+    addCheck(label, 'blocked', firstUsefulLine(result.output), issue);
+    return false;
+  }
+
+  addCheck(label, 'passed', `${filePath} passed ${npmScript}`, issue);
+  return true;
+}
+
+async function checkProxySmoke() {
+  const baseUrl = process.env.ECHO_PROXY_BASE_URL || '';
+  const allowedOrigin = process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
+
+  if (!baseUrl || !allowedOrigin) {
+    addCheck(
+      'production proxy smoke',
+      'blocked',
+      'Set ECHO_PROXY_BASE_URL and ECHO_PROXY_SMOKE_ORIGIN, then run readiness again.',
+      '#1',
+    );
+    return false;
+  }
+
+  const result = await runNpm([
+    '--prefix',
+    'echo-api-proxy',
+    'run',
+    'smoke:deploy',
+    '--',
+    '--base-url',
+    baseUrl,
+    '--allowed-origin',
+    allowedOrigin,
+  ]);
+
+  if (result.code !== 0) {
+    addCheck('production proxy smoke', 'blocked', firstUsefulLine(result.output), '#1');
+    return false;
+  }
+
+  addCheck('production proxy smoke', 'passed', `smoke:deploy passed for ${baseUrl}`, '#1');
+  return true;
+}
+
+function checkReadmeLinks() {
+  const readmePath = path.resolve(repoRoot, 'README.md');
+  const readmeText = readFileSync(readmePath, 'utf8');
+
+  if (!hasFinalReadmeLinks(readmeText)) {
+    addCheck(
+      'README portfolio links',
+      'blocked',
+      'Missing final case-study/video link markers: project-echo-case-study-ko, project-echo-case-study-en, project-echo-real-g2-video.',
+      '#10',
+    );
+    return false;
+  }
+
+  addCheck('README portfolio links', 'passed', 'README contains final case-study and real G2 video link markers.', '#10');
+  return true;
+}
+
+function checkKeyRotationEvidence() {
+  const evidencePath = path.resolve(repoRoot, 'docs/key-rotation-evidence.md');
+  if (!existsSync(evidencePath)) {
+    addCheck(
+      'provider key rotation evidence',
+      'blocked',
+      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, and production log review notes.',
+      '#1',
+    );
+    return false;
+  }
+
+  const text = readFileSync(evidencePath, 'utf8');
+  const required = ['rotation date', 'rotated provider keys', 'production log review'];
+  const missing = required.filter((needle) => !text.toLowerCase().includes(needle));
+  if (missing.length > 0) {
+    addCheck('provider key rotation evidence', 'blocked', `Missing sections: ${missing.join(', ')}`, '#1');
+    return false;
+  }
+
+  const unfinishedFields = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^-\s+[^:]+:\s*$/.test(line))
+    .map((line) => line.replace(/^-\s+/, '').replace(/:\s*$/, ''));
+
+  if (unfinishedFields.length > 0) {
+    const preview = unfinishedFields.slice(0, 5).join(', ');
+    const suffix = unfinishedFields.length > 5 ? `, and ${unfinishedFields.length - 5} more` : '';
+    addCheck('provider key rotation evidence', 'blocked', `Unfilled evidence fields: ${preview}${suffix}`, '#1');
+    return false;
+  }
+
+  addCheck('provider key rotation evidence', 'passed', 'docs/key-rotation-evidence.md has required rotation evidence sections.', '#1');
+  return true;
+}
+
+function checkManifestSummaries() {
+  const pilotPath = path.resolve(repoRoot, 'docs/project-echo-pilot-evidence.completed.json');
+  if (!existsSync(pilotPath)) return false;
+
+  try {
+    const pilot = readJson(pilotPath);
+    if (pilot?.caseStudy?.readmeLinksUpdated !== true) {
+      addCheck('pilot README link flag', 'blocked', 'Completed pilot manifest must set caseStudy.readmeLinksUpdated=true.', '#10');
+      return false;
+    }
+    addCheck('pilot README link flag', 'passed', 'Completed pilot manifest marks README links updated.', '#10');
+    return true;
+  } catch (error) {
+    addCheck('pilot README link flag', 'blocked', `Could not read completed pilot manifest: ${error.message}`, '#10');
+    return false;
+  }
+}
+
+function firstUsefulLine(output) {
+  const lines = output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith('> '));
+  return lines[0] || 'command failed';
+}
+
+function printReport() {
+  console.info('# Project ECHO Release Readiness');
+  console.info('');
+  for (const check of checks) {
+    const marker = check.status === 'passed' ? 'PASS' : 'BLOCKED';
+    const issue = check.issue ? ` ${check.issue}` : '';
+    console.info(`- ${marker}${issue}: ${check.name} - ${check.detail}`);
+  }
+  console.info('');
+}
+
+await validateFinalManifest({
+  label: 'completed pilot evidence manifest',
+  filePath: 'docs/project-echo-pilot-evidence.completed.json',
+  npmScript: 'validate:pilot-evidence',
+  issue: '#5/#10',
+  missingDetail: 'Missing docs/project-echo-pilot-evidence.completed.json with 5-user real G2 pilot, VAD environment metrics, case-study links, and real G2 video evidence.',
+});
+
+await validateFinalManifest({
+  label: 'completed hardware QA manifest',
+  filePath: 'docs/project-echo-hardware-qa.completed.json',
+  npmScript: 'validate:hardware-qa',
+  issue: '#2/#3/#4/#6',
+  missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with physical G2 lifecycle, HUD, Assist, and delayed-proxy evidence.',
+});
+
+checkManifestSummaries();
+await checkProxySmoke();
+checkKeyRotationEvidence();
+checkReadmeLinks();
+
+printReport();
+
+const blocked = checks.filter((check) => check.status !== 'passed');
+if (blocked.length > 0) {
+  console.error(`[readiness] ${blocked.length} blocker(s) remain`);
+  process.exit(1);
+}
+
+console.info('[readiness] Project ECHO release evidence is complete');

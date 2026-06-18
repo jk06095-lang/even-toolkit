@@ -390,6 +390,7 @@
     "validate:hardware-template": "node scripts/validate-hardware-qa.mjs docs/project-echo-hardware-qa.template.json --allow-draft",
     "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
+    "readiness:echo": "node scripts/echo-release-readiness.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prepublishOnly": "npm run build"
   },

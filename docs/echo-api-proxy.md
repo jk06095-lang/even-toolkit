@@ -66,7 +66,8 @@ Manifest:
 8. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
    provider hostnames, SDK imports, and development IPs.
 9. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
-   artifact.
+   artifact. Copy `docs/key-rotation-evidence.template.md` to
+   `docs/key-rotation-evidence.md` and record the rotation evidence there.
 10. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 

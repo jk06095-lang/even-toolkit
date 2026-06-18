@@ -33,6 +33,13 @@ and final hardware QA manifests should pass
 before README portfolio links are updated. A ready-to-copy GitHub Actions workflow template is available at
 [docs/github-actions-verify.yml](./docs/github-actions-verify.yml).
 
+Run `npm run readiness:echo` when preparing to close the remaining Project ECHO
+issues. It intentionally fails until the completed pilot manifest, completed
+hardware QA manifest, deployed proxy smoke check, key-rotation evidence, and
+final README case-study/video links are all present. Use
+[docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
+as the key-rotation evidence template.
+
 ## Built with
 
 - Even Hub SDK
