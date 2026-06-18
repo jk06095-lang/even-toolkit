@@ -305,7 +305,7 @@ export class HUDController {
     await this.showText(lines.join('\n'));
   }
 
-  // ── Phase 2: Combat ──
+  // ── Phase 2: Live Practice ──
   
   private _combatInitialized = false;
   private _combatHudState: CombatHUDState = 'READY';
@@ -422,7 +422,7 @@ export class HUDController {
   async showPaused(): Promise<void> {
     await this.setCombatHudState('PAUSED');
   }
-  // ── Phase 3: Debrief ──
+  // ── Phase 3: Review ──
 
   async showDebrief(_status: string): Promise<void> {
     await this.enterStandby();
