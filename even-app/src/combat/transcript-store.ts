@@ -72,6 +72,23 @@ export interface SessionEventAnalytics {
   hintMissedCount: number;
   hintSimplifiedCount: number;
   rawTranscriptSaved: boolean;
+  audioSource?: string;
+  avgSilenceDurationMs?: number;
+  selfResponseRate?: number;
+  cueLatencyCount?: number;
+  cueLatencyP50Ms?: number | null;
+  cueLatencyP95Ms?: number | null;
+  cueLatencyMaxMs?: number | null;
+  manualCueRequestCount?: number;
+  autoCueTriggerCount?: number;
+  cueDismissedCount?: number;
+  falseTriggerCount?: number;
+  cueUsedCount?: number;
+  autoAssistPaused?: boolean;
+  vadSpeechThreshold?: number;
+  vadNoiseFloorRms?: number;
+  vadSpeechFloorRms?: number;
+  vadCalibratedAt?: number;
 }
 
 export interface TranscriptStoreOptions {
@@ -79,6 +96,23 @@ export interface TranscriptStoreOptions {
   retentionPolicy?: TranscriptRetentionPolicy;
   now?: () => number;
 }
+
+export type SessionEventTelemetry = Omit<
+  Partial<SessionEventAnalytics>,
+  | 'sessionId'
+  | 'startTime'
+  | 'endTime'
+  | 'week'
+  | 'topic'
+  | 'category'
+  | 'speechCount'
+  | 'hintCount'
+  | 'silenceCount'
+  | 'hintUsedCount'
+  | 'hintMissedCount'
+  | 'hintSimplifiedCount'
+  | 'rawTranscriptSaved'
+>;
 
 export interface UserDataExport {
   exportVersion: '1.0.0';
@@ -99,6 +133,7 @@ export class TranscriptStore {
   private readonly saveRawTranscript: boolean;
   private readonly retentionPolicy: TranscriptRetentionPolicy;
   private readonly now: () => number;
+  private eventTelemetry: SessionEventTelemetry = {};
 
   constructor(
     week: number,
@@ -202,6 +237,13 @@ export class TranscriptStore {
     this.flush();
   }
 
+  setSessionEventTelemetry(telemetry: SessionEventTelemetry): void {
+    this.eventTelemetry = {
+      ...this.eventTelemetry,
+      ...telemetry,
+    };
+  }
+
   /**
    * Finalize the session. Returns a raw transcript only when persistence was
    * explicitly enabled and the selected retention policy keeps finalized data.
@@ -264,6 +306,7 @@ export class TranscriptStore {
     const analytics = buildEventAnalytics(
       this.session,
       this.saveRawTranscript && isPersistentTranscriptRetention(this.retentionPolicy),
+      this.eventTelemetry,
     );
     const all = TranscriptStore.loadAnalytics();
     all.push(analytics);
@@ -430,6 +473,7 @@ export class TranscriptStore {
 function buildEventAnalytics(
   session: SessionTranscript,
   rawTranscriptSaved: boolean,
+  telemetry: SessionEventTelemetry = {},
 ): SessionEventAnalytics {
   return {
     sessionId: session.sessionId,
@@ -445,5 +489,6 @@ function buildEventAnalytics(
     hintMissedCount: session.entries.filter((e) => e.type === 'hint_missed').length,
     hintSimplifiedCount: session.entries.filter((e) => e.type === 'hint_simplified').length,
     rawTranscriptSaved,
+    ...telemetry,
   };
 }

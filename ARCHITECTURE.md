@@ -84,6 +84,12 @@ Cue latency records include:
 Latency records are stored as metadata only. They do not include raw transcript
 text, audio payloads, or cue request bodies.
 
+At session end, `TranscriptStore` persists privacy-safe `eventAnalytics` for
+real-device QA exports: audio source, cue latency p50/p95/max, assist counts,
+average silence, self-response rate, and calibration threshold/floors. These
+analytics remain available through `Export my data` even when raw transcript
+saving is off.
+
 ## SessionEngine dependency injection
 
 `SessionEngine` owns the core session state machine, but hardware and external

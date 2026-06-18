@@ -43,6 +43,11 @@ Do not present ECHO as a finished portfolio flagship until the real-device evide
 | Reconnect count | G2 reconnects required during a run | Per test run |
 | Battery consumption | Battery delta over the test block | Per device |
 
+Privacy-safe session telemetry is available in the Review tab through
+`Export my data` -> `eventAnalytics`. It includes audio source, cue latency
+p50/p95/max, assist counts, average silence, self-response rate, and VAD
+calibration threshold/floors without raw utterance, cue text, or audio payloads.
+
 ## UX Metrics
 
 | Metric | Definition | Target capture |

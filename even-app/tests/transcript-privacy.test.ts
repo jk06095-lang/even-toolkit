@@ -68,6 +68,56 @@ describe('transcript privacy controls', () => {
     expect(JSON.stringify(analytics)).not.toContain('try this phrase');
   });
 
+  it('exports privacy-safe QA telemetry without raw transcript text', () => {
+    const store = new TranscriptStore(1, 'QA Topic', 'general', {
+      now: () => now,
+    });
+
+    store.addSpeech('sensitive utterance', 'live_final');
+    store.addHint('sensitive cue text', 'gemini_eval');
+    store.setSessionEventTelemetry({
+      audioSource: 'bridge',
+      avgSilenceDurationMs: 2400,
+      selfResponseRate: 50,
+      cueLatencyCount: 2,
+      cueLatencyP50Ms: 180,
+      cueLatencyP95Ms: 420,
+      cueLatencyMaxMs: 420,
+      manualCueRequestCount: 1,
+      autoCueTriggerCount: 1,
+      cueDismissedCount: 0,
+      falseTriggerCount: 0,
+      cueUsedCount: 1,
+      autoAssistPaused: false,
+      vadSpeechThreshold: 0.032,
+      vadNoiseFloorRms: 0.009,
+      vadSpeechFloorRms: 0.061,
+      vadCalibratedAt: now - 5_000,
+    });
+    store.finalize();
+
+    const exportData = TranscriptStore.exportUserData();
+    expect(exportData.rawTranscripts).toEqual([]);
+    expect(exportData.eventAnalytics[0]).toMatchObject({
+      audioSource: 'bridge',
+      avgSilenceDurationMs: 2400,
+      selfResponseRate: 50,
+      cueLatencyCount: 2,
+      cueLatencyP50Ms: 180,
+      cueLatencyP95Ms: 420,
+      cueLatencyMaxMs: 420,
+      manualCueRequestCount: 1,
+      autoCueTriggerCount: 1,
+      cueUsedCount: 1,
+      vadSpeechThreshold: 0.032,
+      vadNoiseFloorRms: 0.009,
+      vadSpeechFloorRms: 0.061,
+      rawTranscriptSaved: false,
+    });
+    expect(JSON.stringify(exportData)).not.toContain('sensitive utterance');
+    expect(JSON.stringify(exportData)).not.toContain('sensitive cue text');
+  });
+
   it('persists raw transcript text only after save opt-in', () => {
     const store = new TranscriptStore(2, 'Saved Topic', 'business', {
       saveRawTranscript: true,

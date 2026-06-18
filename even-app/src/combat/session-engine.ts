@@ -480,6 +480,34 @@ export class SessionEngine {
     );
   }
 
+  private summarizeCueLatency(): {
+    count: number;
+    p50: number | null;
+    p95: number | null;
+    max: number | null;
+  } {
+    const values = this.cueLatencyRecords
+      .map((record) => record.end_to_end_latency_ms)
+      .filter((value): value is number => Number.isFinite(value))
+      .sort((a, b) => a - b);
+
+    if (values.length === 0) {
+      return { count: 0, p50: null, p95: null, max: null };
+    }
+
+    const nearestRank = (percentile: number) => {
+      const index = Math.max(0, Math.ceil(percentile * values.length) - 1);
+      return values[Math.min(index, values.length - 1)]!;
+    };
+
+    return {
+      count: values.length,
+      p50: nearestRank(0.5),
+      p95: nearestRank(0.95),
+      max: values[values.length - 1]!,
+    };
+  }
+
   /**
    * Configure the session topic and category before starting.
    */
@@ -917,6 +945,8 @@ export class SessionEngine {
       this.speechRecognizer = null;
     }
 
+    const audioSource = this.vad?.audioSource ?? this.preferredAudioSource;
+
     if (this.vad) {
       await this.vad.stop();
       this.vad = null;
@@ -950,6 +980,32 @@ export class SessionEngine {
       });
     }
 
+    const avgSilenceDurationMs = Math.round(avgSilence);
+    const selfResponseRate = this.speechCount > 0
+      ? Math.round((this.selfResponses / this.speechCount) * 100)
+      : 0;
+    const cueLatencySummary = this.summarizeCueLatency();
+
+    this.transcriptStore?.setSessionEventTelemetry({
+      audioSource,
+      avgSilenceDurationMs,
+      selfResponseRate,
+      cueLatencyCount: cueLatencySummary.count,
+      cueLatencyP50Ms: cueLatencySummary.p50,
+      cueLatencyP95Ms: cueLatencySummary.p95,
+      cueLatencyMaxMs: cueLatencySummary.max,
+      manualCueRequestCount: this.assistMetrics.manual_request_count,
+      autoCueTriggerCount: this.assistMetrics.auto_trigger_count,
+      cueDismissedCount: this.assistMetrics.cue_dismissed_count,
+      falseTriggerCount: this.assistMetrics.false_trigger_count,
+      cueUsedCount: this.assistMetrics.cue_used_count,
+      autoAssistPaused: this.assistMetrics.auto_assist_paused,
+      vadSpeechThreshold: this.vadCalibration?.speechThreshold,
+      vadNoiseFloorRms: this.vadCalibration?.noiseFloorRms,
+      vadSpeechFloorRms: this.vadCalibration?.speechFloorRms,
+      vadCalibratedAt: this.vadCalibration?.calibratedAt,
+    });
+
     // Finalize transcript cache
     const transcript = this.transcriptStore?.finalize() ?? undefined;
     this.transcriptStore = null;
@@ -962,10 +1018,8 @@ export class SessionEngine {
       totalHints: this.hintCount,
       totalSpeechEvents: this.speechCount,
       totalSilenceEvents: this.silenceCount,
-      avgSilenceDurationMs: Math.round(avgSilence),
-      selfResponseRate: this.speechCount > 0
-        ? Math.round((this.selfResponses / this.speechCount) * 100)
-        : 0,
+      avgSilenceDurationMs,
+      selfResponseRate,
       hintHistory: this.hintHistory,
       silenceDurations: this.silenceDurations,
       assistMetrics: { ...this.assistMetrics },

@@ -70,6 +70,7 @@ Still requires real G2 validation:
 - Outdoor stationary wind: record threshold, false starts, and missed speech.
 - Confirm higher noise-floor environments produce a higher BridgeVAD threshold than quiet room.
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
+- After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
 
 ## Delayed proxy QA
 
@@ -96,6 +97,7 @@ Still requires real G2 validation:
 - With `Cloud processing` off, start a session and confirm no ECHO API proxy cue, transcription, grammar, or session-analysis requests are sent.
 - With `Save transcripts` off, complete a session and confirm `echo_transcripts` and `echo_transcript_buffer` do not contain raw utterance text.
 - Confirm `echo_session_events` contains only counts/flags and no utterance, hint, audio, or request body text.
+- Confirm `Export my data` includes privacy-safe QA telemetry such as cue latency p50/p95, assist counts, audio source, and VAD calibration fields without raw utterance or cue text when transcript saving is off.
 - Enable `Save transcripts`, complete a session, and confirm a saved session appears in Review.
 - Test each retention option: `Delete after session`, `1 day`, `7 days`, and `Until deleted`.
 - Confirm `Delete current session`, per-session `Delete`, `Delete all transcripts`, per-session `Export`, and `Export my data` work from Review.
