@@ -8,6 +8,8 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "check": "node --check server.mjs"
+    "check": "node --check server.mjs",
+    "test": "node --test server.test.mjs",
+    "verify": "npm run check && npm run test"
   }
 }

@@ -51,13 +51,18 @@ Manifest:
 3. Set `ECHO_PROXY_ALLOWED_ORIGINS` to the final ECHO app origins.
 4. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
-5. Build and package the app with `cd even-app && npm run verify`.
-6. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
+5. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
+6. Build and package the app with `cd even-app && npm run verify`.
+7. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
    provider hostnames, SDK imports, and development IPs.
-7. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+8. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact.
-8. Confirm proxy logs do not contain request bodies, raw transcript text, or
+9. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
+
+`npm run verify` starts the proxy with no provider key and checks `/healthz`,
+allowed CORS behavior, disallowed-origin rejection, and safe `proxy_not_configured`
+errors that do not echo learner text.
 
 ## Safe Failure Behavior
 
