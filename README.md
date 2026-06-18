@@ -23,6 +23,10 @@ Real-device validation is tracked in [RESEARCH.md](./RESEARCH.md) and
 completed G2 case study and video evidence only after the pilot scorecard is
 filled in.
 
+Run `npm run verify:all` before release or hardware QA. It verifies the root
+TypeScript build, ECHO API proxy smoke tests, and ECHO app test/build/package
+gate.
+
 ## Built with
 
 - Even Hub SDK

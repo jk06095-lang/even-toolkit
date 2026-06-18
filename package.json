@@ -386,6 +386,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "verify:all": "node scripts/verify-all.mjs",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
