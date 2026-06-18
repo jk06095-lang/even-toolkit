@@ -87,7 +87,9 @@ Still requires real G2 validation:
 
 ## Delayed proxy QA
 
-- Configure a delayed proxy response for cue generation.
+- Start a local or staging ECHO API proxy with `ECHO_PROXY_QA_DELAY_MS=5000`
+  and confirm `/healthz` reports `qaDelayMs: 5000`.
+- Point the app build/session at that delayed proxy.
 - Start a session, trigger a cue request, then select `END PRACTICE` before the proxy returns.
 - Confirm the delayed response does not update the G2 HUD or phone cue card after the session ends.
 - Repeat the same delayed response test with Pause and Exit ECHO.

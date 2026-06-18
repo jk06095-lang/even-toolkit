@@ -30,6 +30,13 @@ Recommended:
 - `GEMINI_MODEL=gemini-1.5-flash`
 - `ECHO_PROXY_PROVIDER_TIMEOUT_MS=20000`
 - `ECHO_PROXY_MAX_BODY_BYTES=6000000`
+- `ECHO_PROXY_QA_DELAY_MS=0`
+
+QA only:
+
+- Set `ECHO_PROXY_QA_DELAY_MS=5000` on a local or staging proxy to delay POST
+  responses while testing late-response guards. Leave it unset or `0` for
+  production.
 
 Client build:
 
@@ -60,8 +67,9 @@ Manifest:
    ```
 
    The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
-   CORS, blocked untrusted origins, and safe non-echoing error responses. Use
-   `--allow-http --allow-unconfigured` only for local dry-runs.
+   CORS, blocked untrusted origins, `qaDelayMs: 0`, and safe non-echoing error
+   responses. Use `--allow-http --allow-unconfigured --allow-qa-delay` only for
+   local dry-runs.
 7. Build and package the app with `cd even-app && npm run verify`.
 8. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
    provider hostnames, SDK imports, and development IPs.
@@ -75,7 +83,10 @@ Manifest:
 allowed CORS behavior, disallowed-origin rejection, and safe `proxy_not_configured`
 errors that do not echo learner text. `npm run smoke:deploy` performs the
 corresponding remote deployment checks and expects the deployed server to report
-`configured: true` unless `--allow-unconfigured` is passed for local testing.
+`configured: true` and `qaDelayMs: 0` unless local-only override flags are
+passed for local testing.
+For delayed-response QA, start a local or staging proxy with
+`ECHO_PROXY_QA_DELAY_MS=5000`; `/healthz` reports the active `qaDelayMs`.
 
 ## Safe Failure Behavior
 

@@ -7,6 +7,7 @@ import { after, before, test } from 'node:test';
 const port = 18_700 + Math.floor(Math.random() * 500);
 const allowedOrigin = 'https://echo-client.example.test';
 const baseUrl = `http://127.0.0.1:${port}`;
+const qaDelayMs = 120;
 
 let child;
 
@@ -17,6 +18,7 @@ before(async () => {
       ...process.env,
       PORT: String(port),
       ECHO_PROXY_ALLOWED_ORIGINS: allowedOrigin,
+      ECHO_PROXY_QA_DELAY_MS: String(qaDelayMs),
       GEMINI_API_KEY: '',
       GOOGLE_GENERATIVE_AI_API_KEY: '',
     },
@@ -60,11 +62,13 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(response.headers.get('access-control-allow-origin'), allowedOrigin);
   assert.equal(body.ok, true);
   assert.equal(body.configured, false);
+  assert.equal(body.qaDelayMs, qaDelayMs);
   assert.equal(typeof body.model, 'string');
 });
 
 test('missing provider key fails safely without echoing request content', async () => {
   const sensitiveText = 'raw learner sentence must not come back';
+  const startedAt = Date.now();
   const response = await fetch(`${baseUrl}/v1/cue`, {
     method: 'POST',
     headers: {
@@ -77,9 +81,11 @@ test('missing provider key fails safely without echoing request content', async 
     }),
   });
   const text = await response.text();
+  const elapsedMs = Date.now() - startedAt;
   const body = JSON.parse(text);
 
   assert.equal(response.status, 503);
+  assert.ok(elapsedMs >= qaDelayMs, `expected delayed QA response, got ${elapsedMs}ms`);
   assert.equal(body.error.code, 'proxy_not_configured');
   assert.match(body.error.message, /not configured/i);
   assert.equal(text.includes(sensitiveText), false);

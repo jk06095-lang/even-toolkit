@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 const PORT = readNumberEnv('PORT', readNumberEnv('ECHO_PROXY_PORT', 8787));
 const MAX_BODY_BYTES = readNumberEnv('ECHO_PROXY_MAX_BODY_BYTES', 6_000_000);
 const PROVIDER_TIMEOUT_MS = readNumberEnv('ECHO_PROXY_PROVIDER_TIMEOUT_MS', 20_000);
+const QA_DELAY_MS = Math.min(readNumberEnv('ECHO_PROXY_QA_DELAY_MS', 0), 60_000);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || '';
 const ALLOWED_ORIGINS = parseOrigins(
@@ -38,12 +39,17 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         configured: Boolean(GEMINI_API_KEY),
         model: GEMINI_MODEL,
+        qaDelayMs: QA_DELAY_MS,
       });
       return;
     }
 
     if (req.method !== 'POST') {
       throw new HttpError(405, 'method_not_allowed', 'Use POST for ECHO API endpoints.');
+    }
+
+    if (QA_DELAY_MS > 0) {
+      await delay(QA_DELAY_MS);
     }
 
     if (!GEMINI_API_KEY) {
@@ -349,6 +355,10 @@ function parseOrigins(value) {
 function readNumberEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] || '', 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseJsonish(value) {

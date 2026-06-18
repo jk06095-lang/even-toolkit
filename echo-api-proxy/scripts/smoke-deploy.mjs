@@ -11,6 +11,7 @@ const disallowedOrigin =
   'https://blocked.project-echo.invalid';
 const allowHttp = args.includes('--allow-http');
 const allowUnconfigured = args.includes('--allow-unconfigured');
+const allowQaDelay = args.includes('--allow-qa-delay');
 
 if (wantsHelp || !baseUrl || !allowedOrigin) {
   console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin
@@ -20,8 +21,8 @@ Environment alternatives:
   ECHO_PROXY_SMOKE_ORIGIN
   ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN
 
-Default release behavior requires HTTPS and /healthz configured=true.
-Use --allow-http and --allow-unconfigured only for local smoke testing.`);
+Default release behavior requires HTTPS, /healthz configured=true, and qaDelayMs=0.
+Use --allow-http, --allow-unconfigured, and --allow-qa-delay only for local smoke testing.`);
   process.exit(wantsHelp ? 0 : 1);
 }
 
@@ -104,10 +105,13 @@ async function checkHealthz() {
   if (!allowUnconfigured) {
     assertEqual(body?.configured, true, 'GET /healthz configured');
   }
+  if (!allowQaDelay) {
+    assertEqual(body?.qaDelayMs ?? 0, 0, 'GET /healthz qaDelayMs');
+  }
   assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'GET /healthz CORS origin');
   assertIncludes(header(response, 'cache-control'), 'no-store', 'GET /healthz cache-control');
 
-  console.info(`[proxy-smoke] /healthz ok configured=${body?.configured}`);
+  console.info(`[proxy-smoke] /healthz ok configured=${body?.configured} qaDelayMs=${body?.qaDelayMs ?? 0}`);
 }
 
 async function checkOptions() {
