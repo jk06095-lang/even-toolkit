@@ -66,16 +66,17 @@ draft scaffold; it is shape-checked during `npm run verify:all` with
 `npm run validate:pilot-template`.
 
 For final evidence, copy the template to a completed manifest, fill all five
-participants, A/B/C runs, metrics, artifact references, and case-study links,
-then run:
+participants, A/B/C runs, VAD calibration environments, metrics, artifact
+references, and case-study links, then run:
 
 ```bash
 npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json
 ```
 
 The final command intentionally fails if the manifest still has `TBD`, missing
-numeric metrics, fewer than 5 participants, missing A/B/C runs, missing real G2
-video evidence, or README links not marked as updated.
+numeric metrics, fewer than 5 participants, missing A/B/C runs, missing VAD
+environment results, missing real G2 video evidence, or README links not marked
+as updated.
 
 ## UX Metrics
 

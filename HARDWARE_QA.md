@@ -72,6 +72,9 @@ Still requires real G2 validation:
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
 - After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
 - Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json`.
+- Record quiet room, cafe background, air-conditioner noise, and outdoor wind
+  results under `vadCalibration.environments` in
+  [docs/project-echo-pilot-evidence.template.json](./docs/project-echo-pilot-evidence.template.json).
 
 ## Delayed proxy QA
 

@@ -24,8 +24,8 @@ completed G2 case study and video evidence only after the pilot scorecard is
 filled in.
 
 Run `npm run verify:all` before release or hardware QA. It verifies the root
-TypeScript build, the Project ECHO pilot evidence template, ECHO API proxy smoke
-tests, and ECHO app test/build/package gate. Final pilot manifests should pass
+TypeScript build, the Project ECHO pilot/VAD evidence template, ECHO API proxy
+smoke tests, and ECHO app test/build/package gate. Final pilot manifests should pass
 `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json`
 before README portfolio links are updated. A ready-to-copy GitHub Actions workflow template is available at
 [docs/github-actions-verify.yml](./docs/github-actions-verify.yml).

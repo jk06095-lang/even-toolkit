@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const REQUIRED_CONDITIONS = ['A', 'B', 'C'];
+const REQUIRED_VAD_ENVIRONMENTS = ['quiet_room', 'cafe_background', 'air_conditioner', 'outdoor_wind'];
 
 const SYSTEM_METRICS = [
   { key: 'g2MicSuccessRate', min: 0, max: 1 },
@@ -26,6 +27,14 @@ const UX_METRICS = [
   { key: 'interruptionRating', min: 1, max: 7 },
   { key: 'trustRating', min: 1, max: 7 },
   { key: 'privacyConcernRating', min: 1, max: 7 },
+];
+
+const VAD_METRICS = [
+  { key: 'vadSpeechThreshold', min: 0 },
+  { key: 'vadNoiseFloorRms', min: 0 },
+  { key: 'vadSpeechFloorRms', min: 0 },
+  { key: 'falseStarts', min: 0 },
+  { key: 'missedSpeechEvents', min: 0 },
 ];
 
 const PLACEHOLDER_PATTERNS = [
@@ -258,6 +267,43 @@ function validateAggregate(manifestObject) {
   }
 }
 
+function validateVadCalibration(manifestObject) {
+  if (!validateObject(manifestObject.vadCalibration, 'vadCalibration')) {
+    return;
+  }
+
+  if (!Array.isArray(manifestObject.vadCalibration.environments)) {
+    addError('vadCalibration.environments', 'expected an array');
+    return;
+  }
+
+  const environmentNames = manifestObject.vadCalibration.environments.map(
+    (environment) => environment && environment.name,
+  );
+
+  for (const environmentName of REQUIRED_VAD_ENVIRONMENTS) {
+    if (!environmentNames.includes(environmentName)) {
+      addError('vadCalibration.environments', `missing environment ${environmentName}`);
+    }
+  }
+
+  manifestObject.vadCalibration.environments.forEach((environment, index) => {
+    const pointer = `vadCalibration.environments[${index}]`;
+    if (!validateObject(environment, pointer)) {
+      return;
+    }
+
+    validateText(environment, 'name', pointer);
+    if (typeof environment.name === 'string' && !REQUIRED_VAD_ENVIRONMENTS.includes(environment.name)) {
+      addError(`${pointer}.name`, `must be one of ${REQUIRED_VAD_ENVIRONMENTS.join(', ')}`);
+    }
+
+    validateMetricGroup(environment.metrics, VAD_METRICS, `${pointer}.metrics`);
+    validateText(environment, 'qaExportPath', pointer);
+    validateText(environment, 'notes', pointer);
+  });
+}
+
 function validateManifest(manifestObject) {
   if (!validateObject(manifestObject, 'manifest')) {
     return;
@@ -297,6 +343,7 @@ function validateManifest(manifestObject) {
     });
   }
 
+  validateVadCalibration(manifestObject);
   validateAggregate(manifestObject);
 
   if (validateObject(manifestObject.caseStudy, 'caseStudy')) {

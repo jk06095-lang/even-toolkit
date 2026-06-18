@@ -515,6 +515,58 @@
       ]
     }
   ],
+  "vadCalibration": {
+    "environments": [
+      {
+        "name": "quiet_room",
+        "metrics": {
+          "vadSpeechThreshold": null,
+          "vadNoiseFloorRms": null,
+          "vadSpeechFloorRms": null,
+          "falseStarts": null,
+          "missedSpeechEvents": null
+        },
+        "qaExportPath": "TBD",
+        "notes": "TBD"
+      },
+      {
+        "name": "cafe_background",
+        "metrics": {
+          "vadSpeechThreshold": null,
+          "vadNoiseFloorRms": null,
+          "vadSpeechFloorRms": null,
+          "falseStarts": null,
+          "missedSpeechEvents": null
+        },
+        "qaExportPath": "TBD",
+        "notes": "TBD"
+      },
+      {
+        "name": "air_conditioner",
+        "metrics": {
+          "vadSpeechThreshold": null,
+          "vadNoiseFloorRms": null,
+          "vadSpeechFloorRms": null,
+          "falseStarts": null,
+          "missedSpeechEvents": null
+        },
+        "qaExportPath": "TBD",
+        "notes": "TBD"
+      },
+      {
+        "name": "outdoor_wind",
+        "metrics": {
+          "vadSpeechThreshold": null,
+          "vadNoiseFloorRms": null,
+          "vadSpeechFloorRms": null,
+          "falseStarts": null,
+          "missedSpeechEvents": null
+        },
+        "qaExportPath": "TBD",
+        "notes": "TBD"
+      }
+    ]
+  },
   "aggregate": {
     "conditions": {
       "A": {
