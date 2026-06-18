@@ -64,6 +64,9 @@ lazy-load change to the session/audio lifecycle and should be handled as a
 separate performance task after device QA. Follow-up tracking: GitHub issue
 #12.
 
+Use `cd even-app && npm run bundle:report` after a production build to capture
+before/after chunk evidence for #12.
+
 ## Verification
 
 - Root `npm audit --json`: 0 vulnerabilities.
