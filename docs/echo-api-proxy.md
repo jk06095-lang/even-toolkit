@@ -52,17 +52,29 @@ Manifest:
 4. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
 5. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
-6. Build and package the app with `cd even-app && npm run verify`.
-7. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
+6. Smoke-test the deployed proxy without making a provider generation call:
+
+   ```bash
+   cd echo-api-proxy
+   npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin
+   ```
+
+   The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
+   CORS, blocked untrusted origins, and safe non-echoing error responses. Use
+   `--allow-http --allow-unconfigured` only for local dry-runs.
+7. Build and package the app with `cd even-app && npm run verify`.
+8. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
    provider hostnames, SDK imports, and development IPs.
-8. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+9. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact.
-9. Confirm proxy logs do not contain request bodies, raw transcript text, or
+10. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
 allowed CORS behavior, disallowed-origin rejection, and safe `proxy_not_configured`
-errors that do not echo learner text.
+errors that do not echo learner text. `npm run smoke:deploy` performs the
+corresponding remote deployment checks and expects the deployed server to report
+`configured: true` unless `--allow-unconfigured` is passed for local testing.
 
 ## Safe Failure Behavior
 

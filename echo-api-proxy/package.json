@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node --check server.mjs",
+    "check:smoke": "node --check scripts/smoke-deploy.mjs",
+    "smoke:deploy": "node scripts/smoke-deploy.mjs",
     "test": "node --test server.test.mjs",
-    "verify": "npm run check && npm run test"
+    "verify": "npm run check && npm run check:smoke && npm run test"
   }
 }
