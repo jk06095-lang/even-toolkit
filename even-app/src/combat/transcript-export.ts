@@ -136,6 +136,7 @@ function buildStage2(session: SessionTranscript): ExportStage2 {
 async function buildStage3(
   stage1: ExportStage1,
   stage2: ExportStage2,
+  allowCloudProcessing = true,
 ): Promise<ExportStage3> {
   // Fallback (no API or failure)
   const fallback: ExportStage3 = {
@@ -146,7 +147,7 @@ async function buildStage3(
     gem_instruction: `주제: ${stage1.topic}, Week ${stage1.week}. 발화 ${stage2.speech_count}회, 힌트 ${stage2.hint_count}회. 추가 분석이 필요합니다.`,
   };
 
-  if (!isEchoApiConfigured()) return fallback;
+  if (!allowCloudProcessing || !isEchoApiConfigured()) return fallback;
 
   try {
     const requestId = `${stage1.session_id}:session-analysis:${Date.now()}`;
@@ -186,10 +187,11 @@ async function buildStage3(
  */
 export async function generateExportJSON(
   session: SessionTranscript,
+  options: { allowCloudProcessing?: boolean } = {},
 ): Promise<SessionExportJSON> {
   const stage1 = buildStage1(session);
   const stage2 = buildStage2(session);
-  const stage3 = await buildStage3(stage1, stage2);
+  const stage3 = await buildStage3(stage1, stage2, options.allowCloudProcessing ?? true);
 
   // Attach scenario-specific Gem prompt if available
   // category field stores the scenario ID from topic-registry
@@ -212,8 +214,9 @@ export async function generateExportJSON(
  */
 export async function downloadExportJSON(
   session: SessionTranscript,
+  options: { allowCloudProcessing?: boolean } = {},
 ): Promise<void> {
-  const exportData = await generateExportJSON(session);
+  const exportData = await generateExportJSON(session, options);
   const jsonStr = JSON.stringify(exportData, null, 2);
   const blob = new Blob([jsonStr], { type: 'application/json' });
   const url = URL.createObjectURL(blob);

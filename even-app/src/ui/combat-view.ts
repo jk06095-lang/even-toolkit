@@ -23,6 +23,40 @@ export function renderCombatView(): string {
     <div class="phase-view" id="phase2-view">
       <div class="phase-indicator p2">● Active Training</div>
 
+      <div class="card" id="privacy-settings-card">
+        <div class="card-header">
+          <div class="icon" style="background: var(--color-accent-alpha); color: var(--color-accent)">PR</div>
+          <h3>Privacy Settings</h3>
+          <span class="badge badge-neutral" id="privacy-settings-badge">Review</span>
+        </div>
+
+        <div style="display: grid; gap: 10px; margin-top: var(--spacing-same);">
+          <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-text); font-size: 13px;">
+            <span>Use microphone</span>
+            <input type="checkbox" id="privacy-use-microphone" />
+          </label>
+          <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-text); font-size: 13px;">
+            <span>Cloud processing</span>
+            <input type="checkbox" id="privacy-cloud-processing" />
+          </label>
+          <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-text); font-size: 13px;">
+            <span>Save transcripts</span>
+            <input type="checkbox" id="privacy-save-transcripts" />
+          </label>
+          <label style="display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--color-text); font-size: 13px;">
+            <span>Retention</span>
+            <select id="privacy-retention" style="font-family: var(--font-display); font-size: 12px; padding: 6px 8px; border-radius: var(--radius); border: 1px solid var(--color-border); background: var(--color-surface-light); color: var(--color-text);">
+              <option value="immediate">Delete after session</option>
+              <option value="1d">1 day</option>
+              <option value="7d">7 days</option>
+              <option value="until_deleted">Until deleted</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="privacy-settings-status" class="text-detail" style="margin-top: var(--spacing-same); color: var(--color-text-muted);"></div>
+      </div>
+
       <!-- Mode Selector -->
       <div class="card" id="mode-selector-card">
         <div class="card-header">

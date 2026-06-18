@@ -27,6 +27,13 @@ import { TranscriptStore } from './combat/transcript-store';
 import { downloadExportJSON } from './combat/transcript-export';
 import { SCENARIOS, CATEGORY_META, getScenariosByCategory, getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from './combat/topic-registry';
 import { renderTopicSelector, renderScenarioGrid, fillTopicDetail } from './ui/topic-selector-view';
+import {
+  loadPrivacySettings,
+  savePrivacySettings,
+  RETENTION_LABELS,
+  type PrivacySettings,
+  type TranscriptRetentionPolicy,
+} from './privacy/settings';
 
 // ── Global State ──
 
@@ -44,6 +51,7 @@ let currentMode: 'general' | 'scenario' | null = null;
 let preferredAudioSource: 'bridge' | 'browser' = (localStorage.getItem('preferredAudioSource') as 'bridge' | 'browser') || 'bridge';
 let endingPracticePromise: Promise<void> | null = null;
 let selectedAssistMode: AssistMode = 'manual';
+let privacySettings: PrivacySettings = loadPrivacySettings();
 let latestAssistMetrics: AssistMetrics = {
   manual_request_count: 0,
   auto_trigger_count: 0,
@@ -362,7 +370,71 @@ function showCalibrationResult(cal: CalibrationResult): void {
 // Phase 2: Combat
 // ═══════════════════════════════════════════
 
+function bindPrivacyControls(): void {
+  privacySettings = loadPrivacySettings();
+
+  const mic = document.getElementById('privacy-use-microphone') as HTMLInputElement | null;
+  const cloud = document.getElementById('privacy-cloud-processing') as HTMLInputElement | null;
+  const save = document.getElementById('privacy-save-transcripts') as HTMLInputElement | null;
+  const retention = document.getElementById('privacy-retention') as HTMLSelectElement | null;
+
+  if (!mic || !cloud || !save || !retention) return;
+
+  mic.checked = privacySettings.useMicrophone;
+  cloud.checked = privacySettings.allowCloudProcessing;
+  save.checked = privacySettings.saveTranscripts;
+  retention.value = privacySettings.transcriptRetention;
+  retention.disabled = !save.checked;
+
+  const persist = () => {
+    privacySettings = savePrivacySettings({
+      ...privacySettings,
+      useMicrophone: mic.checked,
+      allowCloudProcessing: cloud.checked,
+      saveTranscripts: save.checked,
+      transcriptRetention: retention.value as TranscriptRetentionPolicy,
+    });
+    retention.disabled = !privacySettings.saveTranscripts;
+    if (!privacySettings.saveTranscripts) {
+      TranscriptStore.clearSessionBuffer();
+    }
+    TranscriptStore.applyRetention(privacySettings.transcriptRetention);
+    updatePrivacySettingsUI();
+  };
+
+  mic.addEventListener('change', persist);
+  cloud.addEventListener('change', persist);
+  save.addEventListener('change', persist);
+  retention.addEventListener('change', persist);
+
+  updatePrivacySettingsUI();
+}
+
+function updatePrivacySettingsUI(message?: string, tone: 'normal' | 'error' | 'success' = 'normal'): void {
+  const badge = document.getElementById('privacy-settings-badge');
+  const status = document.getElementById('privacy-settings-status');
+  if (badge) {
+    badge.textContent = privacySettings.useMicrophone ? 'Ready' : 'Mic off';
+    badge.className = privacySettings.useMicrophone ? 'badge badge-success' : 'badge badge-neutral';
+  }
+  if (status) {
+    const retentionLabel = RETENTION_LABELS[privacySettings.transcriptRetention];
+    status.textContent = message ?? [
+      privacySettings.useMicrophone ? 'Microphone enabled' : 'Microphone disabled',
+      privacySettings.allowCloudProcessing ? 'cloud on' : 'cloud off',
+      privacySettings.saveTranscripts ? `saving on (${retentionLabel})` : 'saving off',
+    ].join(' | ');
+    status.style.color = tone === 'error'
+      ? 'var(--color-negative)'
+      : tone === 'success'
+        ? 'var(--color-positive)'
+        : 'var(--color-text-muted)';
+  }
+}
+
 function bindCombatEvents(): void {
+  bindPrivacyControls();
+
   // Mode selection
   document.getElementById('btn-mode-general')?.addEventListener('click', () => {
     currentMode = 'general';
@@ -584,6 +656,12 @@ function selectWeek(week: number): void {
 }
 
 async function startSession(): Promise<void> {
+  privacySettings = loadPrivacySettings();
+  if (!privacySettings.useMicrophone) {
+    updatePrivacySettingsUI('Enable Use microphone before starting a Combat session.', 'error');
+    return;
+  }
+
   // Use selected scenario or fall back to general
   const scenario = selectedScenario;
   const category = scenario ? toLegacyCategory(scenario.id) as ChunkCategory : 'general';
@@ -784,7 +862,13 @@ async function startSession(): Promise<void> {
       }
     },
     onAssistMetrics: updateAssistMetricsUI,
-  }, preferredAudioSource, calibration);
+  }, preferredAudioSource, calibration, {
+    cloudProcessingEnabled: privacySettings.allowCloudProcessing,
+    transcriptOptions: {
+      saveRawTranscript: privacySettings.saveTranscripts,
+      retentionPolicy: privacySettings.transcriptRetention,
+    },
+  });
 
   session.setAssistMode(selectedAssistMode);
 
@@ -930,10 +1014,12 @@ function toggleSessionUI(active: boolean): void {
   const historyCard = document.getElementById('hint-history-card');
   const sessionCard = document.getElementById('session-card');
   const assistPanel = document.getElementById('assist-mode-panel');
+  const privacyCard = document.getElementById('privacy-settings-card');
 
   if (btnStartGen) btnStartGen.style.display = active ? 'none' : 'block';
   if (btnStartScen) btnStartScen.style.display = active ? 'none' : 'block';
   if (modeSelector) modeSelector.style.display = active ? 'none' : 'block';
+  if (privacyCard) privacyCard.style.display = active ? 'none' : 'block';
   
   // Hide the specific practice areas when active to declutter
   if (active) {
@@ -1209,6 +1295,28 @@ function bindDebriefEvents(): void {
 
   // Render cached session export list
   renderSessionExportList();
+
+  document.getElementById('btn-export-my-data')?.addEventListener('click', () => {
+    downloadMyDataExport();
+    setSessionExportStatus('My data export downloaded.', 'success');
+  });
+
+  document.getElementById('btn-delete-current-session')?.addEventListener('click', () => {
+    const deletedSessionId = TranscriptStore.deleteLatestSession();
+    renderSessionExportList();
+    setSessionExportStatus(
+      deletedSessionId ? `Deleted current session ${deletedSessionId}.` : 'No saved session to delete.',
+      deletedSessionId ? 'success' : 'normal',
+    );
+  });
+
+  document.getElementById('btn-delete-all-transcripts')?.addEventListener('click', () => {
+    const confirmed = window.confirm('Delete all saved raw transcripts from this device?');
+    if (!confirmed) return;
+    const count = TranscriptStore.deleteAllTranscripts();
+    renderSessionExportList();
+    setSessionExportStatus(`Deleted ${count} saved transcript${count === 1 ? '' : 's'}.`, 'success');
+  });
 }
 
 function showDebriefResult(stored: StoredDebrief): void {
@@ -1261,7 +1369,10 @@ function renderSessionExportList(): void {
             <div class="text-normal-body" style="color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">W${s.week} · ${s.topic}</div>
             <div class="text-detail" style="color: var(--color-text-muted);">${dateStr} · ${durationStr} · 💬${s.speechCount} 💡${s.hintCount}</div>
           </div>
-          <button class="btn" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-export-session="${s.sessionId}">Export</button>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-export-session="${s.sessionId}">Export</button>
+            <button class="btn btn-neutral" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-delete-session="${s.sessionId}">Delete</button>
+          </div>
         </div>
       `;
     })
@@ -1285,7 +1396,9 @@ function renderSessionExportList(): void {
         const sessionData = TranscriptStore.getById(sessionId);
         if (!sessionData) throw new Error('Session not found in cache');
 
-        await downloadExportJSON(sessionData);
+        await downloadExportJSON(sessionData, {
+          allowCloudProcessing: loadPrivacySettings().allowCloudProcessing,
+        });
 
         if (statusEl) {
           statusEl.textContent = '✓ Export downloaded successfully';
@@ -1302,6 +1415,50 @@ function renderSessionExportList(): void {
       }
     });
   });
+
+  listEl.querySelectorAll('[data-delete-session]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sessionId = (btn as HTMLElement).dataset.deleteSession;
+      if (!sessionId) return;
+      TranscriptStore.deleteSession(sessionId);
+      renderSessionExportList();
+      setSessionExportStatus(`Deleted session ${sessionId}.`, 'success');
+    });
+  });
+}
+
+function setSessionExportStatus(
+  message: string,
+  tone: 'normal' | 'success' | 'error' = 'normal',
+): void {
+  const statusEl = document.getElementById('session-export-status');
+  if (!statusEl) return;
+  statusEl.style.display = 'block';
+  statusEl.textContent = message;
+  statusEl.style.background = tone === 'error'
+    ? 'var(--color-negative-alpha, rgba(239,68,68,0.1))'
+    : tone === 'success'
+      ? 'var(--color-positive-alpha)'
+      : 'var(--color-accent-alpha)';
+  statusEl.style.color = tone === 'error'
+    ? 'var(--color-negative)'
+    : tone === 'success'
+      ? 'var(--color-positive)'
+      : 'var(--color-accent)';
+}
+
+function downloadMyDataExport(): void {
+  const exportData = TranscriptStore.exportUserData();
+  const jsonStr = JSON.stringify(exportData, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `echo_my_data_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ═══════════════════════════════════════════

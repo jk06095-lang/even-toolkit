@@ -11,7 +11,7 @@ import type { ChunkCategory } from './fallback-chunks';
 import type { HUDController } from '../hud/hud-controller';
 import type { VadCalibration } from '../dsp/calibration';
 import { HybridRecognizer } from './hybrid-recognizer';
-import { TranscriptStore, type SessionTranscript } from './transcript-store';
+import { TranscriptStore, type SessionTranscript, type TranscriptStoreOptions } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
 
 // ── Types ──
@@ -109,6 +109,11 @@ export interface SessionCallbacks {
   onAssistMetrics?: (metrics: AssistMetrics) => void;
 }
 
+export interface SessionEngineOptions {
+  cloudProcessingEnabled?: boolean;
+  transcriptOptions?: TranscriptStoreOptions;
+}
+
 // ── Engine ──
 
 export class SessionEngine {
@@ -143,6 +148,8 @@ export class SessionEngine {
   private showingCountdown = false;
   private preferredAudioSource: 'bridge' | 'browser' = 'bridge';
   private vadCalibration: VadCalibration | null = null;
+  private cloudProcessingEnabled = true;
+  private transcriptOptions: TranscriptStoreOptions = {};
   private lifecycleToken = 0;
   private sessionRequestScopeId = '';
   private requestSequence = 0;
@@ -169,11 +176,14 @@ export class SessionEngine {
     callbacks: SessionCallbacks,
     preferredAudioSource: 'bridge' | 'browser' = 'bridge',
     vadCalibration?: VadCalibration | null,
+    options: SessionEngineOptions = {},
   ) {
     this.weekConfig = WEEK_CONFIGS[week] ?? WEEK_CONFIGS[1]!;
     this.callbacks = callbacks;
     this.preferredAudioSource = preferredAudioSource;
     this.vadCalibration = vadCalibration ?? null;
+    this.cloudProcessingEnabled = options.cloudProcessingEnabled ?? true;
+    this.transcriptOptions = options.transcriptOptions ?? {};
   }
 
   /** Whether VAD is running in simulation (keyboard) mode */
@@ -388,6 +398,7 @@ export class SessionEngine {
       this.weekConfig.week,
       this._topic,
       this._scenarioId || this._category,
+      this.transcriptOptions,
     );
 
     // Initialize transcript analyzer for hint tracking
@@ -421,6 +432,10 @@ export class SessionEngine {
       onSpeechEnd: async (audio: Float32Array) => {
         // Evaluate the speech for poor grammar/nonsense while silence timer ticks
         if (this.isGenerating || this._state !== 'listening') return;
+        if (!this.cloudProcessingEnabled) {
+          this.transcriptStore?.addSpeech('[speech detected]', 'speech_api');
+          return;
+        }
 
         this.isGenerating = true;
         const request = this.beginRequest('transcription');
@@ -429,6 +444,7 @@ export class SessionEngine {
             topic: this._topic,
             week: this.weekConfig.week,
             category: this._category,
+            allowCloudProcessing: this.cloudProcessingEnabled,
             clientSessionId: request.sessionRequestScopeId,
             requestId: request.requestId,
             lastUtterance: this.lastLiveTranscript || undefined,
@@ -577,6 +593,11 @@ export class SessionEngine {
    * Includes retry logic (max 3 attempts, 2s apart).
    */
   private startSpeechRecognizer(retryCount = 0): void {
+    if (!this.cloudProcessingEnabled) {
+      console.log('[Session] Cloud processing disabled - live transcription disabled');
+      return;
+    }
+
     const isBridge = this.vad?.audioSource === 'bridge';
 
     this.speechRecognizer = new HybridRecognizer({
@@ -660,6 +681,8 @@ export class SessionEngine {
           }, 2000);
         }
       },
+    }, {
+      cloudProcessingEnabled: this.cloudProcessingEnabled,
     });
 
     if (isBridge) {
@@ -688,12 +711,14 @@ export class SessionEngine {
 
   private async showGrammarFeedbackIfCurrent(transcript: string): Promise<void> {
     if (this._state !== 'listening') return;
+    if (!this.cloudProcessingEnabled) return;
 
     const request = this.beginRequest('grammar');
     try {
       const correction = await evaluateGrammar(transcript, this._topic, {
         clientSessionId: request.sessionRequestScopeId,
         requestId: request.requestId,
+        allowCloudProcessing: this.cloudProcessingEnabled,
       }, request.controller.signal);
       if (
         correction &&
@@ -791,7 +816,7 @@ export class SessionEngine {
     }
 
     // Finalize transcript cache
-    const transcript = this.transcriptStore?.finalize();
+    const transcript = this.transcriptStore?.finalize() ?? undefined;
     this.transcriptStore = null;
 
     const log: SessionLog = {
@@ -982,6 +1007,7 @@ export class SessionEngine {
             simplified = await simplifyHint(activeHint.text, this._topic, {
               clientSessionId: request.sessionRequestScopeId,
               requestId: request.requestId,
+              allowCloudProcessing: this.cloudProcessingEnabled,
             }, request.controller.signal);
           } finally {
             this.finishRequest(request.controller);
@@ -1071,6 +1097,7 @@ export class SessionEngine {
         topic: this._topic,
         week: this.weekConfig.week,
         category: this._category,
+        allowCloudProcessing: this.cloudProcessingEnabled,
         clientSessionId: request.sessionRequestScopeId,
         requestId: request.requestId,
         lastUtterance: this.lastLiveTranscript || undefined,

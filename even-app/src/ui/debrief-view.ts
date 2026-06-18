@@ -72,6 +72,12 @@ export function renderDebriefView(): string {
           Select a cached combat session to export as 3-stage JSON for Gemini Gem handoff.
         </p>
 
+        <div style="display: flex; gap: var(--spacing-same); flex-wrap: wrap; margin-bottom: var(--spacing-cross);">
+          <button class="btn" id="btn-export-my-data" style="padding: 6px 12px; font-size: 12px; min-width: auto;">Export my data</button>
+          <button class="btn btn-neutral" id="btn-delete-current-session" style="padding: 6px 12px; font-size: 12px; min-width: auto;">Delete current session</button>
+          <button class="btn btn-danger" id="btn-delete-all-transcripts" style="padding: 6px 12px; font-size: 12px; min-width: auto;">Delete all transcripts</button>
+        </div>
+
         <div id="session-export-list"></div>
         <div id="session-export-empty" style="color: var(--color-text-muted); text-align: center; padding: 16px 0; font-size: 13px;">
           No cached sessions yet. Complete a Combat session first.

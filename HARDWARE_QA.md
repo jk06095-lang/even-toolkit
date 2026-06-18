@@ -18,7 +18,7 @@
 - G2 audio capture stops.
 - Phone/Web Speech recognition stops when active.
 - Silence countdown and HUD flash timers clear.
-- The current session is finalized and saved.
+- The current session is finalized; raw transcript storage occurs only when `Save transcripts` is enabled.
 - The glasses return to standby.
 - Late cue/transcription/grammar responses do not update the HUD.
 
@@ -66,6 +66,16 @@ Ten-cycle test:
 - Repeat the same delayed response test with Pause and Exit ECHO.
 - Confirm console/session metadata shows request ID, request scope, network latency, generation latency, HUD rendering latency, and end-to-end latency.
 - Confirm debug logs do not print raw transcript text as part of latency metadata.
+
+## Privacy controls QA
+
+- With default settings, confirm Combat does not start until `Use microphone` is enabled.
+- With `Cloud processing` off, start a session and confirm no ECHO API proxy cue, transcription, grammar, or session-analysis requests are sent.
+- With `Save transcripts` off, complete a session and confirm `echo_transcripts` and `echo_transcript_buffer` do not contain raw utterance text.
+- Confirm `echo_session_events` contains only counts/flags and no utterance, hint, audio, or request body text.
+- Enable `Save transcripts`, complete a session, and confirm a saved session appears in Debrief.
+- Test each retention option: `Delete after session`, `1 day`, `7 days`, and `Until deleted`.
+- Confirm `Delete current session`, per-session `Delete`, `Delete all transcripts`, per-session `Export`, and `Export my data` work from Debrief.
 
 ## Assist mode QA
 

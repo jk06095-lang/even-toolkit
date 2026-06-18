@@ -18,6 +18,7 @@ export interface ChunkRequest {
   topic: string;
   week: number;
   category?: ChunkCategory;
+  allowCloudProcessing?: boolean;
   clientSessionId?: string;
   requestId?: string;
   lastUtterance?: string;
@@ -55,7 +56,7 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
     generationLatencyMs: 0,
   });
 
-  if (!isEchoApiConfigured()) {
+  if (req.allowCloudProcessing === false || !isEchoApiConfigured()) {
     return fallback();
   }
 
@@ -107,6 +108,7 @@ export async function evaluateSpeech(
   signal?: AbortSignal,
 ): Promise<SpeechEvaluationResult | null> {
   if (audio.length < 16_000 * 0.5) return null;
+  if (req.allowCloudProcessing === false) return null;
   if (!isEchoApiConfigured()) return null;
 
   const start = Date.now();
@@ -168,10 +170,11 @@ export async function evaluateSpeech(
 export async function evaluateGrammar(
   transcript: string,
   topic: string,
-  metadata?: { clientSessionId?: string; requestId?: string },
+  metadata?: { clientSessionId?: string; requestId?: string; allowCloudProcessing?: boolean },
   signal?: AbortSignal,
 ): Promise<string | null> {
   if (!transcript || transcript.trim().length < 5) return null;
+  if (metadata?.allowCloudProcessing === false) return null;
   if (!isEchoApiConfigured()) return null;
 
   try {
@@ -207,9 +210,10 @@ export async function evaluateGrammar(
 export async function simplifyHint(
   hint: string,
   topic: string,
-  metadata?: { clientSessionId?: string; requestId?: string },
+  metadata?: { clientSessionId?: string; requestId?: string; allowCloudProcessing?: boolean },
   signal?: AbortSignal,
 ): Promise<string | null> {
+  if (metadata?.allowCloudProcessing === false) return null;
   if (!isEchoApiConfigured()) return null;
 
   try {

@@ -46,6 +46,10 @@ export interface HybridRecognizerCallbacks {
 
 export type HybridMode = 'browser' | 'bridge' | 'hybrid';
 
+export interface HybridRecognizerOptions {
+  cloudProcessingEnabled?: boolean;
+}
+
 // ── HybridRecognizer ──
 
 /**
@@ -72,9 +76,11 @@ export class HybridRecognizer {
   private lastInterimSampleCount = 0;
   private interimTranscribing = false;
   private requestControllers = new Set<AbortController>();
+  private readonly cloudProcessingEnabled: boolean;
 
-  constructor(callbacks: HybridRecognizerCallbacks) {
+  constructor(callbacks: HybridRecognizerCallbacks, options: HybridRecognizerOptions = {}) {
     this.callbacks = callbacks;
+    this.cloudProcessingEnabled = options.cloudProcessingEnabled ?? true;
   }
 
   private beginRequest(): AbortController {
@@ -119,6 +125,10 @@ export class HybridRecognizer {
    * @returns `true` if started successfully.
    */
   start(): boolean {
+    if (!this.cloudProcessingEnabled) {
+      this.callbacks.onError?.('CLOUD_PROCESSING_DISABLED');
+      return false;
+    }
     this._mode = 'browser';
     return this.startWebSpeech();
   }
@@ -133,6 +143,11 @@ export class HybridRecognizer {
    * @returns `true` if started successfully.
    */
   startHybrid(): boolean {
+    if (!this.cloudProcessingEnabled) {
+      this.callbacks.onError?.('CLOUD_PROCESSING_DISABLED');
+      return false;
+    }
+
     if (HybridRecognizer.isWebSpeechSupported()) {
       this._mode = 'hybrid';
       // Initialise PCM state so feedPCM() accepts data
@@ -159,7 +174,6 @@ export class HybridRecognizer {
    */
   startBridge(): boolean {
     this._mode = 'bridge';
-    this._active = true;
     this.pcmBuffer = [];
     this.pcmBufferLength = 0;
     this.isSpeaking = false;
@@ -167,12 +181,21 @@ export class HybridRecognizer {
     this.lastInterimSampleCount = 0;
     this.interimTranscribing = false;
 
+    if (!this.cloudProcessingEnabled) {
+      console.warn('[HybridRecognizer] Cloud processing is disabled');
+      this._active = false;
+      this.callbacks.onError?.('CLOUD_PROCESSING_DISABLED');
+      return false;
+    }
+
     if (!isEchoApiConfigured()) {
       console.warn('[HybridRecognizer] ECHO API proxy is not configured');
+      this._active = false;
       this.callbacks.onError?.('ECHO_API_NOT_CONFIGURED');
       return false;
     }
 
+    this._active = true;
     console.log('[HybridRecognizer] Started in BRIDGE mode (PCM via ECHO API proxy)');
     return true;
   }

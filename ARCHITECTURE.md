@@ -21,7 +21,23 @@ The client does not import provider SDKs or read provider API keys from Vite env
 The deploy-ready Node reference proxy lives in `echo-api-proxy/server.mjs`.
 Deployment and key-rotation steps are documented in `docs/echo-api-proxy.md`.
 Proxy logs must not include request bodies, raw transcript text, or audio
-payloads unless a future explicit retention control enables that behavior.
+payloads.
+
+## Privacy and retention
+
+`Privacy Settings` gate microphone use, ECHO API proxy calls, raw transcript
+saving, and transcript retention. The defaults are microphone off, cloud
+processing off, and transcript saving off.
+
+Raw transcript text is stored by `TranscriptStore` only when `Save transcripts`
+is enabled. Event analytics are stored separately in `echo_session_events` as
+counts and flags only; they do not contain utterance text, hint text, audio, or
+request bodies.
+
+Retention is enforced on session finalization and when the Debrief export list
+opens. `Delete after session` keeps no finalized raw transcript. The Debrief
+screen provides current-session deletion, all-transcript deletion, per-session
+delete/export, and a full local `Export my data` download.
 
 ## Audio modes
 
