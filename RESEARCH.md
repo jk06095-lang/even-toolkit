@@ -120,6 +120,10 @@ evidence must be an `https://` URL or a repo path to a video file.
 - Pilot scorecard with the tables above filled in.
 - Clear limitations: small sample, controlled scenarios, English practice focus, and hardware-specific constraints.
 - README links to the completed case study and video assets only after the evidence is captured.
+- Put each final README portfolio marker on the same markdown link line:
+  `project-echo-case-study-ko`, `project-echo-case-study-en`, and
+  `project-echo-real-g2-video`. The link targets must match the completed pilot
+  manifest.
 
 ## Defer Until Core Stability
 

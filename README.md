@@ -39,7 +39,10 @@ hardware QA manifest, deployed proxy smoke check, key-rotation evidence, and
 final README case-study/video links are all present. Use
 [docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
 as the key-rotation evidence template; `npm run readiness:echo` validates the
-filled evidence with `npm run validate:key-rotation-evidence`.
+filled evidence with `npm run validate:key-rotation-evidence`. Final portfolio
+links must be markdown links carrying the markers `project-echo-case-study-ko`,
+`project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
+match the completed pilot manifest targets.
 
 ## Built with
 

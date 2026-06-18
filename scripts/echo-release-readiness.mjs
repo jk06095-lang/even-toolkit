@@ -50,14 +50,33 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
-function hasFinalReadmeLinks(readmeText) {
-  const requiredMarkers = [
-    'project-echo-case-study-ko',
-    'project-echo-case-study-en',
-    'project-echo-real-g2-video',
-  ];
-  return requiredMarkers.every((marker) => readmeText.includes(marker));
-}
+const README_PORTFOLIO_LINKS = [
+  {
+    marker: 'project-echo-case-study-ko',
+    manifestKey: 'koreanCaseStudyUrl',
+    extensions: ['md', 'html', 'pdf'],
+  },
+  {
+    marker: 'project-echo-case-study-en',
+    manifestKey: 'englishCaseStudyUrl',
+    extensions: ['md', 'html', 'pdf'],
+  },
+  {
+    marker: 'project-echo-real-g2-video',
+    manifestKey: 'realG2VideoUrl',
+    extensions: ['mp4', 'mov', 'webm', 'mkv'],
+  },
+];
+
+const PLACEHOLDER_PATTERNS = [
+  /^$/,
+  /^TBD$/i,
+  /^TODO$/i,
+  /^N\/A$/i,
+  /^placeholder$/i,
+  /^fill/i,
+  /^https?:\/\/example\.com/i,
+];
 
 async function validateFinalManifest({
   label,
@@ -120,18 +139,31 @@ async function checkProxySmoke() {
 function checkReadmeLinks() {
   const readmePath = path.resolve(repoRoot, 'README.md');
   const readmeText = readFileSync(readmePath, 'utf8');
-
-  if (!hasFinalReadmeLinks(readmeText)) {
+  let completedPilot = null;
+  try {
+    completedPilot = readCompletedPilotManifest();
+  } catch (error) {
     addCheck(
       'README portfolio links',
       'blocked',
-      'Missing final case-study/video link markers: project-echo-case-study-ko, project-echo-case-study-en, project-echo-real-g2-video.',
+      `Could not read completed pilot manifest for README link comparison: ${error.message}`,
+      '#10',
+    );
+    return false;
+  }
+  const findings = validateReadmePortfolioLinks(readmeText, completedPilot);
+
+  if (findings.length > 0) {
+    addCheck(
+      'README portfolio links',
+      'blocked',
+      findings.slice(0, 3).join('; '),
       '#10',
     );
     return false;
   }
 
-  addCheck('README portfolio links', 'passed', 'README contains final case-study and real G2 video link markers.', '#10');
+  addCheck('README portfolio links', 'passed', 'README links match the final case-study and real G2 video evidence.', '#10');
   return true;
 }
 
@@ -162,7 +194,7 @@ function checkManifestSummaries() {
   if (!existsSync(pilotPath)) return false;
 
   try {
-    const pilot = readJson(pilotPath);
+    const pilot = readCompletedPilotManifest();
     if (pilot?.caseStudy?.readmeLinksUpdated !== true) {
       addCheck('pilot README link flag', 'blocked', 'Completed pilot manifest must set caseStudy.readmeLinksUpdated=true.', '#10');
       return false;
@@ -173,6 +205,64 @@ function checkManifestSummaries() {
     addCheck('pilot README link flag', 'blocked', `Could not read completed pilot manifest: ${error.message}`, '#10');
     return false;
   }
+}
+
+function readCompletedPilotManifest() {
+  const pilotPath = path.resolve(repoRoot, 'docs/project-echo-pilot-evidence.completed.json');
+  if (!existsSync(pilotPath)) return null;
+  return readJson(pilotPath);
+}
+
+function validateReadmePortfolioLinks(readmeText, completedPilot) {
+  const findings = [];
+  const lines = readmeText.split(/\r?\n/);
+
+  for (const requirement of README_PORTFOLIO_LINKS) {
+    const line = lines.find((candidate) => candidate.includes(requirement.marker));
+    if (!line) {
+      findings.push(`Missing README marker ${requirement.marker}`);
+      continue;
+    }
+
+    const target = extractMarkdownLinkTarget(line);
+    if (!target) {
+      findings.push(`README marker ${requirement.marker} must be on a markdown link line`);
+      continue;
+    }
+
+    if (!looksLikeEvidenceTarget(target, requirement.extensions)) {
+      findings.push(`README marker ${requirement.marker} has invalid evidence target ${target}`);
+      continue;
+    }
+
+    const manifestTarget = completedPilot?.caseStudy?.[requirement.manifestKey];
+    if (manifestTarget && target !== manifestTarget) {
+      findings.push(
+        `README marker ${requirement.marker} must match completed pilot manifest target ${manifestTarget}`,
+      );
+    }
+  }
+
+  return findings;
+}
+
+function extractMarkdownLinkTarget(line) {
+  const match = line.match(/\[[^\]]+\]\(([^)\s]+)\)/);
+  return match?.[1] ?? null;
+}
+
+function looksLikeEvidenceTarget(value, extensions) {
+  const trimmed = String(value ?? '').trim();
+  if (PLACEHOLDER_PATTERNS.some((pattern) => pattern.test(trimmed))) return false;
+  if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  if (/^http:\/\//i.test(trimmed)) return false;
+
+  const escapedExtensions = extensions.map((extension) => extension.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const relativePathPattern = new RegExp(
+    `^(?:\\.{1,2}/)?[A-Za-z0-9_.\\-/]+\\.(${escapedExtensions.join('|')})$`,
+    'i',
+  );
+  return relativePathPattern.test(trimmed);
 }
 
 function firstUsefulLine(output) {
