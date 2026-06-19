@@ -179,6 +179,101 @@ describe('transcript privacy controls', () => {
     expect(isConversationTurn(turn)).toBe(true);
   });
 
+  it('adds explicit partner conversation turns with Korean translation metadata', () => {
+    const store = new TranscriptStore(2, 'Saved Topic', 'business', {
+      saveRawTranscript: true,
+      retentionPolicy: '7d',
+      now: () => now,
+      idFactory: () => 'partner-turn-0001',
+    });
+
+    const turn = store.addConversationTurn({
+      speaker: 'partner',
+      transcript: 'What problem are you solving first?',
+      startedAt: now + 1_000,
+      endedAt: now + 2_000,
+      source: 'phone',
+      language: 'en-US',
+      translationKo: '<b>먼저 어떤 문제를 해결하려고 하나요?</b>',
+      confidence: 0.87,
+      correctedByUser: true,
+      piiFlags: ['redacted-name'],
+    });
+
+    expect(turn).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'partner-turn-0001',
+      speaker: 'partner',
+      startedAt: now + 1_000,
+      endedAt: now + 2_000,
+      source: 'phone',
+      language: 'en-US',
+      transcript: 'What problem are you solving first?',
+      translationKo: '먼저 어떤 문제를 해결하려고 하나요?',
+      confidence: 0.87,
+      correctedByUser: true,
+      piiFlags: ['redacted-name'],
+    });
+    expect(isConversationTurn(turn)).toBe(true);
+
+    const transcript = store.finalize();
+    expect(transcript?.conversationTurns?.[0]).toMatchObject({
+      id: 'partner-turn-0001',
+      speaker: 'partner',
+      translationKo: '먼저 어떤 문제를 해결하려고 하나요?',
+    });
+    expect(JSON.stringify(transcript?.conversationTurns)).not.toContain('<b>');
+  });
+
+  it('updates persisted conversation turn speaker corrections and translations', () => {
+    localStorage.setItem('echo_transcripts', JSON.stringify([
+      {
+        ...makeSession('correction-session', now),
+        conversationTurns: [
+          {
+            schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+            id: 'turn-unknown',
+            sessionId: 'correction-session',
+            speaker: 'unknown',
+            startedAt: now - 5_000,
+            endedAt: now - 4_000,
+            source: 'phone',
+            language: 'en-US',
+            transcript: 'Could you clarify the customer segment?',
+            confidence: 0.61,
+            isFinal: true,
+            piiFlags: [],
+          },
+        ],
+      },
+    ]));
+
+    const updated = TranscriptStore.updateConversationTurn('correction-session', 'turn-unknown', {
+      speaker: 'partner',
+      correctedByUser: true,
+      translationKo: '<span>고객 세그먼트를 명확히 해 주시겠어요?</span>',
+      confidence: 0.93,
+    });
+
+    expect(updated).toMatchObject({
+      speaker: 'partner',
+      correctedByUser: true,
+      translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+      confidence: 0.93,
+    });
+    expect(isConversationTurn(updated)).toBe(true);
+
+    const [stored] = TranscriptStore.loadAll();
+    expect(stored?.conversationTurns?.[0]).toMatchObject({
+      id: 'turn-unknown',
+      speaker: 'partner',
+      correctedByUser: true,
+      translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+      confidence: 0.93,
+    });
+    expect(JSON.stringify(stored?.conversationTurns)).not.toContain('<span>');
+  });
+
   it('persists validated ECHO domain v2 Cue and AssistEpisode records', () => {
     const store = new TranscriptStore(2, 'Saved Topic', 'business', {
       saveRawTranscript: true,

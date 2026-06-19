@@ -21,6 +21,7 @@ import {
   type ConversationTurn,
   type ConversationTurnSource,
   type Cue,
+  type SpeakerRole,
 } from '@toolkit/echo-domain-v2';
 
 export interface TranscriptEntry {
@@ -115,6 +116,31 @@ export interface TranscriptStoreOptions {
   defaultLanguage?: string;
   idFactory?: () => string;
 }
+
+export interface AddConversationTurnInput {
+  speaker?: SpeakerRole;
+  transcript: string;
+  startedAt?: number;
+  endedAt?: number;
+  source?: ConversationTurnSource;
+  language?: string;
+  translationKo?: string;
+  confidence?: number;
+  isFinal?: boolean;
+  correctedByUser?: boolean;
+  piiFlags?: string[];
+}
+
+export type ConversationTurnUpdate = Partial<Pick<
+  ConversationTurn,
+  'speaker' |
+  'translationKo' |
+  'confidence' |
+  'correctedByUser' |
+  'language' |
+  'isFinal' |
+  'piiFlags'
+>>;
 
 export type SessionEventTelemetry = Omit<
   Partial<SessionEventAnalytics>,
@@ -228,6 +254,34 @@ export class TranscriptStore {
     });
   }
 
+  addConversationTurn(input: AddConversationTurnInput): ConversationTurn | null {
+    const text = input.transcript.trim();
+    if (!text) return null;
+    const startedAt = coerceTimestamp(input.startedAt, this.now());
+    const turn: ConversationTurn = {
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: this.idFactory(),
+      sessionId: this.session.sessionId,
+      speaker: input.speaker ?? 'unknown',
+      startedAt,
+      endedAt: coerceTimestamp(input.endedAt, startedAt),
+      source: input.source ?? this.defaultTurnSource,
+      language: input.language ?? this.defaultLanguage,
+      transcript: text,
+      translationKo: cleanOptionalPlainText(input.translationKo, 1000),
+      confidence: input.confidence,
+      isFinal: input.isFinal ?? true,
+      correctedByUser: input.correctedByUser,
+      piiFlags: input.piiFlags ?? [],
+    };
+
+    if (!isConversationTurn(turn)) return null;
+    this.session.conversationTurns ??= [];
+    this.session.conversationTurns.push(turn);
+    this.flush();
+    return turn;
+  }
+
   addCue(cue: Cue): Cue | null {
     if (!isCue(cue)) return null;
     this.session.cues ??= [];
@@ -277,6 +331,22 @@ export class TranscriptStore {
   getLatestConversationTurnId(): string | null {
     const turns = this.session.conversationTurns ?? [];
     return turns[turns.length - 1]?.id ?? null;
+  }
+
+  updateConversationTurn(
+    turnId: string,
+    patch: ConversationTurnUpdate,
+  ): ConversationTurn | null {
+    const turns = this.session.conversationTurns ?? [];
+    const index = turns.findIndex((turn) => turn.id === turnId);
+    if (index < 0) return null;
+
+    const updated = applyConversationTurnUpdate(turns[index]!, patch);
+    if (!updated) return null;
+    turns[index] = updated;
+    this.session.conversationTurns = turns;
+    this.flush();
+    return updated;
   }
 
   addSilence(durationMs: number): void {
@@ -426,6 +496,38 @@ export class TranscriptStore {
   static getById(sessionId: string): SessionTranscript | null {
     const all = TranscriptStore.loadAll();
     return all.find((s) => s.sessionId === sessionId) ?? null;
+  }
+
+  static updateConversationTurn(
+    sessionId: string,
+    turnId: string,
+    patch: ConversationTurnUpdate,
+  ): ConversationTurn | null {
+    const all = TranscriptStore.loadAll();
+    const sessionIndex = all.findIndex((session) => session.sessionId === sessionId);
+    if (sessionIndex < 0) return null;
+
+    const session = all[sessionIndex]!;
+    const turns = getConversationTurns(session);
+    const turnIndex = turns.findIndex((turn) => turn.id === turnId);
+    if (turnIndex < 0) return null;
+
+    const updated = applyConversationTurnUpdate(turns[turnIndex]!, patch);
+    if (!updated) return null;
+
+    turns[turnIndex] = updated;
+    all[sessionIndex] = {
+      ...session,
+      conversationTurns: turns,
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    } catch {
+      return null;
+    }
+
+    return updated;
   }
 
   static getSummaries(): Array<{
@@ -609,7 +711,7 @@ function normalizeConversationTurns(value: unknown, session: SessionTranscript):
     : [];
 
   if (storedTurns.length > 0) {
-    return storedTurns;
+    return storedTurns.slice().sort((a, b) => a.startedAt - b.startedAt);
   }
 
   return session.entries
@@ -621,6 +723,33 @@ function normalizeConversationTurns(value: unknown, session: SessionTranscript):
       'g2',
       'en-US',
     ));
+}
+
+function applyConversationTurnUpdate(
+  turn: ConversationTurn,
+  patch: ConversationTurnUpdate,
+): ConversationTurn | null {
+  const updated: ConversationTurn = {
+    ...turn,
+  };
+
+  if (patch.speaker !== undefined) updated.speaker = patch.speaker;
+  if (patch.language !== undefined) updated.language = patch.language;
+  if (patch.confidence !== undefined) updated.confidence = patch.confidence;
+  if (patch.correctedByUser !== undefined) updated.correctedByUser = patch.correctedByUser;
+  if (patch.isFinal !== undefined) updated.isFinal = patch.isFinal;
+  if (patch.piiFlags !== undefined) updated.piiFlags = patch.piiFlags;
+  if (patch.translationKo !== undefined) {
+    const translationKo = cleanOptionalPlainText(patch.translationKo, 1000);
+    if (translationKo) {
+      updated.translationKo = translationKo;
+    } else {
+      delete updated.translationKo;
+    }
+  }
+
+  if (!isConversationTurn(updated)) return null;
+  return updated;
 }
 
 function normalizeCues(value: unknown): Cue[] {
@@ -672,6 +801,16 @@ function coerceNumber(value: unknown, fallback: number): number {
 function coerceTimestamp(value: unknown, fallback: number): number {
   const timestamp = coerceNumber(value, fallback);
   return timestamp >= 0 ? timestamp : fallback;
+}
+
+function cleanOptionalPlainText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const cleaned = value
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+  return cleaned || undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -130,6 +130,58 @@ describe('transcript export session-analysis guards', () => {
     });
   });
 
+  it('preserves two-speaker turn corrections and Korean translations in stage 1 export', async () => {
+    echoApiMock.configured = false;
+    const session = makeSession();
+    session.conversationTurns = [
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: 'session-a:turn:1',
+        sessionId: 'session-a',
+        speaker: 'learner',
+        startedAt: Date.UTC(2026, 5, 19, 10, 0, 10),
+        endedAt: Date.UTC(2026, 5, 19, 10, 0, 11),
+        source: 'g2',
+        language: 'en-US',
+        transcript: 'I think we should start with the customer problem.',
+        confidence: 0.9,
+        isFinal: true,
+        piiFlags: [],
+      },
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: 'session-a:turn:2',
+        sessionId: 'session-a',
+        speaker: 'partner',
+        startedAt: Date.UTC(2026, 5, 19, 10, 0, 20),
+        endedAt: Date.UTC(2026, 5, 19, 10, 0, 22),
+        source: 'phone',
+        language: 'en-US',
+        transcript: 'What customer problem matters most?',
+        translationKo: '가장 중요한 고객 문제는 무엇인가요?',
+        confidence: 0.84,
+        isFinal: true,
+        correctedByUser: true,
+        piiFlags: [],
+      },
+    ];
+
+    const exportJson = await generateExportJSON(session, {
+      allowCloudProcessing: false,
+    });
+
+    expect(exportJson.stage_1_raw.conversation_turns).toHaveLength(2);
+    expect(exportJson.stage_1_raw.conversation_turns[1]).toMatchObject({
+      id: 'session-a:turn:2',
+      speaker: 'partner',
+      source: 'phone',
+      transcript: 'What customer problem matters most?',
+      translationKo: '가장 중요한 고객 문제는 무엇인가요?',
+      confidence: 0.84,
+      correctedByUser: true,
+    });
+  });
+
   it('ignores aborted delayed session-analysis responses and returns fallback handoff', async () => {
     const controller = new AbortController();
     const exportPromise = generateExportJSON(makeSession(), {

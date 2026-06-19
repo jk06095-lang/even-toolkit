@@ -1,8 +1,10 @@
 import { TranscriptStore } from '../combat/transcript-store';
 import { downloadExportJSON } from '../combat/transcript-export';
+import { buildConversationTimelineRows } from '../combat/conversation-timeline';
 import { loadPrivacySettings } from '../privacy/settings';
 import { importDebrief, type StoredDebrief } from './json-parser';
 import type { HUDController } from '../hud/hud-controller';
+import type { SpeakerRole } from '@toolkit/echo-domain-v2';
 
 export interface DebriefControllerContext {
   getHud: () => HUDController | null;
@@ -126,6 +128,28 @@ function renderSessionExportList(): void {
       setSessionExportStatus(`Deleted session ${sessionId}.`, 'success');
     });
   });
+
+  listEl.querySelectorAll('[data-speaker-turn]').forEach((select) => {
+    select.addEventListener('change', () => {
+      const element = select as HTMLSelectElement;
+      const sessionId = element.dataset.speakerSession;
+      const turnId = element.dataset.speakerTurn;
+      const speaker = element.value as SpeakerRole;
+      if (!sessionId || !turnId || !isSpeakerRole(speaker)) return;
+
+      const updated = TranscriptStore.updateConversationTurn(sessionId, turnId, {
+        speaker,
+        correctedByUser: true,
+      });
+
+      if (updated) {
+        renderSessionExportList();
+        setSessionExportStatus(`Updated speaker for turn ${turnId}.`, 'success');
+      } else {
+        setSessionExportStatus('Speaker update failed.', 'error');
+      }
+    });
+  });
 }
 
 function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
@@ -163,6 +187,14 @@ function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
 
   content.append(title, detail);
 
+  const session = TranscriptStore.getById(summary.sessionId);
+  if (session) {
+    const timeline = createConversationTimeline(summary.sessionId, session);
+    if (timeline) {
+      content.append(timeline);
+    }
+  }
+
   const actions = document.createElement('div');
   actions.style.display = 'flex';
   actions.style.gap = '6px';
@@ -186,6 +218,66 @@ function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
   actions.append(exportButton, deleteButton);
   item.append(content, actions);
   return item;
+}
+
+function createConversationTimeline(sessionId: string, session: NonNullable<ReturnType<typeof TranscriptStore.getById>>): HTMLElement | null {
+  const rows = buildConversationTimelineRows(session, 6);
+  if (rows.length === 0) return null;
+
+  const timeline = document.createElement('div');
+  timeline.className = 'conversation-timeline';
+
+  rows.forEach((row) => {
+    const item = document.createElement('div');
+    item.className = `conversation-turn conversation-turn-${row.speaker}`;
+
+    const header = document.createElement('div');
+    header.className = 'conversation-turn-header';
+
+    const select = document.createElement('select');
+    select.className = 'conversation-speaker-select';
+    select.dataset.speakerSession = sessionId;
+    select.dataset.speakerTurn = row.turnId;
+    for (const [value, label] of [
+      ['learner', 'Me'],
+      ['partner', 'Partner'],
+      ['unknown', 'Unknown'],
+    ] as const) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      option.selected = row.speaker === value;
+      select.append(option);
+    }
+
+    const meta = document.createElement('span');
+    meta.className = 'conversation-turn-meta';
+    meta.textContent = [
+      row.timeLabel,
+      row.sourceLabel,
+      row.confidenceLabel,
+      row.correctedByUser ? 'corrected' : '',
+    ].filter(Boolean).join(' | ');
+
+    header.append(select, meta);
+
+    const transcript = document.createElement('div');
+    transcript.className = 'conversation-turn-text';
+    transcript.textContent = row.transcript;
+
+    item.append(header, transcript);
+
+    if (row.translationKo) {
+      const translation = document.createElement('div');
+      translation.className = 'conversation-turn-translation';
+      translation.textContent = row.translationKo;
+      item.append(translation);
+    }
+
+    timeline.append(item);
+  });
+
+  return timeline;
 }
 
 function setSessionExportStatus(
@@ -225,4 +317,8 @@ function downloadMyDataExport(): void {
 function setElText(id: string, text: string): void {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
+}
+
+function isSpeakerRole(value: string): value is SpeakerRole {
+  return value === 'learner' || value === 'partner' || value === 'unknown';
 }
