@@ -149,9 +149,12 @@ aggregate metrics.
 
 Run `npm run prepare:echo-evidence-drafts` before the field run to create
 draft Korean/English case-study outlines, an architecture draft, and a real G2
-video shot list under `docs/evidence-drafts/`. These files are planning aids
-only; copy them to stable non-draft paths and link them from README only after
-the completed pilot evidence manifest passes validation.
+video shot list under `docs/evidence-drafts/`. It also creates
+`project-echo-field-runbook.draft.md`, which maps #5/#10 pilot evidence to the
+hardware, proxy, README, and Custom GPT Action gates that must be finished
+before readiness can pass. These files are planning aids only; copy final assets
+to stable non-draft paths and link them from README only after the completed
+pilot evidence manifest passes validation.
 
 - One short product problem statement.
 - One architecture diagram showing G2, phone UI, local privacy controls, and ECHO API proxy.

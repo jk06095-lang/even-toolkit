@@ -35,6 +35,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   const caseStudyEnPath = path.join(tmpRoot, 'project-echo-case-study.en.draft.md');
   const architecturePath = path.join(tmpRoot, 'project-echo-architecture.draft.md');
   const videoShotListPath = path.join(tmpRoot, 'project-echo-real-g2-video-shot-list.draft.md');
+  const fieldRunbookPath = path.join(tmpRoot, 'project-echo-field-runbook.draft.md');
   const buildReportPath = path.join(tmpRoot, 'project-echo-build-artifact.md');
 
   for (const filePath of [
@@ -46,6 +47,7 @@ test('prepares draft evidence manifests without marking external evidence comple
     caseStudyEnPath,
     architecturePath,
     videoShotListPath,
+    fieldRunbookPath,
     buildReportPath,
   ]) {
     assert.equal(existsSync(filePath), true, `${filePath} should exist`);
@@ -79,6 +81,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   const caseStudyEn = readFileSync(caseStudyEnPath, 'utf8');
   const architecture = readFileSync(architecturePath, 'utf8');
   const videoShotList = readFileSync(videoShotListPath, 'utf8');
+  const fieldRunbook = readFileSync(fieldRunbookPath, 'utf8');
 
   assert.match(caseStudyKo, /Draft only/);
   assert.match(caseStudyKo, /project-echo-case-study-ko/);
@@ -90,6 +93,12 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(architecture, /ECHO API proxy/);
   assert.match(videoShotList, /project-echo-real-g2-video/);
   assert.match(videoShotList, /G2 shows READY/);
+  assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
+  assert.match(fieldRunbook, /npm run readiness:echo/);
+  assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
+  assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
+  assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
+  assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);
   assert.doesNotMatch(caseStudyKo, /\]\(docs\/project-echo-case-study\.ko\.md\)/);
   assert.doesNotMatch(caseStudyEn, /\]\(docs\/project-echo-case-study\.en\.md\)/);
 

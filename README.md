@@ -70,9 +70,12 @@ npm run prepare:echo-evidence-drafts
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when
 available, local client artifact scan counts, and draft case-study/video
-package outlines. They stay in `draft` status and do not replace the required
-`*.completed.json` evidence files, the final `docs/key-rotation-evidence.md`,
-or the final README portfolio links.
+package outlines. The generator also writes
+`docs/evidence-drafts/project-echo-field-runbook.draft.md`, a single operator
+checklist mapping the remaining issues to their final evidence gates and the
+Even Hub private/beta testing boundary. They stay in `draft` status and do not
+replace the required `*.completed.json` evidence files, the final
+`docs/key-rotation-evidence.md`, or the final README portfolio links.
 
 For the future Custom GPT Action API, run the local reference smoke with:
 

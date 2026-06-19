@@ -34,8 +34,11 @@ npm run prepare:echo-evidence-drafts
 
 This writes draft files under `docs/evidence-drafts/`, including the current app
 version, `even-app/echo.ehpk` SHA-256 when present, and bundle metrics when
-`even-app/dist` exists. The generated files remain `draft`; they are a starting
-point for the physical run, not completed hardware QA.
+`even-app/dist` exists. It also writes
+`docs/evidence-drafts/project-echo-field-runbook.draft.md`, which gathers the
+hardware QA, pilot, proxy, portfolio, and Custom GPT Action evidence queue into
+one field-run checklist. The generated files remain `draft`; they are a
+starting point for the physical run, not completed hardware QA.
 
 Official Even Realities
 [simulator docs](https://hub.evenrealities.com/docs/test/simulator) treat the
