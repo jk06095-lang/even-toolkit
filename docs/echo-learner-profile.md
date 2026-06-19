@@ -41,6 +41,12 @@ gated behind the existing microphone and cloud-processing privacy settings and
 falls back to typed attempts when Web Speech is unavailable or the page is not
 running on HTTPS / localhost.
 
+After two successful recall reps, the prompt moves into transfer mode. Transfer
+prompts are generated from the item's `speechAct`, scenario tags, and optional
+partner-turn context so the learner must use the communication goal in a new
+situation instead of reciting the saved phrase. Successful transfer grades
+advance to the next generated scenario.
+
 ## Custom GPT Handoff
 
 `generateCustomGptHandoffFiles()` returns the manual Custom GPT v1 bundle:
@@ -55,6 +61,6 @@ and phone-like values are replaced before profile generation.
 ## Remaining Work
 
 This is the data foundation and first phone review surface for the
-active-recall loop. Remaining work is to add pronunciation scoring, richer
-transfer scenarios, G2/bridge-based recall capture evidence, and later
-write-back from roleplay or Custom GPT Action flows.
+active-recall loop. Remaining work is to add pronunciation scoring,
+G2/bridge-based recall capture evidence, and later write-back from roleplay or
+Custom GPT Action flows.

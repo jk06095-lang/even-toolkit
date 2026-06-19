@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION, type AssistOutcome, type CueLevel } from '@toolkit/echo-domain-v2';
 import type { SessionTranscript } from '../src/combat/transcript-store';
 import {
+  buildTransferScenarios,
   buildActiveRecallQueue,
   clearActiveRecallSnapshot,
   createActiveRecallPrompt,
@@ -125,6 +126,7 @@ describe('active recall learning loop', () => {
     const prompt = createActiveRecallPrompt(item!.learningItem, matureState);
     expect(prompt.mode).toBe('transfer');
     expect(prompt.prompt).toContain('New situation');
+    expect(prompt.transferScenario?.instruction).toContain('Ask the other person to repeat it naturally');
     expect(prompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
 
     recordActiveRecallAttempt(item!.learningItem, 'easy', 'Sorry, can you repeat that?', {
@@ -137,6 +139,36 @@ describe('active recall learning loop', () => {
       transferSuccessCount: 1,
       lastGrade: 'easy',
     });
+
+    const nextTransferPrompt = createActiveRecallPrompt(
+      item!.learningItem,
+      loadActiveRecallSnapshot().states[item!.learningItem.id]!,
+    );
+    expect(nextTransferPrompt.transferScenario?.id).not.toBe(prompt.transferScenario?.id);
+    expect(nextTransferPrompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
+  });
+
+  it('builds source-remix transfer scenarios when partner context exists', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    const learningItem = {
+      ...item!.learningItem,
+      examples: [
+        {
+          ...item!.learningItem.examples[0]!,
+          partnerTurn: 'The platform changed at the last minute.',
+        },
+      ],
+    };
+
+    const scenarios = buildTransferScenarios(learningItem);
+
+    expect(scenarios[0]).toMatchObject({
+      scenarioTag: 'Train station source remix',
+      partnerTurn: 'The platform changed at the last minute.',
+    });
+    expect(scenarios[0]?.instruction).not.toContain(learningItem.canonicalExpression);
   });
 });
 

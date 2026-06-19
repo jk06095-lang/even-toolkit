@@ -1,4 +1,4 @@
-import type { LearningItem } from '@toolkit/echo-domain-v2';
+import type { LearningItem, SpeechAct } from '@toolkit/echo-domain-v2';
 import { buildLearningItems } from '../combat/learner-profile';
 import type { SessionTranscript } from '../combat/transcript-store';
 
@@ -24,6 +24,14 @@ export interface ActiveRecallPrompt {
   answer: string;
   meaningKo: string;
   scenarioTag: string;
+  transferScenario?: ActiveRecallTransferScenario;
+}
+
+export interface ActiveRecallTransferScenario {
+  id: string;
+  scenarioTag: string;
+  partnerTurn?: string;
+  instruction: string;
 }
 
 export interface ActiveRecallQueueItem {
@@ -119,8 +127,15 @@ export function createActiveRecallPrompt(
   const scenarioTag = item.examples[0]?.scenarioTag || item.scenarioTags[0] || 'conversation';
   const readyForTransfer = state.reps >= 2 && state.transferSuccessCount < 2;
   const mode: ActiveRecallPromptMode = readyForTransfer ? 'transfer' : 'meaning_to_expression';
+  const transferScenario = mode === 'transfer'
+    ? selectTransferScenario(item, state.transferSuccessCount)
+    : undefined;
   const prompt = mode === 'transfer'
-    ? `New situation (${scenarioTag}): ${item.meaningKo}. Say a natural English response without looking at the saved phrase.`
+    ? [
+      `New situation (${transferScenario?.scenarioTag ?? scenarioTag}): ${item.meaningKo}.`,
+      transferScenario?.partnerTurn ? `Partner: "${transferScenario.partnerTurn}"` : '',
+      transferScenario?.instruction ?? 'Say a natural English response without looking at the saved phrase.',
+    ].filter(Boolean).join(' ')
     : `Recall this in English: ${item.meaningKo}. Say it before revealing the answer.`;
 
   return {
@@ -128,8 +143,37 @@ export function createActiveRecallPrompt(
     prompt,
     answer: item.canonicalExpression,
     meaningKo: item.meaningKo,
-    scenarioTag,
+    scenarioTag: transferScenario?.scenarioTag ?? scenarioTag,
+    transferScenario,
   };
+}
+
+export function buildTransferScenarios(item: LearningItem): ActiveRecallTransferScenario[] {
+  const baseScenarioTag = sanitizePlainText(
+    item.examples[0]?.scenarioTag || item.scenarioTags[0] || 'conversation',
+    120,
+  ) || 'conversation';
+  const partnerTurn = sanitizeOptional(
+    item.examples.find((example) => example.partnerTurn)?.partnerTurn ?? '',
+    240,
+  );
+  const core = transferInstructionsForSpeechAct(item.speechAct, baseScenarioTag);
+  const scenarios: ActiveRecallTransferScenario[] = core.map((instruction, index) => ({
+    id: `${item.id}:transfer:${index + 1}`,
+    scenarioTag: index === 0 ? baseScenarioTag : `${baseScenarioTag} transfer ${index + 1}`,
+    instruction,
+  }));
+
+  if (partnerTurn) {
+    scenarios.unshift({
+      id: `${item.id}:transfer:source-context`,
+      scenarioTag: `${baseScenarioTag} source remix`,
+      partnerTurn,
+      instruction: 'Respond naturally in your own words. Do not copy the saved phrase as a script.',
+    });
+  }
+
+  return scenarios;
 }
 
 export function recordActiveRecallAttempt(
@@ -306,6 +350,53 @@ function intervalMsForGrade(grade: ActiveRecallGrade, stability: number): number
     ? Math.max(2, stability)
     : Math.max(4, stability * 1.5);
   return Math.round(days * 24 * 60 * 60 * 1000);
+}
+
+function selectTransferScenario(
+  item: LearningItem,
+  transferSuccessCount: number,
+): ActiveRecallTransferScenario {
+  const scenarios = buildTransferScenarios(item);
+  return scenarios[Math.min(transferSuccessCount, scenarios.length - 1)]!;
+}
+
+function transferInstructionsForSpeechAct(
+  speechAct: SpeechAct,
+  scenarioTag: string,
+): string[] {
+  if (speechAct === 'ask_repeat') {
+    return [
+      `You missed one key detail in a ${scenarioTag} exchange. Ask the other person to repeat it naturally.`,
+      'The other person speaks too quickly. Recover the conversation without apologizing for too long.',
+      'You caught the topic but missed the exact detail. Ask for repetition in one short turn.',
+    ];
+  }
+  if (speechAct === 'clarify') {
+    return [
+      `A detail in this ${scenarioTag} conversation is ambiguous. Ask a concise clarification question.`,
+      'You understand the general topic but not the condition. Ask them to make it clearer.',
+      'Check your understanding with one natural follow-up question.',
+    ];
+  }
+  if (speechAct === 'repair') {
+    return [
+      `You started an answer in a ${scenarioTag} conversation but it came out incomplete. Repair the turn naturally.`,
+      'You used the wrong word. Correct yourself and keep the conversation moving.',
+      'Restate your idea more clearly without restarting the whole conversation.',
+    ];
+  }
+  if (speechAct === 'buy_time') {
+    return [
+      `You need a moment to think in a ${scenarioTag} conversation. Buy time politely.`,
+      'Keep eye contact and ask for a brief moment before answering.',
+      'Use one short phrase to hold the floor while you prepare your answer.',
+    ];
+  }
+  return [
+    `Answer a new ${scenarioTag} prompt using the same communication goal.`,
+    'Give a natural response in one turn without reading the saved expression.',
+    'Use the expression idea in a different situation, not as a memorized quote.',
+  ];
 }
 
 function normalizeSnapshot(value: unknown): ActiveRecallStoreSnapshot {
