@@ -1,7 +1,10 @@
 import { TranscriptStore } from '../combat/transcript-store';
 import { downloadExportJSON } from '../combat/transcript-export';
 import { buildConversationTimelineRows } from '../combat/conversation-timeline';
-import { queuePendingConversationTranslations } from '../combat/translation-queue';
+import {
+  processPendingConversationTranslations,
+  queuePendingConversationTranslations,
+} from '../combat/translation-queue';
 import { loadPrivacySettings } from '../privacy/settings';
 import { importDebrief, type StoredDebrief } from './json-parser';
 import type { HUDController } from '../hud/hud-controller';
@@ -12,6 +15,7 @@ export interface DebriefControllerContext {
 }
 
 type SessionSummary = ReturnType<typeof TranscriptStore.getSummaries>[number];
+const processingTranslationSessions = new Set<string>();
 
 export function bindDebriefEvents(context: DebriefControllerContext): void {
   document.getElementById('btn-import-debrief')?.addEventListener('click', async () => {
@@ -222,7 +226,8 @@ function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
 }
 
 function createConversationTimeline(sessionId: string, session: NonNullable<ReturnType<typeof TranscriptStore.getById>>): HTMLElement | null {
-  queuePendingConversationTranslations(session);
+  const jobs = queuePendingConversationTranslations(session);
+  scheduleConversationTranslationProcessing(sessionId, session, jobs.some((job) => job.status === 'pending'));
   const rows = buildConversationTimelineRows(session, 6);
   if (rows.length === 0) return null;
 
@@ -285,6 +290,31 @@ function createConversationTimeline(sessionId: string, session: NonNullable<Retu
   });
 
   return timeline;
+}
+
+function scheduleConversationTranslationProcessing(
+  sessionId: string,
+  session: NonNullable<ReturnType<typeof TranscriptStore.getById>>,
+  hasPendingJob: boolean,
+): void {
+  if (!hasPendingJob || processingTranslationSessions.has(sessionId)) return;
+  if (!loadPrivacySettings().allowCloudProcessing) return;
+
+  processingTranslationSessions.add(sessionId);
+  void processPendingConversationTranslations(session, {
+    allowCloudProcessing: true,
+  })
+    .then((results) => {
+      if (results.length > 0) {
+        renderSessionExportList();
+      }
+    })
+    .catch((err) => {
+      console.warn('[Debrief] Translation processing failed:', err);
+    })
+    .finally(() => {
+      processingTranslationSessions.delete(sessionId);
+    });
 }
 
 function setSessionExportStatus(

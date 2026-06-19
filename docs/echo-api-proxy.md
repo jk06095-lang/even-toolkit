@@ -7,6 +7,7 @@ The app calls a server-side proxy, and only the proxy calls the AI provider.
 
 - `POST /v1/cue`
 - `POST /v1/transcribe`
+- `POST /v1/translate`
 - `POST /v1/session-analysis`
 - `GET /healthz`
 
@@ -109,5 +110,6 @@ For delayed-response QA, start a local or staging proxy with
 
 When the proxy is missing, slow, blocked by CORS, or returns a non-2xx response,
 the client treats it as unavailable. Cue generation falls back to local static
-templates, and transcription/session analysis paths fail safely without exposing
-provider details to the browser.
+templates, translation jobs move to a non-blocking failed state, and
+transcription/session analysis paths fail safely without exposing provider
+details to the browser.

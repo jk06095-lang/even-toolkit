@@ -1,5 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION, type ConversationTurn } from '@toolkit/echo-domain-v2';
+
+const echoApiMock = vi.hoisted(() => ({
+  requestTranslation: vi.fn(),
+}));
+
+vi.mock('../src/services/echo-api', () => ({
+  requestTranslation: echoApiMock.requestTranslation,
+}));
+
 import {
   clearConversationTranslationJobs,
   enqueueConversationTurnTranslation,
@@ -7,6 +16,7 @@ import {
   loadConversationTranslationJobs,
   markConversationTranslationComplete,
   markConversationTranslationFailed,
+  processPendingConversationTranslations,
   queuePendingConversationTranslations,
   shouldQueueKoreanTranslation,
 } from '../src/combat/translation-queue';
@@ -43,6 +53,7 @@ describe('conversation translation queue', () => {
       configurable: true,
     });
     clearConversationTranslationJobs();
+    echoApiMock.requestTranslation.mockReset();
   });
 
   it('queues final non-Korean turns once without duplicating raw transcript text', () => {
@@ -129,6 +140,75 @@ describe('conversation translation queue', () => {
       translationKo: 'Korean translation',
     });
     expect(JSON.stringify(stored)).not.toContain('<b>');
+  });
+
+  it('processes pending jobs through the translation proxy when cloud processing is allowed', async () => {
+    const session = makeSession([makeTurn({ id: 'partner-1' })]);
+    localStorage.setItem('echo_transcripts', JSON.stringify([session]));
+    echoApiMock.requestTranslation.mockResolvedValueOnce({
+      translationKo: '<b>고객 세그먼트를 명확히 해 주시겠어요?</b>',
+      source: 'proxy',
+      latencyMs: 42,
+    });
+
+    const results = await processPendingConversationTranslations(session, {
+      allowCloudProcessing: true,
+      now: () => 2_000,
+    });
+
+    expect(echoApiMock.requestTranslation).toHaveBeenCalledWith({
+      clientSessionId: 'session-a',
+      requestId: 'session-a:partner-1:ko-KR:attempt:1',
+      turnId: 'partner-1',
+      sourceLanguage: 'en-US',
+      targetLanguage: 'ko-KR',
+      text: 'Could you clarify the customer segment?',
+    }, undefined);
+    expect(results).toEqual([
+      expect.objectContaining({
+        turnId: 'partner-1',
+        status: 'translated',
+      }),
+    ]);
+    expect(TranscriptStore.loadAll()[0]?.conversationTurns?.[0]).toMatchObject({
+      translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+    });
+  });
+
+  it('does not send translation text to the proxy when cloud processing is disabled', async () => {
+    const session = makeSession([makeTurn({ id: 'partner-1' })]);
+    localStorage.setItem('echo_transcripts', JSON.stringify([session]));
+
+    const results = await processPendingConversationTranslations(session, {
+      allowCloudProcessing: false,
+      now: () => 2_000,
+    });
+
+    expect(results).toEqual([]);
+    expect(echoApiMock.requestTranslation).not.toHaveBeenCalled();
+    expect(TranscriptStore.loadAll()[0]?.conversationTurns?.[0]).not.toHaveProperty('translationKo');
+  });
+
+  it('records proxy translation failures without mutating the saved turn', async () => {
+    const session = makeSession([makeTurn({ id: 'partner-1' })]);
+    localStorage.setItem('echo_transcripts', JSON.stringify([session]));
+    echoApiMock.requestTranslation.mockRejectedValueOnce(new Error('<b>proxy unavailable</b>'));
+
+    const results = await processPendingConversationTranslations(session, {
+      allowCloudProcessing: true,
+      now: () => 2_000,
+    });
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        turnId: 'partner-1',
+        status: 'failed',
+        job: expect.objectContaining({
+          error: 'proxy unavailable',
+        }),
+      }),
+    ]);
+    expect(TranscriptStore.loadAll()[0]?.conversationTurns?.[0]).not.toHaveProperty('translationKo');
   });
 });
 

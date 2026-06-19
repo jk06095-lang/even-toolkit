@@ -1,5 +1,6 @@
 import type { ConversationTurn } from '@toolkit/echo-domain-v2';
 import { getConversationTurns, TranscriptStore, type SessionTranscript } from './transcript-store';
+import { requestTranslation, type TranslationApiResponse } from '../services/echo-api';
 
 const STORAGE_KEY = 'echo_conversation_translation_jobs';
 const TARGET_LANGUAGE = 'ko-KR';
@@ -36,6 +37,19 @@ export interface ConversationTranslationState {
 export interface ConversationTranslationCompleteResult {
   job: ConversationTranslationJob;
   turn: ConversationTurn;
+}
+
+export interface ProcessConversationTranslationOptions {
+  allowCloudProcessing: boolean;
+  signal?: AbortSignal;
+  now?: () => number;
+  translate?: typeof requestTranslation;
+}
+
+export interface ConversationTranslationProcessResult {
+  job: ConversationTranslationJob;
+  turnId: string;
+  status: 'translated' | 'failed';
 }
 
 export function shouldQueueKoreanTranslation(turn: ConversationTurn): boolean {
@@ -125,6 +139,84 @@ export function getConversationTranslationJob(
 ): ConversationTranslationJob | null {
   const id = translationJobId(sessionId, turnId);
   return loadConversationTranslationJobs().find((job) => job.id === id) ?? null;
+}
+
+export async function processPendingConversationTranslations(
+  session: SessionTranscript,
+  options: ProcessConversationTranslationOptions,
+): Promise<ConversationTranslationProcessResult[]> {
+  if (!options.allowCloudProcessing || options.signal?.aborted) return [];
+
+  const now = options.now ?? (() => Date.now());
+  const translate = options.translate ?? requestTranslation;
+  const turns = getConversationTurns(session);
+  const turnsById = new Map(turns.map((turn) => [turn.id, turn]));
+  const jobs = queuePendingConversationTranslations(session, now())
+    .filter((job) => job.status === 'pending');
+  const results: ConversationTranslationProcessResult[] = [];
+
+  for (const job of jobs) {
+    if (options.signal?.aborted) break;
+
+    const turn = turnsById.get(job.turnId);
+    if (!turn || !shouldQueueKoreanTranslation(turn)) continue;
+
+    try {
+      const response = await translate({
+        clientSessionId: session.sessionId,
+        requestId: `${job.id}:attempt:${job.attempts + 1}`,
+        turnId: job.turnId,
+        sourceLanguage: turn.language,
+        targetLanguage: TARGET_LANGUAGE,
+        text: turn.transcript,
+      }, options.signal);
+      if (options.signal?.aborted) break;
+
+      const translationKo = extractTranslationKo(response);
+      const completed = translationKo
+        ? markConversationTranslationComplete(job.sessionId, job.turnId, translationKo, now())
+        : null;
+      if (completed) {
+        results.push({
+          job: completed.job,
+          turnId: job.turnId,
+          status: 'translated',
+        });
+        continue;
+      }
+
+      const failed = markConversationTranslationFailed(
+        job.sessionId,
+        job.turnId,
+        'Translation response was empty.',
+        now(),
+      );
+      if (failed) {
+        results.push({
+          job: failed,
+          turnId: job.turnId,
+          status: 'failed',
+        });
+      }
+    } catch (err) {
+      if (options.signal?.aborted) break;
+      const failed = markConversationTranslationFailed(
+        job.sessionId,
+        job.turnId,
+        err instanceof Error ? err.message : 'Translation failed.',
+        now(),
+      );
+      if (failed) {
+        results.push({
+          job: failed,
+          turnId: job.turnId,
+          status: 'failed',
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 export function loadConversationTranslationJobs(): ConversationTranslationJob[] {
@@ -289,6 +381,14 @@ function cleanPlainText(value: unknown, maxLength: number): string | undefined {
     .trim()
     .slice(0, maxLength);
   return cleaned || undefined;
+}
+
+function extractTranslationKo(response: TranslationApiResponse | string): string | undefined {
+  if (typeof response === 'string') return cleanPlainText(response, MAX_TRANSLATION_LENGTH);
+  return (
+    cleanPlainText(response.translationKo, MAX_TRANSLATION_LENGTH) ||
+    cleanPlainText(response.text, MAX_TRANSLATION_LENGTH)
+  );
 }
 
 function coerceString(value: unknown): string {

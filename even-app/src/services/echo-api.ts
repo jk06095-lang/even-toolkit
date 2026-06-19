@@ -156,6 +156,22 @@ export interface TranscriptionApiResponse {
   latencyMs?: number;
 }
 
+export interface TranslationApiRequest {
+  clientSessionId?: string;
+  requestId?: string;
+  turnId: string;
+  sourceLanguage: string;
+  targetLanguage: 'ko-KR';
+  text: string;
+}
+
+export interface TranslationApiResponse {
+  translationKo?: string | null;
+  text?: string | null;
+  source?: string;
+  latencyMs?: number;
+}
+
 export function requestCue(input: CueApiRequest, signal?: AbortSignal): Promise<CueApiResponse | string> {
   return postEcho<CueApiResponse | string>('/v1/cue', input, signal);
 }
@@ -169,4 +185,11 @@ export function requestTranscription(
 
 export function requestSessionAnalysis<T = unknown>(input: unknown, signal?: AbortSignal): Promise<T> {
   return postEcho<T>('/v1/session-analysis', input, signal);
+}
+
+export function requestTranslation(
+  input: TranslationApiRequest,
+  signal?: AbortSignal,
+): Promise<TranslationApiResponse | string> {
+  return postEcho<TranslationApiResponse | string>('/v1/translate', input, signal);
 }

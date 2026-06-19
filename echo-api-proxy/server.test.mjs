@@ -157,6 +157,37 @@ test('missing provider key fails safely without echoing request content', async 
   assert.equal((proxyOutput + proxyErrorOutput).includes(sensitiveText), false);
 });
 
+test('missing provider key fails safely for translation without echoing source text', async () => {
+  const sensitiveText = 'translate this learner sentence without echoing it';
+  const startedAt = Date.now();
+  const response = await fetch(`${baseUrl}/v1/translate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      clientSessionId: 'translation-safe-session',
+      requestId: 'translation-safe-session:translate:1',
+      turnId: 'turn-1',
+      sourceLanguage: 'en-US',
+      targetLanguage: 'ko-KR',
+      text: sensitiveText,
+    }),
+  });
+  const text = await response.text();
+  const elapsedMs = Date.now() - startedAt;
+  const body = JSON.parse(text);
+
+  assert.equal(response.status, 503);
+  assert.ok(elapsedMs >= qaDelayMs, `expected delayed QA response, got ${elapsedMs}ms`);
+  assert.equal(body.error.code, 'proxy_not_configured');
+  assert.equal(text.includes(sensitiveText), false);
+  await delay(20);
+  assert.equal((proxyOutput + proxyErrorOutput).includes(sensitiveText), false);
+});
+
 test('rate limit returns a clear 429 before provider work starts', async () => {
   const request = () => fetch(`${baseUrl}/v1/cue`, {
     method: 'POST',
@@ -208,6 +239,28 @@ test('malformed request schema is rejected before provider work starts', async (
       topic: 'schema qa',
       clientSessionId: 'malformed-schema-session',
       usedHints: 'not an array',
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, 'invalid_request_schema');
+});
+
+test('translation request schema is bounded before provider work starts', async () => {
+  const response = await fetch(`${baseUrl}/v1/translate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      clientSessionId: 'translation-schema-session',
+      turnId: 'turn-1',
+      sourceLanguage: 'en-US',
+      targetLanguage: 'en-US',
+      text: 'What problem are you solving first?',
     }),
   });
   const body = await response.json();
