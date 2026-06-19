@@ -201,7 +201,7 @@ describe('active recall learning loop', () => {
     expect(nextTransferPrompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
   });
 
-  it('records G2 bridge recall attempts without browser pronunciation scores', () => {
+  it('records G2 bridge recall attempts with audio-level evidence but no browser pronunciation scores', () => {
     const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
       now: () => dueNow,
     });
@@ -214,16 +214,74 @@ describe('active recall learning loop', () => {
       {
         now: () => dueNow,
         captureSource: 'g2_bridge',
+        audioLevelEvidence: {
+          source: 'g2_bridge_pcm',
+          sampleRateHz: 16000,
+          durationMs: 40,
+          frameCount: 4,
+          speechFrameCount: 2,
+          silenceFrameCount: 2,
+          speechThreshold: 0.015,
+          averageRms: 0.108,
+          peakRms: 0.153,
+          voiceActivityRatio: 0.5,
+          clippedFrameCount: 0,
+        },
       },
     );
 
     expect(attempt.captureSource).toBe('g2_bridge');
     expect(attempt.evaluation?.pronunciationScore).toBeUndefined();
     expect(attempt.evaluation?.pronunciationSource).toBeUndefined();
+    expect(attempt.audioLevelEvidence).toMatchObject({
+      source: 'g2_bridge_pcm',
+      sampleRateHz: 16000,
+      durationMs: 40,
+      voiceActivityRatio: 0.5,
+    });
     expect(loadActiveRecallSnapshot().attempts.at(-1)).toMatchObject({
       captureSource: 'g2_bridge',
       grade: 'good',
+      audioLevelEvidence: {
+        source: 'g2_bridge_pcm',
+        peakRms: 0.153,
+      },
     });
+  });
+
+  it('drops G2 audio-level evidence from typed or phone attempts', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    const attempt = recordActiveRecallAttempt(
+      item!.learningItem,
+      'good',
+      'Could you repeat that?',
+      {
+        now: () => dueNow,
+        captureSource: 'phone_web_speech',
+        pronunciationConfidence: 0.72,
+        audioLevelEvidence: {
+          source: 'g2_bridge_pcm',
+          sampleRateHz: 16000,
+          durationMs: 40,
+          frameCount: 4,
+          speechFrameCount: 2,
+          silenceFrameCount: 2,
+          speechThreshold: 0.015,
+          averageRms: 0.108,
+          peakRms: 0.153,
+          voiceActivityRatio: 0.5,
+          clippedFrameCount: 0,
+        },
+      },
+    );
+
+    expect(attempt.captureSource).toBe('phone_web_speech');
+    expect(attempt.audioLevelEvidence).toBeUndefined();
+    expect(attempt.evaluation?.pronunciationSource).toBe('web_speech_confidence');
   });
 
   it('builds source-remix transfer scenarios when partner context exists', () => {

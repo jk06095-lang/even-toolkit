@@ -100,6 +100,7 @@ export function createChatGptActionMockServer() {
         assertOneOf(body.grade, ['again', 'hard', 'good', 'easy'], 'grade');
         assertOneOf(body.mode, ['meaning_to_expression', 'transfer'], 'mode');
         assertOneOf(body.captureSource, REVIEW_CAPTURE_SOURCES, 'captureSource');
+        assertOptionalAudioLevelEvidence(body.audioLevelEvidence);
         sendJson(response, 200, {
           accepted: true,
           itemId: body.itemId,
@@ -297,6 +298,54 @@ function assertOneOf(value, allowed, field) {
 function assertArrayBounds(value, min, max, field) {
   if (!Array.isArray(value) || value.length < min || value.length > max) {
     throw httpError(400, `${field} must contain ${min}-${max} item(s)`);
+  }
+}
+
+function assertOptionalAudioLevelEvidence(value) {
+  if (value === undefined || value === null) return;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw httpError(400, 'audioLevelEvidence must be an object');
+  }
+  const required = [
+    'source',
+    'sampleRateHz',
+    'durationMs',
+    'frameCount',
+    'speechFrameCount',
+    'silenceFrameCount',
+    'speechThreshold',
+    'averageRms',
+    'peakRms',
+    'voiceActivityRatio',
+    'clippedFrameCount',
+  ];
+  assertRequired(value, required);
+  if (value.source !== 'g2_bridge_pcm' || value.sampleRateHz !== 16_000) {
+    throw httpError(400, 'audioLevelEvidence must describe G2 bridge PCM');
+  }
+  assertIntegerRange(value.durationMs, 1, 600_000, 'audioLevelEvidence.durationMs');
+  assertIntegerRange(value.frameCount, 1, 120_000, 'audioLevelEvidence.frameCount');
+  assertIntegerRange(value.speechFrameCount, 0, 120_000, 'audioLevelEvidence.speechFrameCount');
+  assertIntegerRange(value.silenceFrameCount, 0, 120_000, 'audioLevelEvidence.silenceFrameCount');
+  assertNumberRange(value.speechThreshold, 0, 1, 'audioLevelEvidence.speechThreshold');
+  assertNumberRange(value.averageRms, 0, 1, 'audioLevelEvidence.averageRms');
+  assertNumberRange(value.peakRms, 0, 1, 'audioLevelEvidence.peakRms');
+  assertNumberRange(value.voiceActivityRatio, 0, 1, 'audioLevelEvidence.voiceActivityRatio');
+  assertIntegerRange(value.clippedFrameCount, 0, 120_000, 'audioLevelEvidence.clippedFrameCount');
+  if (value.speechFrameCount + value.silenceFrameCount > value.frameCount) {
+    throw httpError(400, 'audioLevelEvidence frame counts are inconsistent');
+  }
+}
+
+function assertIntegerRange(value, min, max, field) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw httpError(400, `${field} must be an integer from ${min} to ${max}`);
+  }
+}
+
+function assertNumberRange(value, min, max, field) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw httpError(400, `${field} must be a number from ${min} to ${max}`);
   }
 }
 

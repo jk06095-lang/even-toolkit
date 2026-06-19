@@ -1,6 +1,7 @@
 import type { HUDController } from '../hud/hud-controller';
 import { HybridRecognizer, type HybridRecognizerCallbacks } from '../combat/hybrid-recognizer';
 import { isEchoApiConfigured } from '../services/echo-api';
+import type { ActiveRecallAudioLevelEvidence } from './active-recall';
 
 export type ActiveRecallSpeechStatus =
   | 'idle'
@@ -14,6 +15,7 @@ export type ActiveRecallSpeechStatus =
 export interface ActiveRecallSpeechCallbacks {
   onInterim?: (text: string) => void;
   onFinal?: (text: string, confidence?: number) => void;
+  onAudioLevelEvidence?: (evidence: ActiveRecallAudioLevelEvidence) => void;
   onStatus?: (status: ActiveRecallSpeechStatus) => void;
   onError?: (message: string) => void;
 }
@@ -70,6 +72,19 @@ interface SpeechRecognitionErrorEventLike {
   error?: string;
   message?: string;
 }
+
+interface AudioLevelStats {
+  frameCount: number;
+  speechFrameCount: number;
+  silenceFrameCount: number;
+  clippedFrameCount: number;
+  totalSamples: number;
+  totalRms: number;
+  peakRms: number;
+}
+
+const G2_PCM_SAMPLE_RATE_HZ = 16_000;
+const CLIPPED_SAMPLE_THRESHOLD = 0.98;
 
 export type ActiveRecallBridgeHud = Pick<HUDController, 'connected' | 'onAudioData' | 'setAudioCapture'>;
 
@@ -227,6 +242,7 @@ export class ActiveRecallBridgeSpeechCapture {
   private speechActive = false;
   private silenceFrames = 0;
   private requestCounter = 0;
+  private audioStats: AudioLevelStats = emptyAudioLevelStats();
 
   constructor(
     callbacks: ActiveRecallSpeechCallbacks,
@@ -275,6 +291,7 @@ export class ActiveRecallBridgeSpeechCapture {
     this.active = true;
     this.speechActive = false;
     this.silenceFrames = 0;
+    this.audioStats = emptyAudioLevelStats();
 
     try {
       this.unsubscribeAudio = this.hud.onAudioData((pcm) => this.handlePcm(pcm));
@@ -294,6 +311,7 @@ export class ActiveRecallBridgeSpeechCapture {
     this.active = false;
     this.speechActive = false;
     this.silenceFrames = 0;
+    this.audioStats = emptyAudioLevelStats();
 
     this.unsubscribeAudio?.();
     this.unsubscribeAudio = undefined;
@@ -321,7 +339,12 @@ export class ActiveRecallBridgeSpeechCapture {
     if (speechLike && !this.speechActive) {
       this.speechActive = true;
       this.silenceFrames = 0;
+      this.audioStats = emptyAudioLevelStats();
       this.recognizer.notifySpeechStart();
+    }
+
+    if (this.speechActive) {
+      this.recordAudioFrame(samples, rms, speechLike);
     }
 
     this.recognizer.feedPCM(samples);
@@ -337,11 +360,49 @@ export class ActiveRecallBridgeSpeechCapture {
     if (this.silenceFrames >= this.minSilenceFrames) {
       this.speechActive = false;
       this.silenceFrames = 0;
+      const evidence = this.buildAudioLevelEvidence();
+      this.audioStats = emptyAudioLevelStats();
+      if (evidence) {
+        this.callbacks.onAudioLevelEvidence?.(evidence);
+      }
       void Promise.resolve(this.recognizer.notifySpeechEnd()).catch((error) => {
         this.updateStatus('error');
         this.callbacks.onError?.(error instanceof Error ? error.message : 'G2 bridge transcription failed');
       });
     }
+  }
+
+  private recordAudioFrame(samples: Float32Array, rms: number, speechLike: boolean): void {
+    this.audioStats.frameCount += 1;
+    this.audioStats.totalSamples += samples.length;
+    this.audioStats.totalRms += rms;
+    this.audioStats.peakRms = Math.max(this.audioStats.peakRms, rms);
+    if (speechLike) {
+      this.audioStats.speechFrameCount += 1;
+    } else {
+      this.audioStats.silenceFrameCount += 1;
+    }
+    if (hasClippedSample(samples)) {
+      this.audioStats.clippedFrameCount += 1;
+    }
+  }
+
+  private buildAudioLevelEvidence(): ActiveRecallAudioLevelEvidence | undefined {
+    const stats = this.audioStats;
+    if (stats.frameCount === 0 || stats.totalSamples === 0) return undefined;
+    return {
+      source: 'g2_bridge_pcm',
+      sampleRateHz: G2_PCM_SAMPLE_RATE_HZ,
+      durationMs: Math.round((stats.totalSamples / G2_PCM_SAMPLE_RATE_HZ) * 1000),
+      frameCount: stats.frameCount,
+      speechFrameCount: stats.speechFrameCount,
+      silenceFrameCount: stats.silenceFrameCount,
+      speechThreshold: round3(this.speechThreshold),
+      averageRms: round3(stats.totalRms / stats.frameCount),
+      peakRms: round3(stats.peakRms),
+      voiceActivityRatio: round3(stats.speechFrameCount / stats.frameCount),
+      clippedFrameCount: stats.clippedFrameCount,
+    };
   }
 
   private defaultRecognizerFactory(callbacks: HybridRecognizerCallbacks): ActiveRecallBridgeRecognizerDriver {
@@ -386,6 +447,18 @@ function averageConfidence(values: number[]): number | undefined {
   return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 1000) / 1000;
 }
 
+function emptyAudioLevelStats(): AudioLevelStats {
+  return {
+    frameCount: 0,
+    speechFrameCount: 0,
+    silenceFrameCount: 0,
+    clippedFrameCount: 0,
+    totalSamples: 0,
+    totalRms: 0,
+    peakRms: 0,
+  };
+}
+
 function pcm16ToFloat32(bytes: Uint8Array): Float32Array {
   const samples = Math.floor(bytes.byteLength / 2);
   const output = new Float32Array(samples);
@@ -403,4 +476,15 @@ function calculateRms(samples: Float32Array): number {
     sumSquares += samples[index] * samples[index];
   }
   return Math.sqrt(sumSquares / samples.length);
+}
+
+function hasClippedSample(samples: Float32Array): boolean {
+  for (let index = 0; index < samples.length; index += 1) {
+    if (Math.abs(samples[index]) >= CLIPPED_SAMPLE_THRESHOLD) return true;
+  }
+  return false;
+}
+
+function round3(value: number): number {
+  return Math.round(value * 1000) / 1000;
 }

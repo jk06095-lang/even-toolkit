@@ -30,8 +30,8 @@ can survive Android WebView relaunches and still be rebuilt from saved
 transcripts if local review state is missing. Grades adjust `reps`, `lapses`,
 `difficulty`, `stability`, `dueAt`, and transfer-check progress without marking
 an immediate cue repeat as mastery. Each attempt also records `captureSource`
-as `typed`, `phone_web_speech`, or future `g2_bridge` evidence so browser-only
-voice attempts cannot be mistaken for G2/audio-level pronunciation proof.
+as `typed`, `phone_web_speech`, or `g2_bridge` evidence so browser-only voice
+attempts cannot be mistaken for G2/audio-level pronunciation proof.
 Legacy stored attempts without the field are migrated on load: Web Speech
 confidence maps to `phone_web_speech`, and all other attempts map to `typed`.
 
@@ -63,14 +63,20 @@ running on HTTPS / localhost.
 The Echo Reminders review surface now keeps voice sources explicit: Phone Voice
 uses browser Web Speech, while G2 Voice uses the connected G2 bridge microphone
 and the ECHO API proxy transcription path. G2 Voice attempts are saved with
-`captureSource: "g2_bridge"` and do not reuse browser speech confidence as a
-pronunciation score.
+`captureSource: "g2_bridge"` and can include bounded `audioLevelEvidence`
+derived from the 16 kHz G2 PCM stream: duration, frame counts, speech-frame
+ratio, RMS levels, threshold, and clipping counts. The evidence proves that a
+G2 bridge PCM attempt was captured for review; it is not raw audio and does not
+pretend to be a phoneme-level pronunciation grade.
 
 When Web Speech supplies a final-result confidence value, active recall stores
 it as an optional `pronunciationScore` with source `web_speech_confidence`.
 The app does not invent pronunciation scores for typed attempts or speech
 providers that omit confidence, and the score is presented as browser speech
 confidence rather than a full phoneme-level pronunciation assessment.
+G2 bridge attempts therefore keep audio-level evidence separate from
+`pronunciationScore` until a real pronunciation evaluator is connected and
+hardware evidence is collected.
 
 After two successful recall reps, the prompt moves into transfer mode. Transfer
 prompts are generated from the item's `speechAct`, scenario tags, and optional
@@ -125,10 +131,11 @@ The next server-synced integration boundary now lives under
   token-free evidence JSON that can be referenced from the completed Action
   evidence manifest.
 - `/v1/reviews/attempt` now requires `captureSource` (`typed`,
-  `phone_web_speech`, or future `g2_bridge`) so Action write-back preserves the
-  same production-attempt boundary as the local phone review store. Deployed
-  smoke evidence may prove phone/Web Speech or typed attempts, but it still does
-  not satisfy the separate G2/audio-level pronunciation evidence requirement.
+  `phone_web_speech`, or `g2_bridge`) so Action write-back preserves the same
+  production-attempt boundary as the local phone review store. It may also
+  accept bounded `audioLevelEvidence` for G2 bridge PCM attempts. Deployed smoke
+  evidence may prove phone/Web Speech or typed attempts, but it still does not
+  satisfy the separate real-device G2/audio-level evidence requirement.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.
@@ -184,6 +191,7 @@ authorization and token exchange evidence against the deployed callback, choose
 and review the production storage policy beyond the reference file-backed
 store, and collect completed hardware evidence for G2 bridge active-recall
 capture plus G2/audio-level pronunciation scoring. The app can now label
-G2 bridge recall attempts distinctly, but the current pronunciation layer is
-still limited to optional browser speech confidence; Web Speech-only evidence
-is explicitly insufficient for closing the G2/audio-level requirement.
+G2 bridge recall attempts distinctly and store G2 PCM audio-level evidence, but
+the current scoring layer is still limited to optional browser speech
+confidence. Web Speech-only evidence remains explicitly insufficient for
+closing the G2/audio-level requirement.

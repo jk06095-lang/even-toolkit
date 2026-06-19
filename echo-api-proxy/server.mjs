@@ -456,6 +456,7 @@ function handleActionEndpoint(endpoint, body, url, auth) {
   if (endpoint === 'action-review-attempt') {
     const item = findActionLearningItem(store, body.itemId);
     const nextDueAt = applyActionReviewGrade(item, body.grade, body.mode);
+    const audioLevelEvidence = normalizeActionAudioLevelEvidence(body.audioLevelEvidence);
     store.attempts.push({
       itemId: body.itemId,
       mode: body.mode,
@@ -464,6 +465,7 @@ function handleActionEndpoint(endpoint, body, url, auth) {
       attemptedAt: body.attemptedAt,
       semanticScore: boundedOptionalNumber(body.semanticScore, 0, 1),
       pronunciationScore: boundedOptionalNumber(body.pronunciationScore, 0, 1),
+      ...(audioLevelEvidence ? { audioLevelEvidence } : {}),
     });
     touchActionStore(store);
     return {
@@ -831,6 +833,7 @@ function validateActionRequestBody(endpoint, body, url) {
       'userAttempt',
       'attemptedAt',
       'semanticScore',
+      'audioLevelEvidence',
       'pronunciationScore',
     ], 'body');
     assertActionSchemaVersion(body);
@@ -841,6 +844,7 @@ function validateActionRequestBody(endpoint, body, url) {
     assertOptionalPlainText(body, 'userAttempt', 1_000);
     assertIsoDateField(body, 'attemptedAt');
     assertOptionalNumber(body, 'semanticScore', 0, 1);
+    assertOptionalActionAudioLevelEvidence(body, 'audioLevelEvidence');
     assertOptionalNumber(body, 'pronunciationScore', 0, 1);
     return;
   }
@@ -1083,6 +1087,7 @@ function normalizePersistedActionAttempts(value) {
     if (!['meaning_to_expression', 'transfer'].includes(attempt.mode)) return [];
     if (!['again', 'hard', 'good', 'easy'].includes(attempt.grade)) return [];
     if (typeof attempt.attemptedAt !== 'string' || Number.isNaN(Date.parse(attempt.attemptedAt))) return [];
+    const audioLevelEvidence = normalizeActionAudioLevelEvidence(attempt.audioLevelEvidence);
     return [{
       itemId: attempt.itemId,
       mode: attempt.mode,
@@ -1091,6 +1096,7 @@ function normalizePersistedActionAttempts(value) {
       attemptedAt: attempt.attemptedAt,
       semanticScore: boundedOptionalNumber(attempt.semanticScore, 0, 1),
       pronunciationScore: boundedOptionalNumber(attempt.pronunciationScore, 0, 1),
+      ...(audioLevelEvidence ? { audioLevelEvidence } : {}),
     }];
   });
 }
@@ -1891,6 +1897,41 @@ function assertOptionalNumber(record, field, min, max) {
   }
 }
 
+function assertOptionalActionAudioLevelEvidence(record, field) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  assertPlainObject(value, field);
+  assertAllowedFields(value, [
+    'source',
+    'sampleRateHz',
+    'durationMs',
+    'frameCount',
+    'speechFrameCount',
+    'silenceFrameCount',
+    'speechThreshold',
+    'averageRms',
+    'peakRms',
+    'voiceActivityRatio',
+    'clippedFrameCount',
+  ], field);
+  assertEnumField(value, 'source', ['g2_bridge_pcm']);
+  if (value.sampleRateHz !== 16_000) {
+    throw new HttpError(400, 'invalid_request_schema', `${field}.sampleRateHz must be 16000.`);
+  }
+  assertIntegerField(value, 'durationMs', 1, 600_000);
+  assertIntegerField(value, 'frameCount', 1, 120_000);
+  assertIntegerField(value, 'speechFrameCount', 0, 120_000);
+  assertIntegerField(value, 'silenceFrameCount', 0, 120_000);
+  assertNumberField(value, 'speechThreshold', 0, 1);
+  assertNumberField(value, 'averageRms', 0, 1);
+  assertNumberField(value, 'peakRms', 0, 1);
+  assertNumberField(value, 'voiceActivityRatio', 0, 1);
+  assertIntegerField(value, 'clippedFrameCount', 0, 120_000);
+  if (value.speechFrameCount + value.silenceFrameCount > value.frameCount) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} frame counts are inconsistent.`);
+  }
+}
+
 function assertOptionalEnum(record, field, values) {
   const value = record[field];
   if (value === undefined || value === null) return;
@@ -2036,6 +2077,45 @@ function readActionLimit(url) {
 
 function boundedOptionalNumber(value, min, max) {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+    ? value
+    : undefined;
+}
+
+function normalizeActionAudioLevelEvidence(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  if (value.source !== 'g2_bridge_pcm' || value.sampleRateHz !== 16_000) return undefined;
+  const normalized = {
+    source: 'g2_bridge_pcm',
+    sampleRateHz: 16_000,
+    durationMs: boundedInteger(value.durationMs, 1, 600_000),
+    frameCount: boundedInteger(value.frameCount, 1, 120_000),
+    speechFrameCount: boundedInteger(value.speechFrameCount, 0, 120_000),
+    silenceFrameCount: boundedInteger(value.silenceFrameCount, 0, 120_000),
+    speechThreshold: boundedOptionalNumber(value.speechThreshold, 0, 1),
+    averageRms: boundedOptionalNumber(value.averageRms, 0, 1),
+    peakRms: boundedOptionalNumber(value.peakRms, 0, 1),
+    voiceActivityRatio: boundedOptionalNumber(value.voiceActivityRatio, 0, 1),
+    clippedFrameCount: boundedInteger(value.clippedFrameCount, 0, 120_000),
+  };
+  if (
+    normalized.durationMs === undefined ||
+    normalized.frameCount === undefined ||
+    normalized.speechFrameCount === undefined ||
+    normalized.silenceFrameCount === undefined ||
+    normalized.speechThreshold === undefined ||
+    normalized.averageRms === undefined ||
+    normalized.peakRms === undefined ||
+    normalized.voiceActivityRatio === undefined ||
+    normalized.clippedFrameCount === undefined ||
+    normalized.speechFrameCount + normalized.silenceFrameCount > normalized.frameCount
+  ) {
+    return undefined;
+  }
+  return normalized;
+}
+
+function boundedInteger(value, min, max) {
+  return Number.isInteger(value) && value >= min && value <= max
     ? value
     : undefined;
 }

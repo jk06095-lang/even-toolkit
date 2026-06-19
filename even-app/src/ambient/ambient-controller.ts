@@ -9,6 +9,7 @@ import {
   recordActiveRecallAttempt,
   type ActiveRecallGrade,
   type ActiveRecallAttemptEvaluation,
+  type ActiveRecallAudioLevelEvidence,
   type ActiveRecallCaptureSource,
   type ActiveRecallQueueItem,
 } from '../learning/active-recall';
@@ -144,6 +145,7 @@ function updatePendingList(items: PendingItem[]): void {
 let currentRecallItem: ActiveRecallQueueItem | null = null;
 let recallSpeechCapture: { stop: () => void | Promise<void> } | null = null;
 let currentVoiceAttemptConfidence: number | undefined;
+let currentAttemptAudioLevelEvidence: ActiveRecallAudioLevelEvidence | undefined;
 let currentAttemptCaptureSource: ActiveRecallCaptureSource = 'typed';
 
 function renderActiveRecallPanel(statusMessage = ''): void {
@@ -168,6 +170,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   if (statusEl) statusEl.textContent = statusMessage;
   if (speechStatusEl) speechStatusEl.textContent = '';
   currentVoiceAttemptConfidence = undefined;
+  currentAttemptAudioLevelEvidence = undefined;
   currentAttemptCaptureSource = 'typed';
   answerEl.style.display = 'none';
   if (evaluationEl) evaluationEl.textContent = '';
@@ -263,6 +266,7 @@ function startActiveRecallPhoneSpeech(): void {
       }
       currentAttemptCaptureSource = 'phone_web_speech';
       currentVoiceAttemptConfidence = combineConfidence(currentVoiceAttemptConfidence, confidence);
+      currentAttemptAudioLevelEvidence = undefined;
       setSpeechStatus(
         currentVoiceAttemptConfidence === undefined
           ? 'Voice attempt captured.'
@@ -313,7 +317,18 @@ async function startActiveRecallG2Speech(context: AmbientControllerContext): Pro
       }
       currentAttemptCaptureSource = 'g2_bridge';
       currentVoiceAttemptConfidence = undefined;
-      setSpeechStatus('G2 recall attempt captured.');
+      setSpeechStatus(
+        currentAttemptAudioLevelEvidence
+          ? `G2 recall attempt captured. Audio ${Math.round(currentAttemptAudioLevelEvidence.voiceActivityRatio * 100)}% speech frames.`
+          : 'G2 recall attempt captured.',
+      );
+    },
+    onAudioLevelEvidence: (evidence) => {
+      currentAttemptCaptureSource = 'g2_bridge';
+      currentAttemptAudioLevelEvidence = evidence;
+      setSpeechStatus(
+        `G2 audio evidence captured. Peak RMS ${Math.round(evidence.peakRms * 100)}%.`,
+      );
     },
     onStatus: (status) => {
       setSpeechButtons(status === 'listening', Boolean(currentRecallItem));
@@ -355,7 +370,7 @@ function revealActiveRecallAnswer(): void {
   const evaluation = evaluateActiveRecallAttempt(currentRecallItem.learningItem, attemptEl?.value ?? '', {
     pronunciationConfidence: currentVoiceAttemptConfidence,
   });
-  if (evaluationEl) evaluationEl.textContent = formatEvaluation(evaluation);
+  if (evaluationEl) evaluationEl.textContent = formatEvaluation(evaluation, currentAttemptAudioLevelEvidence);
   if (statusEl) statusEl.textContent = `Suggested grade: ${evaluation.recommendedGrade}. Choose the grade you want to save.`;
 }
 
@@ -371,6 +386,7 @@ function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
       mode: currentRecallItem.prompt.mode,
       captureSource: currentAttemptCaptureSource,
       pronunciationConfidence: currentVoiceAttemptConfidence,
+      audioLevelEvidence: currentAttemptAudioLevelEvidence,
     },
   );
   const next = new Date(attempt.dueAtAfter);
@@ -441,13 +457,19 @@ function statusMessageForSpeechStartReason(reason: string | undefined): string {
   return 'Voice recall is already active.';
 }
 
-function formatEvaluation(evaluation: ActiveRecallAttemptEvaluation): string {
+function formatEvaluation(
+  evaluation: ActiveRecallAttemptEvaluation,
+  audioLevelEvidence?: ActiveRecallAudioLevelEvidence,
+): string {
   const percent = Math.round(evaluation.semanticScore * 100);
   const pronunciation = evaluation.pronunciationScore !== undefined
     ? ` Voice confidence ${Math.round(evaluation.pronunciationScore * 100)}%.`
     : '';
+  const g2Audio = audioLevelEvidence
+    ? ` G2 audio evidence ${Math.round(audioLevelEvidence.voiceActivityRatio * 100)}% speech frames.`
+    : '';
   const missing = evaluation.missingKeywords.length > 0
     ? ` Missing: ${evaluation.missingKeywords.join(', ')}.`
     : '';
-  return `${evaluation.note} Score ${percent}%.${pronunciation} Recommended: ${evaluation.recommendedGrade}.${missing}`;
+  return `${evaluation.note} Score ${percent}%.${pronunciation}${g2Audio} Recommended: ${evaluation.recommendedGrade}.${missing}`;
 }

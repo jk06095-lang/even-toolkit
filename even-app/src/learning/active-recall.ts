@@ -58,6 +58,7 @@ export interface ActiveRecallAttempt {
   dueAtBefore: string;
   dueAtAfter: string;
   evaluation?: ActiveRecallAttemptEvaluation;
+  audioLevelEvidence?: ActiveRecallAudioLevelEvidence;
 }
 
 export interface ActiveRecallAttemptEvaluation {
@@ -71,6 +72,20 @@ export interface ActiveRecallAttemptEvaluation {
   pronunciationScore?: number;
   pronunciationSource?: 'web_speech_confidence';
   pronunciationNote?: string;
+}
+
+export interface ActiveRecallAudioLevelEvidence {
+  source: 'g2_bridge_pcm';
+  sampleRateHz: 16000;
+  durationMs: number;
+  frameCount: number;
+  speechFrameCount: number;
+  silenceFrameCount: number;
+  speechThreshold: number;
+  averageRms: number;
+  peakRms: number;
+  voiceActivityRatio: number;
+  clippedFrameCount: number;
 }
 
 export interface ActiveRecallStoreSnapshot {
@@ -89,6 +104,7 @@ export interface RecordActiveRecallAttemptOptions {
   mode?: ActiveRecallPromptMode;
   pronunciationConfidence?: number;
   captureSource?: ActiveRecallCaptureSource;
+  audioLevelEvidence?: ActiveRecallAudioLevelEvidence;
 }
 
 const STORAGE_KEY = 'echo_active_recall_reviews';
@@ -205,7 +221,11 @@ export function recordActiveRecallAttempt(
   const effectiveGrade = gradeForCapturedAttempt(grade, savedUserAttempt);
   const nextState = advanceActiveRecallState(current, effectiveGrade, now, mode);
   const captureSource = options.captureSource ??
+    (options.audioLevelEvidence ? 'g2_bridge' : undefined) ??
     (options.pronunciationConfidence !== undefined ? 'phone_web_speech' : 'typed');
+  const audioLevelEvidence = captureSource === 'g2_bridge'
+    ? normalizeAudioLevelEvidence(options.audioLevelEvidence)
+    : undefined;
   const attempt: ActiveRecallAttempt = {
     id: `${item.id}:attempt:${now.getTime()}`,
     itemId: item.id,
@@ -220,6 +240,9 @@ export function recordActiveRecallAttempt(
     dueAtAfter: nextState.dueAt,
     evaluation,
   };
+  if (audioLevelEvidence) {
+    attempt.audioLevelEvidence = audioLevelEvidence;
+  }
 
   snapshot.states[item.id] = nextState;
   snapshot.attempts.push(attempt);
@@ -498,7 +521,8 @@ function isActiveRecallAttempt(value: unknown): value is ActiveRecallAttempt {
     typeof value.attemptedAt === 'string' &&
     typeof value.dueAtBefore === 'string' &&
     typeof value.dueAtAfter === 'string' &&
-    (value.evaluation === undefined || isAttemptEvaluation(value.evaluation));
+    (value.evaluation === undefined || isAttemptEvaluation(value.evaluation)) &&
+    (value.audioLevelEvidence === undefined || isAudioLevelEvidence(value.audioLevelEvidence));
 }
 
 function isAttemptEvaluation(value: unknown): value is ActiveRecallAttemptEvaluation {
@@ -524,6 +548,47 @@ function isPromptMode(value: unknown): value is ActiveRecallPromptMode {
 
 function isCaptureSource(value: unknown): value is ActiveRecallCaptureSource {
   return value === 'typed' || value === 'phone_web_speech' || value === 'g2_bridge';
+}
+
+function normalizeAudioLevelEvidence(value: unknown): ActiveRecallAudioLevelEvidence | undefined {
+  if (!isAudioLevelEvidence(value)) return undefined;
+  return {
+    source: 'g2_bridge_pcm',
+    sampleRateHz: 16000,
+    durationMs: Math.round(value.durationMs),
+    frameCount: Math.round(value.frameCount),
+    speechFrameCount: Math.round(value.speechFrameCount),
+    silenceFrameCount: Math.round(value.silenceFrameCount),
+    speechThreshold: round(clamp(value.speechThreshold, 0, 1)),
+    averageRms: round(clamp(value.averageRms, 0, 1)),
+    peakRms: round(clamp(value.peakRms, 0, 1)),
+    voiceActivityRatio: round(clamp(value.voiceActivityRatio, 0, 1)),
+    clippedFrameCount: Math.round(value.clippedFrameCount),
+  };
+}
+
+function isAudioLevelEvidence(value: unknown): value is ActiveRecallAudioLevelEvidence {
+  return isRecord(value) &&
+    value.source === 'g2_bridge_pcm' &&
+    value.sampleRateHz === 16000 &&
+    isFiniteNumberInRange(value.durationMs, 1, 10 * 60 * 1000) &&
+    isFiniteIntegerInRange(value.frameCount, 1, 120_000) &&
+    isFiniteIntegerInRange(value.speechFrameCount, 0, 120_000) &&
+    isFiniteIntegerInRange(value.silenceFrameCount, 0, 120_000) &&
+    isFiniteNumberInRange(value.speechThreshold, 0, 1) &&
+    isFiniteNumberInRange(value.averageRms, 0, 1) &&
+    isFiniteNumberInRange(value.peakRms, 0, 1) &&
+    isFiniteNumberInRange(value.voiceActivityRatio, 0, 1) &&
+    isFiniteIntegerInRange(value.clippedFrameCount, 0, 120_000) &&
+    value.speechFrameCount + value.silenceFrameCount <= value.frameCount;
+}
+
+function isFiniteNumberInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+}
+
+function isFiniteIntegerInRange(value: unknown, min: number, max: number): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 }
 
 function isGrade(value: unknown): value is ActiveRecallGrade {

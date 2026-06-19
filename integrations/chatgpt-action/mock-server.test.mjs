@@ -83,6 +83,19 @@ test('accepts review, roleplay, and redacted session writes', async () => {
     attemptedAt: '2026-06-19T09:05:00.000Z',
     semanticScore: 0.82,
     pronunciationScore: 0.7,
+    audioLevelEvidence: {
+      source: 'g2_bridge_pcm',
+      sampleRateHz: 16000,
+      durationMs: 40,
+      frameCount: 4,
+      speechFrameCount: 2,
+      silenceFrameCount: 2,
+      speechThreshold: 0.015,
+      averageRms: 0.108,
+      peakRms: 0.153,
+      voiceActivityRatio: 0.5,
+      clippedFrameCount: 0,
+    },
   });
   assert.equal(attempt.status, 200);
   assert.deepEqual(Object.keys(await attempt.json()).sort(), ['accepted', 'itemId', 'nextDueAt']);

@@ -190,10 +190,12 @@ describe('active recall speech capture', () => {
     const hud = new FakeHud();
     const statuses: ActiveRecallSpeechStatus[] = [];
     const final: Array<{ text: string; confidence?: number }> = [];
+    const audioEvidence: any[] = [];
     let recognizer!: FakeBridgeRecognizer;
     const capture = new ActiveRecallBridgeSpeechCapture(
       {
         onFinal: (text, confidence) => final.push({ text, confidence }),
+        onAudioLevelEvidence: (evidence) => audioEvidence.push(evidence),
         onStatus: (status) => statuses.push(status),
       },
       {
@@ -221,6 +223,21 @@ describe('active recall speech capture', () => {
     expect(recognizer.speechStartCount).toBe(1);
     expect(recognizer.speechEndCount).toBe(1);
     expect(final).toEqual([{ text: 'Could you repeat that?', confidence: 0.72 }]);
+    expect(audioEvidence).toEqual([
+      expect.objectContaining({
+        source: 'g2_bridge_pcm',
+        sampleRateHz: 16000,
+        durationMs: 40,
+        frameCount: 4,
+        speechFrameCount: 2,
+        silenceFrameCount: 2,
+        speechThreshold: 0.015,
+        voiceActivityRatio: 0.5,
+        clippedFrameCount: 0,
+      }),
+    ]);
+    expect(audioEvidence[0].peakRms).toBeGreaterThan(0);
+    expect(audioEvidence[0].averageRms).toBeGreaterThan(0);
 
     await capture.stop();
     expect(recognizer.stopCount).toBe(1);

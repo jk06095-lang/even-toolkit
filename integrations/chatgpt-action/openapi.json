@@ -413,10 +413,83 @@
             "minimum": 0,
             "maximum": 1
           },
+          "audioLevelEvidence": {
+            "$ref": "#/components/schemas/AudioLevelEvidence"
+          },
           "pronunciationScore": {
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          }
+        }
+      },
+      "AudioLevelEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "sampleRateHz",
+          "durationMs",
+          "frameCount",
+          "speechFrameCount",
+          "silenceFrameCount",
+          "speechThreshold",
+          "averageRms",
+          "peakRms",
+          "voiceActivityRatio",
+          "clippedFrameCount"
+        ],
+        "properties": {
+          "source": {
+            "const": "g2_bridge_pcm"
+          },
+          "sampleRateHz": {
+            "const": 16000
+          },
+          "durationMs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 600000
+          },
+          "frameCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 120000
+          },
+          "speechFrameCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120000
+          },
+          "silenceFrameCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120000
+          },
+          "speechThreshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "averageRms": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "peakRms": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "voiceActivityRatio": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "clippedFrameCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120000
           }
         }
       },

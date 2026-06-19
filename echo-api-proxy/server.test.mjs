@@ -634,11 +634,23 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
           itemId: importedItemId,
           mode: 'meaning_to_expression',
           grade: 'good',
-          captureSource: 'phone_web_speech',
+          captureSource: 'g2_bridge',
           userAttempt: 'Could you explain that again?',
           attemptedAt: new Date().toISOString(),
           semanticScore: 0.87,
-          pronunciationScore: 0.72,
+          audioLevelEvidence: {
+            source: 'g2_bridge_pcm',
+            sampleRateHz: 16000,
+            durationMs: 40,
+            frameCount: 4,
+            speechFrameCount: 2,
+            silenceFrameCount: 2,
+            speechThreshold: 0.015,
+            averageRms: 0.108,
+            peakRms: 0.153,
+            voiceActivityRatio: 0.5,
+            clippedFrameCount: 0,
+          },
         }),
       });
       assert.equal(reviewResponse.status, 200);
@@ -649,8 +661,11 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
     const persistedText = readFileSync(storePath, 'utf8');
     assert.match(persistedText, /project-echo-action-store-v1/);
     assert.equal(persistedText.includes(importedItemId), true);
-    assert.equal(persistedText.includes('"captureSource": "phone_web_speech"'), true);
+    assert.equal(persistedText.includes('"captureSource": "g2_bridge"'), true);
+    assert.equal(persistedText.includes('"audioLevelEvidence"'), true);
+    assert.equal(persistedText.includes('"source": "g2_bridge_pcm"'), true);
     assert.equal(persistedText.includes('rawTranscript'), false);
+    assert.equal(persistedText.includes('audioBase64'), false);
     assert.equal(persistedText.includes('test@example.com'), false);
 
     const restartedProxy = await startProxy(storeEnv);
