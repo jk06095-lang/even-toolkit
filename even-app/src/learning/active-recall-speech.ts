@@ -1,6 +1,7 @@
 import type { HUDController } from '../hud/hud-controller';
 import { HybridRecognizer, type HybridRecognizerCallbacks } from '../combat/hybrid-recognizer';
 import { isEchoApiConfigured } from '../services/echo-api';
+import { resolveVadSpeechThreshold } from '../dsp/calibration';
 import type { ActiveRecallAudioLevelEvidence } from './active-recall';
 
 export type ActiveRecallSpeechStatus =
@@ -252,7 +253,11 @@ export class ActiveRecallBridgeSpeechCapture {
     this.hud = options.hud;
     this.recognizerFactory = options.recognizerFactory ?? this.defaultRecognizerFactory.bind(this);
     this.isProxyConfigured = options.isEchoApiConfigured ?? isEchoApiConfigured;
-    this.speechThreshold = options.speechThreshold ?? 0.015;
+    this.speechThreshold = resolveVadSpeechThreshold(
+      options.speechThreshold === undefined
+        ? null
+        : { speechThreshold: options.speechThreshold },
+    );
     this.minSilenceFrames = Math.max(1, Math.round(options.minSilenceFrames ?? 15));
   }
 

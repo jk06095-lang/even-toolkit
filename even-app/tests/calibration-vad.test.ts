@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { deriveVadCalibration } from '../src/dsp/calibration';
+import {
+  FALLBACK_VAD_SPEECH_THRESHOLD,
+  MAX_VAD_SPEECH_THRESHOLD,
+  deriveVadCalibration,
+  resolveVadSpeechThreshold,
+} from '../src/dsp/calibration';
 
 const capturedAt = new Date('2026-06-18T00:00:00Z').getTime();
 
@@ -60,5 +65,13 @@ describe('calibration-derived VAD thresholds', () => {
     ], capturedAt);
 
     expect(noisy.speechThreshold).toBeGreaterThan(quiet.speechThreshold);
+  });
+
+  it('normalizes saved thresholds before they reach bridge audio paths', () => {
+    expect(resolveVadSpeechThreshold(null)).toBe(FALLBACK_VAD_SPEECH_THRESHOLD);
+    expect(resolveVadSpeechThreshold({ speechThreshold: Number.NaN })).toBe(FALLBACK_VAD_SPEECH_THRESHOLD);
+    expect(resolveVadSpeechThreshold({ speechThreshold: 0.001 })).toBe(FALLBACK_VAD_SPEECH_THRESHOLD);
+    expect(resolveVadSpeechThreshold({ speechThreshold: 0.07 })).toBe(0.07);
+    expect(resolveVadSpeechThreshold({ speechThreshold: 0.9 })).toBe(MAX_VAD_SPEECH_THRESHOLD);
   });
 });

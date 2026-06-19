@@ -368,6 +368,7 @@ function validateDeviceEvidence() {
   if (!validateObject(manifest.activeRecallDeviceEvidence, 'activeRecallDeviceEvidence')) return;
   validateExpected(manifest.activeRecallDeviceEvidence, 'g2BridgeRecallCaptured', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'audioLevelPronunciationScoring', true, 'activeRecallDeviceEvidence');
+  validateExpected(manifest.activeRecallDeviceEvidence, 'calibratedG2ThresholdUsed', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'webSpeechOnlyMarkedInsufficient', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'twoSeparateRecallDaysProven', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'transferScenarioEvidenceCaptured', true, 'activeRecallDeviceEvidence');

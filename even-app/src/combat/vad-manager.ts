@@ -13,7 +13,7 @@
  */
 
 import { HUDController } from '../hud/hud-controller';
-import type { VadCalibration } from '../dsp/calibration';
+import { FALLBACK_VAD_SPEECH_THRESHOLD, resolveVadSpeechThreshold, type VadCalibration } from '../dsp/calibration';
 
 export type VADState = 'idle' | 'loading' | 'listening' | 'paused' | 'error';
 
@@ -389,7 +389,7 @@ class BridgeVAD {
   private silenceFrames = 0;
   
   // Tunable Thresholds
-  private speechThreshold = 0.015; // Normalized RMS threshold for speech
+  private speechThreshold = FALLBACK_VAD_SPEECH_THRESHOLD; // Normalized RMS threshold for speech
   private minSilenceFrames = 15;   // ~0.5s of silence to finalize chunk
 
   static async new(
@@ -405,9 +405,7 @@ class BridgeVAD {
     this.hud = hud;
     this.callbacks = callbacks;
     this.calibration = calibration;
-    if (calibration && Number.isFinite(calibration.speechThreshold)) {
-      this.speechThreshold = Math.min(0.35, Math.max(0.015, calibration.speechThreshold));
-    }
+    this.speechThreshold = resolveVadSpeechThreshold(calibration);
   }
 
   get speechThresholdDebug(): string {

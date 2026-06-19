@@ -36,7 +36,8 @@ before README portfolio links are updated. The Custom GPT Action evidence
 manifest should pass
 `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`
 after the Action API is deployed, OAuth is configured, privacy rejection tests
-are captured, and G2/audio-level active-recall pronunciation evidence exists.
+are captured, and calibrated G2/audio-level active-recall pronunciation evidence
+exists.
 It also has to prove the spaced-recall boundary: two separate hidden recall
 days, transfer scenario evidence, and same-day repeat attempts not counting as
 transfer.

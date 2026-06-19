@@ -502,6 +502,10 @@ availability:
   loops do not unlock transfer or count as independent transfer evidence.
 - \`webSpeechOnlyMarkedInsufficient=true\`: phone Web Speech evidence is clearly
   separated from G2 bridge audio-level recall evidence.
+- \`calibratedG2ThresholdUsed=true\`: G2 bridge recall evidence records the same
+  calibration-derived speech threshold used by the active recall audio-level
+  capture path, or the documented fallback threshold when calibration evidence
+  is legitimately unavailable.
 
 ## Evidence Queue
 

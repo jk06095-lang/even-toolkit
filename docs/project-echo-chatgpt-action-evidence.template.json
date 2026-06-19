@@ -102,6 +102,7 @@
   "activeRecallDeviceEvidence": {
     "g2BridgeRecallCaptured": null,
     "audioLevelPronunciationScoring": null,
+    "calibratedG2ThresholdUsed": null,
     "webSpeechOnlyMarkedInsufficient": null,
     "twoSeparateRecallDaysProven": null,
     "transferScenarioEvidenceCaptured": null,

@@ -80,6 +80,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(action.actionContractVersion, actionSpec.info.version);
   assert.equal(action.actionGpt.customGptConfigured, null);
   assert.equal(action.activeRecallDeviceEvidence.g2BridgeRecallCaptured, null);
+  assert.equal(action.activeRecallDeviceEvidence.calibratedG2ThresholdUsed, null);
   assert.equal(action.activeRecallDeviceEvidence.twoSeparateRecallDaysProven, null);
   assert.equal(action.activeRecallDeviceEvidence.transferScenarioEvidenceCaptured, null);
   assert.equal(action.activeRecallDeviceEvidence.sameDayRepeatNotCountedAsTransfer, null);
@@ -160,6 +161,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
   assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);
   assert.match(fieldRunbook, /twoSeparateRecallDaysProven=true/);
+  assert.match(fieldRunbook, /calibratedG2ThresholdUsed=true/);
   assert.match(fieldRunbook, /sameDayRepeatNotCountedAsTransfer=true/);
   assert.match(fieldRunbook, /smoke:action-oauth/);
   assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));

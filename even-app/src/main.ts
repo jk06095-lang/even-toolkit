@@ -136,6 +136,7 @@ function switchPhase(phase: number): void {
         setScheduler: (scheduler) => {
           ambientScheduler = scheduler;
         },
+        getCalibration: () => calibration,
       });
       break;
   }

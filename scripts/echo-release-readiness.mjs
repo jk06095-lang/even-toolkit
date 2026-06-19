@@ -640,7 +640,7 @@ async function main() {
     filePath: 'docs/project-echo-chatgpt-action-evidence.completed.json',
     npmScript: 'validate:chatgpt-action-evidence',
     issue: '#29',
-    missingDetail: 'Missing docs/project-echo-chatgpt-action-evidence.completed.json with deployed Custom GPT Action/OAuth endpoint proof, privacy rejection evidence, G2/audio-level active-recall pronunciation evidence, and spaced-recall transfer evidence.',
+    missingDetail: 'Missing docs/project-echo-chatgpt-action-evidence.completed.json with deployed Custom GPT Action/OAuth endpoint proof, privacy rejection evidence, calibrated G2/audio-level active-recall pronunciation evidence, and spaced-recall transfer evidence.',
   });
 
   checkManifestSummaries();

@@ -69,6 +69,18 @@ test('rejects completed Action evidence without spaced-recall transfer proof', a
   assert.match(result.stderr, /activeRecallDeviceEvidence\.transferScenarioEvidenceCaptured/);
 });
 
+test('rejects completed Action evidence without calibrated G2 threshold proof', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.activeRecallDeviceEvidence.calibratedG2ThresholdUsed = false;
+  const manifestPath = writeManifest('missing-calibrated-g2-threshold', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.calibratedG2ThresholdUsed/);
+});
+
 function writeManifest(name, manifest) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -131,6 +143,7 @@ function completeManifest({ tokenStorageBoundary }) {
     activeRecallDeviceEvidence: {
       g2BridgeRecallCaptured: true,
       audioLevelPronunciationScoring: true,
+      calibratedG2ThresholdUsed: true,
       webSpeechOnlyMarkedInsufficient: true,
       twoSeparateRecallDaysProven: true,
       transferScenarioEvidenceCaptured: true,

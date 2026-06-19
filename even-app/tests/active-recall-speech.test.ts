@@ -245,6 +245,44 @@ describe('active recall speech capture', () => {
     expect(statuses.at(-1)).toBe('idle');
   });
 
+  it('uses calibrated G2 speech threshold in active recall audio evidence', async () => {
+    const hud = new FakeHud();
+    const audioEvidence: any[] = [];
+    let recognizer!: FakeBridgeRecognizer;
+    const capture = new ActiveRecallBridgeSpeechCapture(
+      {
+        onAudioLevelEvidence: (evidence) => audioEvidence.push(evidence),
+      },
+      {
+        hud,
+        isEchoApiConfigured: () => true,
+        minSilenceFrames: 1,
+        speechThreshold: 0.07,
+        recognizerFactory: (callbacks) => {
+          recognizer = new FakeBridgeRecognizer(callbacks);
+          return recognizer;
+        },
+      },
+    );
+
+    await expect(capture.start()).resolves.toEqual({ ok: true });
+
+    hud.emitPcm(pcmPacket(5000));
+    hud.emitPcm(pcmPacket(0));
+
+    expect(recognizer.speechStartCount).toBe(1);
+    expect(recognizer.speechEndCount).toBe(1);
+    expect(audioEvidence).toEqual([
+      expect.objectContaining({
+        speechThreshold: 0.07,
+        speechFrameCount: 1,
+        silenceFrameCount: 1,
+      }),
+    ]);
+
+    await capture.stop();
+  });
+
   it('keeps G2 bridge recall gated on connection and proxy configuration', async () => {
     const disconnectedHud = new FakeHud();
     disconnectedHud.connected = false;

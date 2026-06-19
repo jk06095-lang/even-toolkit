@@ -38,6 +38,9 @@ const FALLBACK_VAD_CALIBRATION: VadCalibration = {
   calibratedAt: 0,
 };
 
+export const FALLBACK_VAD_SPEECH_THRESHOLD = FALLBACK_VAD_CALIBRATION.speechThreshold;
+export const MAX_VAD_SPEECH_THRESHOLD = 0.35;
+
 function percentile(sortedValues: number[], pct: number): number {
   if (sortedValues.length === 0) return 0;
   const index = Math.min(
@@ -49,6 +52,12 @@ function percentile(sortedValues: number[], pct: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+export function resolveVadSpeechThreshold(calibration?: Pick<VadCalibration, 'speechThreshold'> | null): number {
+  const candidate = calibration?.speechThreshold;
+  if (typeof candidate !== 'number' || !Number.isFinite(candidate)) return FALLBACK_VAD_SPEECH_THRESHOLD;
+  return clamp(candidate, FALLBACK_VAD_SPEECH_THRESHOLD, MAX_VAD_SPEECH_THRESHOLD);
 }
 
 /**
@@ -82,8 +91,8 @@ export function deriveVadCalibration(
     speechFloorRms: roundRms(speechFloorRms),
     speechThreshold: roundRms(clamp(
       speechThreshold,
-      FALLBACK_VAD_CALIBRATION.speechThreshold,
-      0.35,
+      FALLBACK_VAD_SPEECH_THRESHOLD,
+      MAX_VAD_SPEECH_THRESHOLD,
     )),
     calibratedAt,
   };

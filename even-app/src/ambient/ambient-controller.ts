@@ -1,6 +1,7 @@
 import { AmbientScheduler, type PendingItem } from './scheduler';
 import type { EchoDisplay } from './echo-display';
 import type { HUDController } from '../hud/hud-controller';
+import type { CalibrationResult } from '../dsp/calibration';
 import { TranscriptStore } from '../combat/transcript-store';
 import { loadPrivacySettings } from '../privacy/settings';
 import {
@@ -25,6 +26,7 @@ export interface AmbientControllerContext {
   getEchoDisplay: () => EchoDisplay | null;
   getScheduler: () => AmbientScheduler | null;
   setScheduler: (scheduler: AmbientScheduler | null) => void;
+  getCalibration: () => CalibrationResult | null;
 }
 
 export function bindAmbientEvents(context: AmbientControllerContext): void {
@@ -341,6 +343,7 @@ async function startActiveRecallG2Speech(context: AmbientControllerContext): Pro
     },
   }, {
     hud: context.getHud(),
+    speechThreshold: context.getCalibration()?.speechThreshold,
   });
   recallSpeechCapture = capture;
 
