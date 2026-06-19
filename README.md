@@ -33,8 +33,9 @@ and final hardware QA manifests should pass
 `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json`
 before README portfolio links are updated. The hardware QA manifest must identify
 the exact `.ehpk` package path and SHA-256 digest used for the real G2 run. A
-ready-to-copy GitHub Actions workflow template is available at
-[docs/github-actions-verify.yml](./docs/github-actions-verify.yml).
+GitHub Actions runs the same gate from
+[.github/workflows/verify.yml](./.github/workflows/verify.yml). A reference copy
+is also kept at [docs/github-actions-verify.yml](./docs/github-actions-verify.yml).
 
 Run `npm run readiness:echo` when preparing to close the remaining Project ECHO
 issues. It intentionally fails until the completed pilot manifest, completed

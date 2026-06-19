@@ -1,5 +1,4 @@
-# Copy this file to `.github/workflows/verify.yml` from an account or token with
-# GitHub `workflow` scope to enable hosted CI.
+# Reference copy of `.github/workflows/verify.yml`.
 name: Verify
 
 on:
@@ -10,6 +9,13 @@ on:
     branches:
       - main
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
