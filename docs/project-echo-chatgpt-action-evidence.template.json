@@ -1,0 +1,108 @@
+{
+  "project": "Project ECHO",
+  "evidenceStatus": "draft",
+  "runDate": "TBD",
+  "actionApiBaseUrl": "https://api.project-echo.app",
+  "actionContractVersion": "0.1.0",
+  "actionGpt": {
+    "customGptConfigured": null,
+    "openapiSchemaUploaded": null,
+    "privacyPolicyConfigured": null,
+    "actionsAndAppsNotMixed": null,
+    "evidenceRef": "TBD"
+  },
+  "oauth": {
+    "authorizationCodeConfigured": null,
+    "authorizationUrl": "https://api.project-echo.app/oauth/authorize",
+    "tokenUrl": "https://api.project-echo.app/oauth/token",
+    "scopesGranted": [
+      "profile:read",
+      "review:read",
+      "review:write",
+      "roleplay:write",
+      "session:write"
+    ],
+    "tokenStorageBoundary": "TBD",
+    "providerSecretsInGpt": null,
+    "evidenceRef": "TBD"
+  },
+  "endpoints": {
+    "learnerProfile": {
+      "path": "/v1/learner/profile",
+      "method": "GET",
+      "status": null,
+      "schemaVersion": "TBD",
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    },
+    "reviewsNext": {
+      "path": "/v1/reviews/next",
+      "method": "GET",
+      "status": null,
+      "schemaVersion": "TBD",
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    },
+    "reviewAttempt": {
+      "path": "/v1/reviews/attempt",
+      "method": "POST",
+      "status": null,
+      "schemaVersion": "TBD",
+      "writeAccepted": null,
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    },
+    "roleplayStart": {
+      "path": "/v1/roleplays/start",
+      "method": "POST",
+      "status": null,
+      "schemaVersion": "TBD",
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    },
+    "roleplayResult": {
+      "path": "/v1/roleplays/result",
+      "method": "POST",
+      "status": null,
+      "schemaVersion": "TBD",
+      "writeAccepted": null,
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    },
+    "sessionImport": {
+      "path": "/v1/sessions/import-summary",
+      "method": "POST",
+      "status": null,
+      "schemaVersion": "TBD",
+      "writeAccepted": null,
+      "rawTranscriptReturned": null,
+      "rawAudioReturned": null,
+      "directIdentifierReturned": null,
+      "evidenceRef": "TBD"
+    }
+  },
+  "privacy": {
+    "rawTranscriptRejected": null,
+    "rawAudioRejected": null,
+    "directContactIdentifiersRejected": null,
+    "providerSecretsRejected": null,
+    "boundedLearningItemsMax": null,
+    "evidenceRef": "TBD"
+  },
+  "activeRecallDeviceEvidence": {
+    "g2BridgeRecallCaptured": null,
+    "audioLevelPronunciationScoring": null,
+    "webSpeechOnlyMarkedInsufficient": null,
+    "evidenceRef": "TBD"
+  }
+}

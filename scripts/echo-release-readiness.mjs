@@ -562,6 +562,14 @@ await validateFinalManifest({
   missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with .ehpk build-artifact hash, physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, explicit G2/Phone audio-source evidence, and two-speaker conversation timeline evidence.',
 });
 
+await validateFinalManifest({
+  label: 'completed ChatGPT Action evidence manifest',
+  filePath: 'docs/project-echo-chatgpt-action-evidence.completed.json',
+  npmScript: 'validate:chatgpt-action-evidence',
+  issue: '#29',
+  missingDetail: 'Missing docs/project-echo-chatgpt-action-evidence.completed.json with deployed Custom GPT Action/OAuth endpoint proof, privacy rejection evidence, and G2/audio-level active-recall pronunciation evidence.',
+});
+
 checkManifestSummaries();
 await checkProxySmoke();
 await checkKeyRotationEvidence();

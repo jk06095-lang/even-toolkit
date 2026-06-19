@@ -398,6 +398,8 @@
     "test:key-rotation-evidence": "node --test scripts/validate-key-rotation-evidence.test.mjs",
     "validate:echo-domain-v2": "node scripts/validate-echo-domain-v2.mjs",
     "validate:chatgpt-action": "node scripts/validate-chatgpt-action.mjs",
+    "validate:chatgpt-action-evidence": "node scripts/validate-chatgpt-action-evidence.mjs",
+    "validate:chatgpt-action-template": "node scripts/validate-chatgpt-action-evidence.mjs docs/project-echo-chatgpt-action-evidence.template.json --allow-draft",
     "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
     "validate:release-deps": "node scripts/validate-release-deps.mjs",

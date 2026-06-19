@@ -88,11 +88,24 @@ raw transcripts, raw audio, direct contact identifiers, provider keys, or
 session tokens. Run `npm run validate:chatgpt-action` after edits; the same
 check is included in `npm run verify:all`.
 
+The deployment evidence shape is captured in
+`docs/project-echo-chatgpt-action-evidence.template.json`. Final release
+evidence must be copied to
+`docs/project-echo-chatgpt-action-evidence.completed.json` and pass
+`npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`.
+The final manifest must prove the Custom GPT has the Action schema and privacy
+policy configured, OAuth authorization-code flow is server-side, every Action
+endpoint returns bounded learner/review/roleplay data, raw transcripts/audio and
+direct identifiers are rejected, and G2/audio-level active-recall pronunciation
+evidence exists. `npm run readiness:echo` blocks #29 until that completed
+manifest is present.
+
 ## Remaining Work
 
 This is the data foundation and first phone review surface for the
 active-recall loop. Remaining work is to add a real server implementation for
-the Action contract, G2/audio-level pronunciation scoring, and G2/bridge-based
-recall capture evidence. The current pronunciation layer is limited to optional
-browser speech confidence; G2/audio-level pronunciation evidence still needs
-real-device capture.
+the Action contract, deploy and connect it to a real Custom GPT Action with
+OAuth, collect G2/audio-level pronunciation scoring evidence, and capture
+G2/bridge-based recall evidence. The current pronunciation layer is limited to
+optional browser speech confidence; Web Speech-only evidence is explicitly
+insufficient for closing the G2/audio-level requirement.

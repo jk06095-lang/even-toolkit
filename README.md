@@ -31,7 +31,12 @@ manifests should pass
 `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json`
 and final hardware QA manifests should pass
 `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json`
-before README portfolio links are updated. The hardware QA manifest must identify
+before README portfolio links are updated. The Custom GPT Action evidence
+manifest should pass
+`npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`
+after the Action API is deployed, OAuth is configured, privacy rejection tests
+are captured, and G2/audio-level active-recall pronunciation evidence exists.
+The hardware QA manifest must identify
 the exact `.ehpk` package path and SHA-256 digest used for the real G2 run, and
 must include phone-only conversation timeline evidence for the G2 Mic, Phone
 Mic, and import flows. A
@@ -41,9 +46,9 @@ is also kept at [docs/github-actions-verify.yml](./docs/github-actions-verify.ym
 
 Run `npm run readiness:echo` when preparing to close the remaining Project ECHO
 issues. It intentionally fails until the completed pilot manifest, completed
-hardware QA manifest, deployed proxy smoke check for #1/#27, key-rotation and
-session-token evidence for #1/#27, and final README case-study/video links are
-all present. Use
+hardware QA manifest, completed ChatGPT Action evidence manifest for #29,
+deployed proxy smoke check for #1/#27, key-rotation and session-token evidence
+for #1/#27, and final README case-study/video links are all present. Use
 [docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
 as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`, including the ISO
