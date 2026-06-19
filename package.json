@@ -392,6 +392,7 @@
     "validate:key-rotation-template": "node scripts/validate-key-rotation-evidence.mjs docs/key-rotation-evidence.template.md --allow-draft",
     "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
+    "validate:release-deps": "node scripts/validate-release-deps.mjs",
     "readiness:echo": "node scripts/echo-release-readiness.mjs",
     "verify:all": "node scripts/verify-all.mjs",
     "prepublishOnly": "npm run build"
@@ -422,7 +423,7 @@
     }
   },
   "devDependencies": {
-    "@evenrealities/even_hub_sdk": "^0.0.10",
+    "@evenrealities/even_hub_sdk": "0.0.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.2.3",
     "class-variance-authority": "^0.7.1",
@@ -454,8 +455,8 @@
     "url": "https://github.com/jk06095-lang/even-toolkit/issues"
   },
   "dependencies": {
-    "@evenrealities/evenhub-cli": "^0.1.13",
-    "@evenrealities/evenhub-simulator": "^0.7.3",
+    "@evenrealities/evenhub-cli": "0.1.13",
+    "@evenrealities/evenhub-simulator": "0.7.3",
     "react-is": "^19.2.4",
     "recharts": "^3.8.0"
   }

@@ -1,7 +1,8 @@
 # Hardware QA
 
 Use [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json)
-as the required physical G2 evidence manifest for issues #2, #3, #4, #6, and #12.
+as the required physical G2 evidence manifest for issues #2, #3, #4, #6, #12,
+#13, and #14.
 The draft template is shape-checked by `npm run validate:hardware-template`
 inside `npm run verify:all`. Final hardware QA must pass:
 

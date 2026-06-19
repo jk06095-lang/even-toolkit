@@ -3,6 +3,10 @@ import { spawn } from 'node:child_process';
 
 const steps = [
   {
+    label: 'release dependency pins',
+    args: ['run', 'validate:release-deps'],
+  },
+  {
     label: 'root TypeScript build',
     args: ['run', 'build'],
   },
