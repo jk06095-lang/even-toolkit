@@ -1,0 +1,836 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Project ECHO Learner Profile Action",
+    "version": "0.1.0",
+    "description": "Privacy-bounded Custom GPT Action contract for Project ECHO learner profile, active recall, and roleplay write-back."
+  },
+  "servers": [
+    {
+      "url": "https://api.project-echo.app"
+    }
+  ],
+  "security": [
+    {
+      "oauth2": [
+        "profile:read",
+        "review:read",
+        "review:write",
+        "roleplay:write",
+        "session:write"
+      ]
+    }
+  ],
+  "paths": {
+    "/v1/learner/profile": {
+      "get": {
+        "operationId": "getLearnerProfile",
+        "summary": "Read the bounded learner profile",
+        "description": "Returns ability metrics and active learning items without full raw conversation history.",
+        "security": [
+          {
+            "oauth2": [
+              "profile:read"
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded learner profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LearnerProfileResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/next": {
+      "get": {
+        "operationId": "getNextReviews",
+        "summary": "Read due active-recall prompts",
+        "description": "Returns due active-recall prompts with answers hidden unless the client explicitly requests review context.",
+        "security": [
+          {
+            "oauth2": [
+              "review:read"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10,
+              "default": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Due review prompts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reviews/attempt": {
+      "post": {
+        "operationId": "recordReviewAttempt",
+        "summary": "Write back an active-recall attempt",
+        "description": "Records a learner-selected grade and bounded attempt text. The server remains responsible for scheduling.",
+        "security": [
+          {
+            "oauth2": [
+              "review:write"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewAttemptWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated review state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewAttemptResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roleplays/start": {
+      "post": {
+        "operationId": "startRoleplay",
+        "summary": "Start a bounded roleplay plan",
+        "description": "Requests a roleplay that practices selected learning items without exposing raw saved sessions.",
+        "security": [
+          {
+            "oauth2": [
+              "profile:read",
+              "roleplay:write"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleplayStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roleplay plan",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleplayStartResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/roleplays/result": {
+      "post": {
+        "operationId": "recordRoleplayResult",
+        "summary": "Write back roleplay outcomes",
+        "description": "Records bounded roleplay outcomes and learning-item updates without uploading the complete roleplay transcript.",
+        "security": [
+          {
+            "oauth2": [
+              "roleplay:write"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleplayResultWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Roleplay result accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteAcceptedResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/sessions/import-summary": {
+      "post": {
+        "operationId": "importSessionSummary",
+        "summary": "Import a bounded session summary",
+        "description": "Imports a redacted summary and up to three learning items from an ECHO session. Full raw transcripts are intentionally not accepted.",
+        "security": [
+          {
+            "oauth2": [
+              "session:write"
+            ]
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionSummaryImport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session summary accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WriteAcceptedResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "Per-user OAuth. Read and write scopes must be granted separately.",
+        "flows": {
+          "authorizationCode": {
+            "authorizationUrl": "https://api.project-echo.app/oauth/authorize",
+            "tokenUrl": "https://api.project-echo.app/oauth/token",
+            "scopes": {
+              "profile:read": "Read bounded learner profile",
+              "review:read": "Read due active-recall prompts",
+              "review:write": "Write active-recall attempts",
+              "roleplay:write": "Start roleplays and write roleplay outcomes",
+              "session:write": "Import bounded redacted session summaries"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "LearnerProfileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "learnerId",
+          "updatedAt",
+          "profileLocale",
+          "targetLanguage",
+          "privacyMode",
+          "metrics",
+          "ability",
+          "learningItems"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "learnerId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "profileLocale": {
+            "type": "string",
+            "maxLength": 35
+          },
+          "targetLanguage": {
+            "type": "string",
+            "maxLength": 35
+          },
+          "privacyMode": {
+            "enum": [
+              "server_synced"
+            ]
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/LearnerMetrics"
+          },
+          "ability": {
+            "$ref": "#/components/schemas/AbilityVector"
+          },
+          "learningItems": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "$ref": "#/components/schemas/ActionLearningItem"
+            }
+          }
+        }
+      },
+      "ReviewQueueResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "items"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueItem"
+            }
+          }
+        }
+      },
+      "ReviewQueueItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemId",
+          "mode",
+          "prompt",
+          "meaningKo",
+          "scenarioTag",
+          "dueAt"
+        ],
+        "properties": {
+          "itemId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "mode": {
+            "enum": [
+              "meaning_to_expression",
+              "transfer"
+            ]
+          },
+          "prompt": {
+            "$ref": "#/components/schemas/PlainText600"
+          },
+          "meaningKo": {
+            "$ref": "#/components/schemas/PlainText400"
+          },
+          "scenarioTag": {
+            "$ref": "#/components/schemas/PlainText120"
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          }
+        }
+      },
+      "ReviewAttemptWrite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "itemId",
+          "mode",
+          "grade",
+          "attemptedAt"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "itemId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "mode": {
+            "enum": [
+              "meaning_to_expression",
+              "transfer"
+            ]
+          },
+          "grade": {
+            "$ref": "#/components/schemas/ActiveRecallGrade"
+          },
+          "userAttempt": {
+            "$ref": "#/components/schemas/PlainText1000"
+          },
+          "attemptedAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "semanticScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "pronunciationScore": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "ReviewAttemptResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accepted",
+          "itemId",
+          "nextDueAt"
+        ],
+        "properties": {
+          "accepted": {
+            "const": true
+          },
+          "itemId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "nextDueAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          }
+        }
+      },
+      "RoleplayStartRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "learningItemIds",
+          "targetLanguage"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "learningItemIds": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/SafeId"
+            }
+          },
+          "targetLanguage": {
+            "type": "string",
+            "maxLength": 35
+          },
+          "scenarioPreference": {
+            "$ref": "#/components/schemas/PlainText120"
+          },
+          "difficulty": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "RoleplayStartResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roleplayId",
+          "scenario",
+          "goals"
+        ],
+        "properties": {
+          "roleplayId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/PlainText600"
+          },
+          "goals": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/PlainText240"
+            }
+          }
+        }
+      },
+      "RoleplayResultWrite": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "roleplayId",
+          "completedAt",
+          "outcomes"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "roleplayId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "summary": {
+            "$ref": "#/components/schemas/PlainText1000"
+          },
+          "outcomes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/RoleplayLearningOutcome"
+            }
+          }
+        }
+      },
+      "RoleplayLearningOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "itemId",
+          "outcome",
+          "evidenceSummary"
+        ],
+        "properties": {
+          "itemId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "outcome": {
+            "enum": [
+              "independent",
+              "assisted",
+              "failed"
+            ]
+          },
+          "evidenceSummary": {
+            "$ref": "#/components/schemas/PlainText600"
+          },
+          "suggestedGrade": {
+            "$ref": "#/components/schemas/ActiveRecallGrade"
+          }
+        }
+      },
+      "SessionSummaryImport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "sessionId",
+          "endedAt",
+          "sessionSummary",
+          "learningItems"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "sessionId": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "sessionSummary": {
+            "$ref": "#/components/schemas/PlainText1000"
+          },
+          "learningItems": {
+            "type": "array",
+            "maxItems": 3,
+            "items": {
+              "$ref": "#/components/schemas/ActionLearningItem"
+            }
+          }
+        }
+      },
+      "WriteAcceptedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "accepted"
+        ],
+        "properties": {
+          "accepted": {
+            "const": true
+          }
+        }
+      },
+      "ActionLearningItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "id",
+          "canonicalExpression",
+          "meaningKo",
+          "speechAct",
+          "breakdownType",
+          "lastOutcome",
+          "scheduling"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "2.0.0"
+          },
+          "id": {
+            "$ref": "#/components/schemas/SafeId"
+          },
+          "canonicalExpression": {
+            "$ref": "#/components/schemas/PlainText240"
+          },
+          "meaningKo": {
+            "$ref": "#/components/schemas/PlainText400"
+          },
+          "speechAct": {
+            "enum": [
+              "answer",
+              "clarify",
+              "ask_repeat",
+              "buy_time",
+              "repair"
+            ]
+          },
+          "breakdownType": {
+            "enum": [
+              "recall_gap",
+              "listening_gap",
+              "grammar",
+              "word_choice",
+              "pronunciation",
+              "turn_taking"
+            ]
+          },
+          "lastOutcome": {
+            "enum": [
+              "independent",
+              "assisted",
+              "failed"
+            ]
+          },
+          "scenarioTags": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "$ref": "#/components/schemas/PlainText120"
+            }
+          },
+          "naturalRecast": {
+            "$ref": "#/components/schemas/PlainText240"
+          },
+          "scheduling": {
+            "$ref": "#/components/schemas/ReviewScheduling"
+          }
+        }
+      },
+      "ReviewScheduling": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reps",
+          "lapses",
+          "difficulty",
+          "stability",
+          "dueAt"
+        ],
+        "properties": {
+          "reps": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "lapses": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "difficulty": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "stability": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3650
+          },
+          "dueAt": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          }
+        }
+      },
+      "LearnerMetrics": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "conversationRecoveryRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "independentTransferRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "assistedExactRate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "activeRecallDueCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalSessions": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "AbilityVector": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recall",
+          "listening",
+          "grammar",
+          "wordChoice",
+          "pronunciation",
+          "turnTaking"
+        ],
+        "properties": {
+          "recall": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "listening": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "grammar": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "wordChoice": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "pronunciation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "turnTaking": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "ActiveRecallGrade": {
+        "enum": [
+          "again",
+          "hard",
+          "good",
+          "easy"
+        ]
+      },
+      "SafeId": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 180,
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      },
+      "PlainText120": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120,
+        "not": {
+          "pattern": "<[A-Za-z][\\s\\S]*>"
+        }
+      },
+      "PlainText240": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 240,
+        "not": {
+          "pattern": "<[A-Za-z][\\s\\S]*>"
+        }
+      },
+      "PlainText400": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 400,
+        "not": {
+          "pattern": "<[A-Za-z][\\s\\S]*>"
+        }
+      },
+      "PlainText600": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 600,
+        "not": {
+          "pattern": "<[A-Za-z][\\s\\S]*>"
+        }
+      },
+      "PlainText1000": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000,
+        "not": {
+          "pattern": "<[A-Za-z][\\s\\S]*>"
+        }
+      }
+    }
+  }
+}

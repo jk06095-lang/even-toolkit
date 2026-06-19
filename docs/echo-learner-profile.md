@@ -69,11 +69,30 @@ The JSON profile is intended for manual Knowledge upload. It excludes full raw
 transcript export and keeps only bounded, redacted learning snippets. Email-like
 and phone-like values are replaced before profile generation.
 
+## Custom GPT Action Contract
+
+The next server-synced integration boundary now lives under
+`integrations/chatgpt-action/`:
+
+- `openapi.json` defines the future Action API contract for
+  `/v1/learner/profile`, `/v1/reviews/next`, `/v1/reviews/attempt`,
+  `/v1/roleplays/start`, `/v1/roleplays/result`, and
+  `/v1/sessions/import-summary`.
+- `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
+  write-back.
+- `privacy-policy.md` records the Action data boundary.
+
+This contract is intentionally server-synced and OAuth-scoped. It is separate
+from the local manual Knowledge export. The Action schema does not accept full
+raw transcripts, raw audio, direct contact identifiers, provider keys, or
+session tokens. Run `npm run validate:chatgpt-action` after edits; the same
+check is included in `npm run verify:all`.
+
 ## Remaining Work
 
 This is the data foundation and first phone review surface for the
-active-recall loop. Remaining work is to add G2/audio-level pronunciation
-scoring, G2/bridge-based recall capture evidence, and later write-back from
-roleplay or Custom GPT Action flows. The current pronunciation layer is limited
-to optional browser speech confidence; G2/audio-level pronunciation evidence
-still needs real-device capture.
+active-recall loop. Remaining work is to add a real server implementation for
+the Action contract, G2/audio-level pronunciation scoring, and G2/bridge-based
+recall capture evidence. The current pronunciation layer is limited to optional
+browser speech confidence; G2/audio-level pronunciation evidence still needs
+real-device capture.
