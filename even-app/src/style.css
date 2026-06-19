@@ -635,6 +635,11 @@ body {
   font-size: 14px;
   font-weight: 400;
 }
+.active-recall-evaluation {
+  color: var(--color-text-dim);
+  line-height: 1.4;
+  min-height: 18px;
+}
 
 /* ── Textarea ── */
 .textarea {

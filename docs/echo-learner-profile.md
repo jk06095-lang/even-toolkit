@@ -31,6 +31,11 @@ transcripts if local review state is missing. Grades adjust `reps`, `lapses`,
 `difficulty`, `stability`, `dueAt`, and transfer-check progress without marking
 an immediate cue repeat as mastery.
 
+Each saved attempt also carries a local text evaluation: keyword coverage,
+precision, a semantic score, and a suggested grade. The suggestion is a
+privacy-safe client-side aid, not an automatic mastery decision; the learner's
+chosen Again / Hard / Good / Easy grade is still the scheduling input.
+
 ## Custom GPT Handoff
 
 `generateCustomGptHandoffFiles()` returns the manual Custom GPT v1 bundle:
@@ -46,5 +51,5 @@ and phone-like values are replaced before profile generation.
 
 This is the data foundation and first phone review surface for the
 active-recall loop. Remaining work is to add real speech-attempt capture,
-semantic/pronunciation scoring, richer transfer scenarios, and later write-back
-from roleplay or Custom GPT Action flows.
+pronunciation scoring, richer transfer scenarios, and later write-back from
+roleplay or Custom GPT Action flows.

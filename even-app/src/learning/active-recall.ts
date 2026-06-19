@@ -46,6 +46,17 @@ export interface ActiveRecallAttempt {
   attemptedAt: string;
   dueAtBefore: string;
   dueAtAfter: string;
+  evaluation?: ActiveRecallAttemptEvaluation;
+}
+
+export interface ActiveRecallAttemptEvaluation {
+  semanticScore: number;
+  coverage: number;
+  precision: number;
+  recommendedGrade: ActiveRecallGrade;
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  note: string;
 }
 
 export interface ActiveRecallStoreSnapshot {
@@ -133,6 +144,7 @@ export function recordActiveRecallAttempt(
   const prompt = createActiveRecallPrompt(item, current);
   const mode = options.mode ?? prompt.mode;
   const nextState = advanceActiveRecallState(current, grade, now, mode);
+  const evaluation = evaluateActiveRecallAttempt(item, userAttempt);
   const attempt: ActiveRecallAttempt = {
     id: `${item.id}:attempt:${now.getTime()}`,
     itemId: item.id,
@@ -144,6 +156,7 @@ export function recordActiveRecallAttempt(
     attemptedAt: now.toISOString(),
     dueAtBefore: current.dueAt,
     dueAtAfter: nextState.dueAt,
+    evaluation,
   };
 
   snapshot.states[item.id] = nextState;
@@ -153,6 +166,52 @@ export function recordActiveRecallAttempt(
   }
   saveActiveRecallSnapshot(snapshot);
   return attempt;
+}
+
+export function evaluateActiveRecallAttempt(
+  item: LearningItem,
+  userAttempt: string,
+): ActiveRecallAttemptEvaluation {
+  const expectedKeywords = keywordSet([
+    item.canonicalExpression,
+    item.naturalRecast ?? '',
+    ...item.examples.map((example) => example.targetExpression),
+  ].join(' '));
+  const attemptKeywords = keywordSet(sanitizePlainText(userAttempt, 1000));
+
+  if (attemptKeywords.length === 0) {
+    return {
+      semanticScore: 0,
+      coverage: 0,
+      precision: 0,
+      recommendedGrade: 'again',
+      matchedKeywords: [],
+      missingKeywords: expectedKeywords,
+      note: 'No attempt captured.',
+    };
+  }
+
+  const matchedKeywords = expectedKeywords.filter((expected) => (
+    attemptKeywords.some((attempt) => tokensMatch(expected, attempt))
+  ));
+  const matchedAttemptKeywords = attemptKeywords.filter((attempt) => (
+    expectedKeywords.some((expected) => tokensMatch(expected, attempt))
+  ));
+  const missingKeywords = expectedKeywords.filter((expected) => !matchedKeywords.includes(expected));
+  const coverage = ratio(matchedKeywords.length, expectedKeywords.length);
+  const precision = ratio(matchedAttemptKeywords.length, attemptKeywords.length);
+  const semanticScore = round(coverage * 0.7 + precision * 0.3);
+  const recommendedGrade = recommendGrade(semanticScore, missingKeywords.length, userAttempt, item.canonicalExpression);
+
+  return {
+    semanticScore,
+    coverage,
+    precision,
+    recommendedGrade,
+    matchedKeywords,
+    missingKeywords,
+    note: evaluationNote(recommendedGrade, semanticScore),
+  };
 }
 
 export function advanceActiveRecallState(
@@ -298,7 +357,19 @@ function isActiveRecallAttempt(value: unknown): value is ActiveRecallAttempt {
     typeof value.expectedExpression === 'string' &&
     typeof value.attemptedAt === 'string' &&
     typeof value.dueAtBefore === 'string' &&
-    typeof value.dueAtAfter === 'string';
+    typeof value.dueAtAfter === 'string' &&
+    (value.evaluation === undefined || isAttemptEvaluation(value.evaluation));
+}
+
+function isAttemptEvaluation(value: unknown): value is ActiveRecallAttemptEvaluation {
+  return isRecord(value) &&
+    typeof value.semanticScore === 'number' &&
+    typeof value.coverage === 'number' &&
+    typeof value.precision === 'number' &&
+    isGrade(value.recommendedGrade) &&
+    Array.isArray(value.matchedKeywords) &&
+    Array.isArray(value.missingKeywords) &&
+    typeof value.note === 'string';
 }
 
 function isPromptMode(value: unknown): value is ActiveRecallPromptMode {
@@ -324,6 +395,58 @@ function sanitizePlainText(value: string, maxLength: number): string {
     .slice(0, maxLength);
 }
 
+function keywordSet(value: string): string[] {
+  const tokens = value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s']/g, ' ')
+    .split(/\s+/)
+    .map(normalizeToken)
+    .filter((token) => token && !STOP_WORDS.has(token));
+  return Array.from(new Set(tokens));
+}
+
+function normalizeToken(value: string): string {
+  const token = value.replace(/^'+|'+$/g, '');
+  if (token.endsWith("'s")) return token.slice(0, -2);
+  if (token.endsWith('ing') && token.length > 5) return token.slice(0, -3);
+  if (token.endsWith('ed') && token.length > 4) return token.slice(0, -2);
+  if (token.endsWith('s') && token.length > 3) return token.slice(0, -1);
+  return token;
+}
+
+function tokensMatch(expected: string, attempt: string): boolean {
+  if (expected === attempt) return true;
+  const expectedSynonyms = SYNONYMS[expected] ?? [];
+  const attemptSynonyms = SYNONYMS[attempt] ?? [];
+  return expectedSynonyms.includes(attempt) ||
+    attemptSynonyms.includes(expected) ||
+    expectedSynonyms.some((synonym) => attemptSynonyms.includes(synonym));
+}
+
+function recommendGrade(
+  semanticScore: number,
+  missingCount: number,
+  userAttempt: string,
+  canonicalExpression: string,
+): ActiveRecallGrade {
+  if (semanticScore >= 0.9 && missingCount === 0) {
+    return normalizedPhrase(userAttempt) === normalizedPhrase(canonicalExpression) ? 'easy' : 'good';
+  }
+  if (semanticScore >= 0.6) return 'hard';
+  return 'again';
+}
+
+function evaluationNote(grade: ActiveRecallGrade, semanticScore: number): string {
+  if (grade === 'easy') return 'Near-exact recall.';
+  if (grade === 'good') return 'Meaning is covered in a natural variant.';
+  if (grade === 'hard') return `Partial match (${Math.round(semanticScore * 100)}%).`;
+  return 'Try again before counting this review.';
+}
+
+function normalizedPhrase(value: string): string {
+  return keywordSet(value).join(' ');
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -332,6 +455,48 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
+function ratio(numerator: number, denominator: number): number {
+  if (denominator <= 0) return 0;
+  return round(numerator / denominator);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
+
+const STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'are',
+  'be',
+  'can',
+  'could',
+  'do',
+  'does',
+  'for',
+  'i',
+  'it',
+  'me',
+  'please',
+  'sorry',
+  'that',
+  'the',
+  'this',
+  'to',
+  'we',
+  'you',
+]);
+
+const SYNONYMS: Record<string, string[]> = {
+  again: ['repeat', 'say'],
+  ask: ['request'],
+  clarify: ['explain'],
+  customer: ['client'],
+  issue: ['problem'],
+  problem: ['issue'],
+  repeat: ['again', 'say'],
+  request: ['ask'],
+  say: ['again', 'repeat', 'tell'],
+  tell: ['say'],
+};

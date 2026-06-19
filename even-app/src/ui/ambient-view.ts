@@ -69,6 +69,7 @@ export function renderAmbientView(): string {
             <span>Answer</span>
             <strong id="active-recall-answer-text"></strong>
           </div>
+          <div class="active-recall-evaluation text-detail" id="active-recall-evaluation"></div>
           <div class="active-recall-grade-row" id="active-recall-grade-row" style="display: none;">
             <button class="btn btn-default" data-recall-grade="again">Again</button>
             <button class="btn btn-default" data-recall-grade="hard">Hard</button>

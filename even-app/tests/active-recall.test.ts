@@ -5,6 +5,7 @@ import {
   buildActiveRecallQueue,
   clearActiveRecallSnapshot,
   createActiveRecallPrompt,
+  evaluateActiveRecallAttempt,
   loadActiveRecallSnapshot,
   recordActiveRecallAttempt,
 } from '../src/learning/active-recall';
@@ -66,6 +67,9 @@ describe('active recall learning loop', () => {
       grade: 'again',
       userAttempt: 'I maybe tomorrow [redacted-email]',
       dueAtBefore: item!.dueAt,
+      evaluation: {
+        recommendedGrade: 'again',
+      },
     });
     expect(Date.parse(attempt.dueAtAfter) - dueNow.getTime()).toBe(10 * 60 * 1000);
 
@@ -77,6 +81,30 @@ describe('active recall learning loop', () => {
     });
     expect(JSON.stringify(snapshot)).not.toContain('<b>');
     expect(JSON.stringify(snapshot)).not.toContain('test@example.com');
+  });
+
+  it('suggests a grade from local semantic coverage without requiring exact copy', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    const adapted = evaluateActiveRecallAttempt(item!.learningItem, 'Sorry, can you repeat that?');
+    expect(adapted).toMatchObject({
+      recommendedGrade: 'good',
+      missingKeywords: [],
+    });
+    expect(adapted.semanticScore).toBeGreaterThanOrEqual(0.9);
+
+    const exact = evaluateActiveRecallAttempt(item!.learningItem, 'Could you say that again?');
+    expect(exact.recommendedGrade).toBe('easy');
+
+    const empty = evaluateActiveRecallAttempt(item!.learningItem, '');
+    expect(empty).toMatchObject({
+      semanticScore: 0,
+      recommendedGrade: 'again',
+      note: 'No attempt captured.',
+    });
   });
 
   it('moves successful mature items into transfer checks', () => {

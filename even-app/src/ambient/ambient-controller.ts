@@ -4,8 +4,10 @@ import type { HUDController } from '../hud/hud-controller';
 import { TranscriptStore } from '../combat/transcript-store';
 import {
   buildActiveRecallQueue,
+  evaluateActiveRecallAttempt,
   recordActiveRecallAttempt,
   type ActiveRecallGrade,
+  type ActiveRecallAttemptEvaluation,
   type ActiveRecallQueueItem,
 } from '../learning/active-recall';
 
@@ -128,6 +130,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   const promptEl = document.getElementById('active-recall-prompt');
   const answerEl = document.getElementById('active-recall-answer');
   const answerTextEl = document.getElementById('active-recall-answer-text');
+  const evaluationEl = document.getElementById('active-recall-evaluation');
   const metaEl = document.getElementById('active-recall-meta');
   const emptyEl = document.getElementById('active-recall-empty');
   const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
@@ -143,6 +146,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   if (dueCount) dueCount.textContent = String(queue.length);
   if (statusEl) statusEl.textContent = statusMessage;
   answerEl.style.display = 'none';
+  if (evaluationEl) evaluationEl.textContent = '';
   if (gradeRow) gradeRow.style.display = 'none';
   attemptEl.value = '';
 
@@ -173,11 +177,15 @@ function renderActiveRecallPanel(statusMessage = ''): void {
 function revealActiveRecallAnswer(): void {
   if (!currentRecallItem) return;
   const answerEl = document.getElementById('active-recall-answer');
+  const evaluationEl = document.getElementById('active-recall-evaluation');
   const gradeRow = document.getElementById('active-recall-grade-row');
   const statusEl = document.getElementById('active-recall-status');
+  const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
   if (answerEl) answerEl.style.display = 'block';
   if (gradeRow) gradeRow.style.display = 'grid';
-  if (statusEl) statusEl.textContent = 'Grade the attempt after producing it first.';
+  const evaluation = evaluateActiveRecallAttempt(currentRecallItem.learningItem, attemptEl?.value ?? '');
+  if (evaluationEl) evaluationEl.textContent = formatEvaluation(evaluation);
+  if (statusEl) statusEl.textContent = `Suggested grade: ${evaluation.recommendedGrade}. Choose the grade you want to save.`;
 }
 
 function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
@@ -192,7 +200,9 @@ function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
     },
   );
   const next = new Date(attempt.dueAtAfter);
-  renderActiveRecallPanel(`Saved ${grade}. Next review: ${formatDueTime(next)}.`);
+  const suggestion = attempt.evaluation?.recommendedGrade;
+  const suffix = suggestion && suggestion !== grade ? ` Suggested was ${suggestion}.` : '';
+  renderActiveRecallPanel(`Saved ${grade}. Next review: ${formatDueTime(next)}.${suffix}`);
 }
 
 function formatDueTime(date: Date): string {
@@ -202,4 +212,12 @@ function formatDueTime(date: Date): string {
 
 function isActiveRecallGrade(value: string | undefined): value is ActiveRecallGrade {
   return value === 'again' || value === 'hard' || value === 'good' || value === 'easy';
+}
+
+function formatEvaluation(evaluation: ActiveRecallAttemptEvaluation): string {
+  const percent = Math.round(evaluation.semanticScore * 100);
+  const missing = evaluation.missingKeywords.length > 0
+    ? ` Missing: ${evaluation.missingKeywords.join(', ')}.`
+    : '';
+  return `${evaluation.note} Score ${percent}%. Recommended: ${evaluation.recommendedGrade}.${missing}`;
 }
