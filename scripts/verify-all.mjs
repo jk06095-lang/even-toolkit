@@ -35,6 +35,10 @@ const steps = [
     args: ['run', 'validate:pilot-template'],
   },
   {
+    label: 'Project ECHO pilot evidence validator tests',
+    args: ['run', 'test:pilot-evidence'],
+  },
+  {
     label: 'Project ECHO hardware QA template',
     args: ['run', 'validate:hardware-template'],
   },

@@ -89,7 +89,11 @@ Before a field run, generate draft evidence manifests.
 
 function createEvidenceFiles() {
   const evidenceDir = path.join(tmpRoot, 'evidence');
+  const exportsDir = path.join(evidenceDir, 'exports');
+  const notesDir = path.join(evidenceDir, 'notes');
   const videosDir = path.join(evidenceDir, 'videos');
+  mkdirSync(exportsDir, { recursive: true });
+  mkdirSync(notesDir, { recursive: true });
   mkdirSync(videosDir, { recursive: true });
 
   const ko = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.ko.md'), '# KO case study\n');
@@ -102,10 +106,28 @@ function createEvidenceFiles() {
     en,
     architecture,
     video,
+    qaExport(condition, participantId) {
+      return writeEvidenceFile(
+        path.join(exportsDir, `qa-export-${participantId}-${condition}.json`),
+        '{"eventAnalytics":{}}\n',
+      );
+    },
+    observerNotes(condition, participantId) {
+      return writeEvidenceFile(
+        path.join(notesDir, `observer-notes-${participantId}-${condition}.md`),
+        `${participantId} ${condition} observer notes\n`,
+      );
+    },
     runVideo(condition, participantId) {
       return writeEvidenceFile(
         path.join(videosDir, `${participantId}-${condition}.mp4`),
         `${participantId} ${condition} video placeholder\n`,
+      );
+    },
+    vadQaExport(environmentName) {
+      return writeEvidenceFile(
+        path.join(exportsDir, `qa-${environmentName}.json`),
+        `{"environment":"${environmentName}"}\n`,
       );
     },
   };
@@ -139,10 +161,10 @@ function validPilotManifest(evidence) {
     participants,
     vadCalibration: {
       environments: [
-        vadEnvironment('quiet_room', 0.015, 0.005, 0.03),
-        vadEnvironment('cafe_background', 0.02, 0.008, 0.04),
-        vadEnvironment('air_conditioner', 0.022, 0.009, 0.043),
-        vadEnvironment('outdoor_wind', 0.026, 0.011, 0.05),
+        vadEnvironment('quiet_room', 0.015, 0.005, 0.03, evidence),
+        vadEnvironment('cafe_background', 0.02, 0.008, 0.04, evidence),
+        vadEnvironment('air_conditioner', 0.022, 0.009, 0.043, evidence),
+        vadEnvironment('outdoor_wind', 0.026, 0.011, 0.05, evidence),
       ],
     },
     aggregate: {
@@ -177,8 +199,8 @@ function runEvidence(condition, participantId, evidence) {
     systemMetrics: systemMetrics(condition),
     uxMetrics: uxMetrics(condition),
     artifacts: {
-      qaExportPath: `qa-export-${participantId}-${condition}.json`,
-      observerNotesPath: `observer-notes-${participantId}-${condition}.md`,
+      qaExportPath: evidence.qaExport(condition, participantId),
+      observerNotesPath: evidence.observerNotes(condition, participantId),
       videoEvidence: evidence.runVideo(condition, participantId),
     },
   };
@@ -221,7 +243,7 @@ function uxMetrics(condition) {
   };
 }
 
-function vadEnvironment(name, vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFloorRms) {
+function vadEnvironment(name, vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFloorRms, evidence) {
   return {
     name,
     metrics: {
@@ -231,7 +253,7 @@ function vadEnvironment(name, vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFlo
       falseStarts: 0,
       missedSpeechEvents: 0,
     },
-    qaExportPath: `qa-${name}.json`,
+    qaExportPath: evidence.vadQaExport(name),
     notes: `${name} calibration fixture`,
   };
 }

@@ -97,7 +97,10 @@ pilot evidence cannot be reused from an older build. Case-study links must be
 as `docs/project-echo-case-study.ko.md`; video evidence must be an `https://`
 URL or a repo path to a video file. Repo-path evidence must point to a file that
 exists in the repository; a future path or filename-only placeholder is not
-accepted.
+accepted. Per-run `qaExportPath` / `observerNotesPath` and each VAD
+`qaExportPath` must also be real `https://` evidence URLs or repo paths to
+existing `.json`, `.md`, `.txt`, or `.log` files; status text such as `done` is
+not completed evidence.
 VAD calibration evidence must also be internally consistent: speech floor above
 noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.

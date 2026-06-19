@@ -59,6 +59,7 @@ const PLACEHOLDER_PATTERNS = [
 const CASE_STUDY_EXTENSIONS = ['md', 'html', 'pdf'];
 const ARCHITECTURE_EXTENSIONS = ['md', 'html', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
+const PILOT_ARTIFACT_EXTENSIONS = ['json', 'md', 'txt', 'log'];
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const args = process.argv.slice(2);
@@ -488,8 +489,12 @@ function validateRun(run, pointer) {
   validateConditionSemantics(run.condition, run.systemMetrics, run.uxMetrics, pointer);
 
   if (validateObject(run.artifacts, `${pointer}.artifacts`)) {
-    validateText(run.artifacts, 'qaExportPath', `${pointer}.artifacts`);
-    validateText(run.artifacts, 'observerNotesPath', `${pointer}.artifacts`);
+    validateEvidenceLink(run.artifacts, 'qaExportPath', `${pointer}.artifacts`, {
+      extensions: PILOT_ARTIFACT_EXTENSIONS,
+    });
+    validateEvidenceLink(run.artifacts, 'observerNotesPath', `${pointer}.artifacts`, {
+      extensions: PILOT_ARTIFACT_EXTENSIONS,
+    });
     validateEvidenceLink(run.artifacts, 'videoEvidence', `${pointer}.artifacts`, {
       extensions: VIDEO_EXTENSIONS,
     });
@@ -581,7 +586,9 @@ function validateVadCalibration(manifestObject) {
 
     validateMetricGroup(environment.metrics, VAD_METRICS, `${pointer}.metrics`);
     validateVadMetricRelationships(environment.metrics, `${pointer}.metrics`);
-    validateText(environment, 'qaExportPath', pointer);
+    validateEvidenceLink(environment, 'qaExportPath', pointer, {
+      extensions: PILOT_ARTIFACT_EXTENSIONS,
+    });
     validateText(environment, 'notes', pointer);
   });
 
