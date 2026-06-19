@@ -73,6 +73,17 @@ package outlines. They stay in `draft` status and do not replace the required
 `*.completed.json` evidence files, the final `docs/key-rotation-evidence.md`,
 or the final README portfolio links.
 
+After the completed pilot manifest and final portfolio assets exist, promote the
+README portfolio links with:
+
+```bash
+npm run promote:echo-portfolio-links
+```
+
+The promotion command validates `docs/project-echo-pilot-evidence.completed.json`,
+sets its `caseStudy.readmeLinksUpdated` flag, and inserts README markdown links
+that exactly match the completed manifest targets.
+
 The readiness gate is aligned with the
 [official Even Realities developer docs](https://hub.evenrealities.com/docs/get-started/overview):
 Even Hub apps run as phone-hosted WebView plugins, G2 hardware is the display

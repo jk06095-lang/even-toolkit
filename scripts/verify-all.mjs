@@ -43,6 +43,10 @@ const steps = [
     args: ['run', 'test:echo-evidence-drafts'],
   },
   {
+    label: 'Project ECHO portfolio link promotion tests',
+    args: ['run', 'test:echo-portfolio-links'],
+  },
+  {
     label: 'ECHO API proxy verify',
     args: ['--prefix', 'echo-api-proxy', 'run', 'verify'],
   },

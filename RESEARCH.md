@@ -163,6 +163,11 @@ the completed pilot evidence manifest passes validation.
   `project-echo-case-study-ko`, `project-echo-case-study-en`, and
   `project-echo-real-g2-video`. The link targets must match the completed pilot
   manifest, and repo-path targets must already exist in the repository.
+- After copying final assets to stable paths and filling
+  `docs/project-echo-pilot-evidence.completed.json`, run
+  `npm run promote:echo-portfolio-links` to set
+  `caseStudy.readmeLinksUpdated=true` and insert the README links from the
+  manifest targets.
 
 ## Defer Until Core Stability
 
