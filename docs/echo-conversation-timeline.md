@@ -48,17 +48,20 @@ the deployed proxy boundary when cloud processing is allowed and otherwise keeps
 pending jobs local.
 
 Live Practice emits in-memory `SessionTranscript` snapshots for live partial
-and final `ConversationTurn` records. Interim recognizer text creates or updates
-one active partial turn, and the final recognizer result updates that same turn
-ID instead of appending a second turn. Legacy `entries` receive only the final
-speech event once, preserving older summary/export counts without duplicating
-the v2 phone timeline. When cloud processing is enabled, each final non-Korean
-turn also schedules a Korean translation request; successful responses write
-`translationKo` back to the active `ConversationTurn` and re-emit the phone
-timeline snapshot. The phone UI renders the latest recognized turns from that
-snapshot without adding conversation history or translations to the glasses HUD.
-Placeholder speech-detection events remain analytics/cache events and are not
-displayed as phone timeline turns.
+and final `ConversationTurn` records. `SpeechTurnReconciler` owns the live
+speech write path: interim recognizer text creates or updates one active
+partial turn, and the final recognizer result updates that same turn ID instead
+of appending a second turn. Legacy `entries` receive only the final speech event
+once, preserving older summary/export counts without duplicating the v2 phone
+timeline. Speech-evaluation fallback transcripts also enter through the same
+reconciler path when no live final result has already closed the segment. When
+cloud processing is enabled, each final non-Korean turn also schedules a Korean
+translation request; successful responses write `translationKo` back to the
+active `ConversationTurn` and re-emit the phone timeline snapshot. The phone UI
+renders the latest recognized turns from that snapshot without adding
+conversation history or translations to the glasses HUD. Placeholder
+speech-detection events remain analytics/cache events and are not displayed as
+phone timeline turns.
 
 This boundary follows the current Even Hub device model: the glasses render a
 small fixed-canvas container UI, while richer review state belongs on the phone.

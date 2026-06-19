@@ -20,6 +20,7 @@ import {
   shouldQueueKoreanTranslation,
 } from './translation-queue';
 import { requestTranslation } from '../services/echo-api';
+import { SpeechTurnReconciler } from './speech-turn-reconciler';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   type AssistDecision,
@@ -325,7 +326,7 @@ export class SessionEngine {
   private cueVisible = false;
   private activeAssistEpisodeId: string | null = null;
   private lastTurnId: string | null = null;
-  private activeSpeechTurnId: string | null = null;
+  private speechTurnReconciler: SpeechTurnReconciler | null = null;
   private currentSpeechSegmentHasFinalTranscript = false;
 
   constructor(
@@ -498,13 +499,8 @@ export class SessionEngine {
     isFinal = true,
     confidence?: number,
   ): void {
-    const turn = this.transcriptStore?.addSpeech(
-      text,
-      source,
-      isFinal,
-      confidence,
-      this.currentConversationTurnSource(),
-    );
+    const result = this.speechTurnReconciler?.recordSpeechEvent(text, source, isFinal, confidence);
+    const turn = result?.turn ?? null;
     if (turn) {
       this.lastTurnId = turn.id;
       this.emitConversationTimeline();
@@ -531,35 +527,14 @@ export class SessionEngine {
     }
 
     this.resetTranscriptActivity();
-    const finalizedAt = this.clock.now();
-    let turn: ConversationTurn | null = null;
-    if (this.activeSpeechTurnId) {
-      turn = this.transcriptStore?.updateConversationTurn(this.activeSpeechTurnId, {
-        transcript: trimmed,
-        confidence,
-        isFinal: true,
-        endedAt: finalizedAt,
-        source: this.currentConversationTurnSource(),
-      }) ?? null;
-    }
-    if (!turn) {
-      turn = this.transcriptStore?.addConversationTurn({
-        transcript: trimmed,
-        source: this.currentConversationTurnSource(),
-        confidence,
-        isFinal: true,
-        startedAt: finalizedAt,
-        endedAt: finalizedAt,
-      }) ?? null;
-    }
-    this.activeSpeechTurnId = null;
+    const result = this.speechTurnReconciler?.recordFinal(trimmed, source, confidence) ?? null;
+    const turn = result?.turn ?? null;
     if (turn) {
       this.lastTurnId = turn.id;
       this.scheduleConversationTurnTranslation(turn);
     } else {
       this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
     }
-    this.transcriptStore?.addSpeechEntry(trimmed, source, true, confidence);
     this.emitConversationTimeline();
     this.analyzer?.addUtterance(trimmed, true);
 
@@ -572,32 +547,11 @@ export class SessionEngine {
 
   private recordPartialTranscript(text: string, confidence?: number): void {
     const trimmed = text.trim();
-    if (!trimmed || !this.transcriptStore) return;
+    if (!trimmed) return;
 
-    const now = this.clock.now();
-    let turn: ConversationTurn | null = null;
-    if (this.activeSpeechTurnId) {
-      turn = this.transcriptStore.updateConversationTurn(this.activeSpeechTurnId, {
-        transcript: trimmed,
-        confidence,
-        isFinal: false,
-        endedAt: now,
-        source: this.currentConversationTurnSource(),
-      });
-    }
-    if (!turn) {
-      turn = this.transcriptStore.addConversationTurn({
-        transcript: trimmed,
-        source: this.currentConversationTurnSource(),
-        confidence,
-        isFinal: false,
-        startedAt: now,
-        endedAt: now,
-      });
-    }
+    const turn = this.speechTurnReconciler?.recordPartial(trimmed, confidence) ?? null;
     if (!turn) return;
 
-    this.activeSpeechTurnId = turn.id;
     this.lastTurnId = turn.id;
     this.emitConversationTimeline();
   }
@@ -1026,7 +980,7 @@ export class SessionEngine {
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
     this.lastTurnId = null;
-    this.activeSpeechTurnId = null;
+    this.speechTurnReconciler = null;
     this.currentSpeechSegmentHasFinalTranscript = false;
     this.activeAssistEpisodeId = null;
     this.resetAssistMetrics();
@@ -1038,6 +992,10 @@ export class SessionEngine {
       this._scenarioId || this._category,
       this.transcriptOptions,
     );
+    this.speechTurnReconciler = new SpeechTurnReconciler(this.transcriptStore, {
+      now: () => this.clock.now(),
+      getTurnSource: () => this.currentConversationTurnSource(),
+    });
 
     // Initialize transcript analyzer for hint tracking
     this.analyzer = this.transcriptAnalyzerFactory(this.weekConfig.week);
@@ -1261,7 +1219,7 @@ export class SessionEngine {
       },
       onSpeechStart: () => {
         // Additional speech detection feedback
-        this.activeSpeechTurnId = null;
+        this.speechTurnReconciler?.resetActiveTurn();
         this.currentSpeechSegmentHasFinalTranscript = false;
       },
       onSpeechEnd: () => {
@@ -1425,6 +1383,7 @@ export class SessionEngine {
     // Finalize transcript cache
     const transcript = this.transcriptStore?.finalize() ?? undefined;
     this.transcriptStore = null;
+    this.speechTurnReconciler = null;
 
     const log: SessionLog = {
       startTime: this.sessionStartTime,
