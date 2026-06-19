@@ -131,6 +131,20 @@ Manifest:
    validator and by the #1/#27 readiness blockers. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
    only for local dry-runs.
+   When using the root readiness audit instead of running `smoke:deploy`
+   directly, set:
+
+   ```bash
+   ECHO_PROXY_BASE_URL=https://api.project-echo.app
+   ECHO_PROXY_SMOKE_ORIGIN=https://your-client-origin
+   ECHO_PROXY_SMOKE_SESSION_TOKEN=<short-lived signed smoke token>
+   ECHO_PROXY_SMOKE_EVIDENCE_OUT=docs/proxy-smoke-evidence.json
+   npm run readiness:echo
+   ```
+
+   `readiness:echo` accepts the evidence path as a repo-local JSON path and
+   converts it to the correct `echo-api-proxy` relative path before invoking
+   `smoke:deploy`.
 10. Build and package the app with `cd even-app && npm run verify`.
 11. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
    tokens, direct provider hostnames, SDK imports, and development IPs.

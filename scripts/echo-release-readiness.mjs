@@ -117,12 +117,34 @@ async function validateFinalManifest({
 async function checkProxySmoke() {
   const baseUrl = process.env.ECHO_PROXY_BASE_URL || '';
   const allowedOrigin = process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
+  const sessionToken = process.env.ECHO_PROXY_SMOKE_SESSION_TOKEN || '';
+  const evidenceOut = process.env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '';
+  const evidenceOutPath = validateProxySmokeEvidenceOut(evidenceOut);
 
-  if (!baseUrl || !allowedOrigin) {
+  const missingEnv = [
+    ['ECHO_PROXY_BASE_URL', baseUrl],
+    ['ECHO_PROXY_SMOKE_ORIGIN', allowedOrigin],
+    ['ECHO_PROXY_SMOKE_SESSION_TOKEN', sessionToken],
+    ['ECHO_PROXY_SMOKE_EVIDENCE_OUT', evidenceOut],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missingEnv.length > 0) {
     addCheck(
       'production proxy smoke',
       'blocked',
-      'Set ECHO_PROXY_BASE_URL and ECHO_PROXY_SMOKE_ORIGIN, then run readiness again.',
+      `Set ${missingEnv.join(', ')}, then run readiness again. ECHO_PROXY_SMOKE_EVIDENCE_OUT should be a repo-local JSON path such as docs/proxy-smoke-evidence.json.`,
+      PROXY_EVIDENCE_ISSUES,
+    );
+    return false;
+  }
+
+  if (!evidenceOutPath.ok) {
+    addCheck(
+      'production proxy smoke',
+      'blocked',
+      evidenceOutPath.detail,
       PROXY_EVIDENCE_ISSUES,
     );
     return false;
@@ -138,6 +160,8 @@ async function checkProxySmoke() {
     baseUrl,
     '--allowed-origin',
     allowedOrigin,
+    '--evidence-out',
+    evidenceOutPath.proxyRelativePath,
   ]);
 
   if (result.code !== 0) {
@@ -145,8 +169,54 @@ async function checkProxySmoke() {
     return false;
   }
 
-  addCheck('production proxy smoke', 'passed', `smoke:deploy passed for ${baseUrl}`, PROXY_EVIDENCE_ISSUES);
+  addCheck(
+    'production proxy smoke',
+    'passed',
+    `smoke:deploy passed for ${baseUrl} and wrote ${evidenceOutPath.repoRelativePath}`,
+    PROXY_EVIDENCE_ISSUES,
+  );
   return true;
+}
+
+function validateProxySmokeEvidenceOut(value) {
+  if (!value) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_EVIDENCE_OUT is required.',
+    };
+  }
+
+  if (!/^(?:\.{1,2}[\\/])?[A-Za-z0-9_.\-/\\]+\.json$/i.test(value)) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_EVIDENCE_OUT must be a repo-local JSON path.',
+    };
+  }
+
+  const resolvedPath = path.resolve(resolvedRepoRoot, value);
+  const repoPrefix = `${resolvedRepoRoot}${path.sep}`;
+  if (resolvedPath !== resolvedRepoRoot && !resolvedPath.startsWith(repoPrefix)) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_EVIDENCE_OUT must stay inside the repository.',
+    };
+  }
+
+  const repoRelativePath = path.relative(resolvedRepoRoot, resolvedPath).replace(/\\/g, '/');
+  if (!repoRelativePath || repoRelativePath.startsWith('..') || path.isAbsolute(repoRelativePath)) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_EVIDENCE_OUT must resolve to a file inside the repository.',
+    };
+  }
+
+  const proxyRoot = path.resolve(resolvedRepoRoot, 'echo-api-proxy');
+  const proxyRelativePath = path.relative(proxyRoot, resolvedPath).replace(/\\/g, '/');
+  return {
+    ok: true,
+    repoRelativePath,
+    proxyRelativePath,
+  };
 }
 
 function checkReadmeLinks() {

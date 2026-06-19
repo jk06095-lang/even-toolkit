@@ -423,6 +423,24 @@ npm run readiness:echo
 \`readiness:echo\` is expected to fail before the field run. Use the blocker
 list as the remaining evidence queue, not as a reason to fill placeholders.
 
+## Production Proxy Smoke Env
+
+Set these only after the HTTPS proxy is deployed and a short-lived signed smoke
+token has been minted from the server-side secret manager. Do not commit token
+values.
+
+\`\`\`bash
+ECHO_PROXY_BASE_URL=https://api.project-echo.app
+ECHO_PROXY_SMOKE_ORIGIN=https://your-client-origin
+ECHO_PROXY_SMOKE_SESSION_TOKEN=<short-lived signed smoke token>
+ECHO_PROXY_SMOKE_EVIDENCE_OUT=docs/proxy-smoke-evidence.json
+npm run readiness:echo
+\`\`\`
+
+The readiness command converts \`docs/proxy-smoke-evidence.json\` to the
+\`../docs/proxy-smoke-evidence.json\` path expected by \`smoke:deploy\`, because
+the smoke runner executes from \`echo-api-proxy\`.
+
 ## Evidence Queue
 
 | Issues | Evidence artifact | Completion gate |

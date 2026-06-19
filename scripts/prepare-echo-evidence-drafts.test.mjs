@@ -96,6 +96,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
+  assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_SESSION_TOKEN/);
+  assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_EVIDENCE_OUT=docs\/proxy-smoke-evidence\.json/);
+  assert.match(fieldRunbook, /\.\.\/docs\/proxy-smoke-evidence\.json/);
   assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);

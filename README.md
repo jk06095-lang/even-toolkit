@@ -49,7 +49,12 @@ Run `npm run readiness:echo` when preparing to close the remaining Project ECHO
 issues. It intentionally fails until the completed pilot manifest, completed
 hardware QA manifest, completed ChatGPT Action evidence manifest for #29,
 deployed proxy smoke check for #1/#27, key-rotation and session-token evidence
-for #1/#27, and final README case-study/video links are all present. Use
+for #1/#27, and final README case-study/video links are all present. For the
+proxy smoke check, set `ECHO_PROXY_BASE_URL`, `ECHO_PROXY_SMOKE_ORIGIN`,
+`ECHO_PROXY_SMOKE_SESSION_TOKEN`, and repo-local
+`ECHO_PROXY_SMOKE_EVIDENCE_OUT` such as `docs/proxy-smoke-evidence.json`; the
+readiness command passes that evidence path to the proxy smoke runner from the
+`echo-api-proxy` working directory. Use
 [docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
 as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`, including the ISO
