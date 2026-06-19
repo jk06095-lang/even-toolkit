@@ -22,7 +22,9 @@ after(() => {
 test('prepares draft evidence manifests without marking external evidence complete', async () => {
   const actionSpec = JSON.parse(readFileSync(path.join(repoRoot, 'integrations/chatgpt-action/openapi.json'), 'utf8'));
   const actionSmokePath = path.join(tmpRoot, 'chatgpt-action-oauth-smoke.json');
+  const proxySmokePath = path.join(tmpRoot, 'proxy-smoke-evidence.json');
   writeFileSync(actionSmokePath, `${JSON.stringify(actionOauthSmokeFixture(actionSpec.servers[0].url), null, 2)}\n`, 'utf8');
+  writeFileSync(proxySmokePath, `${JSON.stringify(proxySmokeFixture(), null, 2)}\n`, 'utf8');
 
   const result = await runNode([
     'scripts/prepare-echo-evidence-drafts.mjs',
@@ -30,6 +32,8 @@ test('prepares draft evidence manifests without marking external evidence comple
     repoRelative(tmpRoot),
     '--action-oauth-smoke',
     repoRelative(actionSmokePath),
+    '--proxy-smoke-evidence',
+    repoRelative(proxySmokePath),
   ]);
   assert.equal(result.code, 0, result.stderr);
 
@@ -96,6 +100,19 @@ test('prepares draft evidence manifests without marking external evidence comple
   const keyRotation = readFileSync(keyRotationPath, 'utf8');
   assert.match(keyRotation, new RegExp(`Client build or package version: echo-app ${escapeRegExp(appVersion)}`));
   assert.match(keyRotation, /Provider: Gemini/);
+  assert.match(keyRotation, /Production proxy URL: https:\/\/api\.project-echo\.app/);
+  assert.match(keyRotation, /Session token issuer: server-side signed-token issuer verified by production smoke evidence/);
+  assert.match(keyRotation, /Session token TTL: 3600 seconds/);
+  assert.match(keyRotation, /Session token rotation cadence: 7 days/);
+  assert.match(keyRotation, /Session token storage boundary: server secret manager \/ signed-token issuer verified by production smoke evidence/);
+  assert.match(keyRotation, new RegExp(`Deployment smoke evidence JSON: ${escapeRegExp(repoRelative(proxySmokePath))}`));
+  assert.match(keyRotation, /Deployment smoke command result: passed: npm --prefix echo-api-proxy run smoke:deploy/);
+  assert.match(keyRotation, /--session-token <redacted>/);
+  assert.match(keyRotation, /\/healthz configured true: passed/);
+  assert.match(keyRotation, /Allowed origin passed: passed/);
+  assert.match(keyRotation, /Untrusted origin blocked: passed/);
+  assert.match(keyRotation, /Safe non-echoing error response verified: passed/);
+  assert.doesNotMatch(keyRotation, /--allow-http|--allow-unconfigured|--allow-unauthenticated|--allow-qa-delay/);
   assert.match(keyRotation, /Browser artifact key scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
   assert.match(keyRotation, /Session token client artifact scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
   assert.match(keyRotation, /Follow-up issue or ticket: #1\/#27/);
@@ -121,8 +138,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
   assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_SESSION_TOKEN/);
-  assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_EVIDENCE_OUT=docs\/proxy-smoke-evidence\.json/);
-  assert.match(fieldRunbook, /\.\.\/docs\/proxy-smoke-evidence\.json/);
+  assert.match(fieldRunbook, new RegExp(`ECHO_PROXY_SMOKE_EVIDENCE_OUT=${escapeRegExp(repoRelative(proxySmokePath))}`));
+  assert.match(fieldRunbook, new RegExp(`npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence ${escapeRegExp(repoRelative(proxySmokePath))}`));
   assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
@@ -232,6 +249,65 @@ function actionOauthSmokeFixture(baseUrl) {
         rawAudioRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
         directContactIdentifiersRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
         providerSecretsRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
+      },
+    },
+  };
+}
+
+function proxySmokeFixture() {
+  return {
+    schema: 'project-echo-proxy-smoke-v1',
+    generatedAt: '2026-06-19T00:00:00.000Z',
+    baseUrl: 'https://api.project-echo.app',
+    allowedOrigin: 'https://echo-client.example.test',
+    disallowedOrigin: 'https://blocked.project-echo.invalid',
+    allowHttp: false,
+    allowUnconfigured: false,
+    allowUnauthenticated: false,
+    allowQaDelay: false,
+    sessionTokenProvided: true,
+    ok: true,
+    checks: {
+      healthz: {
+        status: 200,
+        ok: true,
+        configured: true,
+        authConfigured: true,
+        qaDelayMs: 0,
+        tokenPolicyConfigured: true,
+        tokenPolicyIssuerPresent: true,
+        tokenPolicyAudience: 'project-echo-api',
+        tokenPolicyTtlSeconds: 3600,
+        tokenPolicyRotationDays: 7,
+        tokenPolicyActiveTokenCount: 1,
+        tokenPolicySignedTokenConfigured: true,
+        corsOriginMatches: true,
+        cacheControlNoStore: true,
+      },
+      options: {
+        status: 204,
+        corsOriginMatches: true,
+        allowsPost: true,
+        allowsAuthorization: true,
+        allowsSessionToken: true,
+        allowsIdempotencyKey: true,
+      },
+      missingSessionToken: {
+        status: 401,
+        errorCode: 'missing_session_token',
+        corsOriginMatches: true,
+      },
+      disallowedOrigin: {
+        status: 403,
+        errorCode: 'origin_not_allowed',
+        corsOriginAbsent: true,
+      },
+      safeError: {
+        status: 503,
+        errorCode: 'proxy_not_configured',
+        errorCodePresent: true,
+        responseEchoedSensitive: false,
+        corsOriginMatches: true,
       },
     },
   };

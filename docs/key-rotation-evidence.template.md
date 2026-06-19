@@ -15,6 +15,10 @@ JSON file written by `smoke:deploy -- --evidence-out ...`. Session token
 evidence must prove short-lived server-side issuance, signed-token or server
 secret-manager storage, client artifact scans, and old-token revocation after
 rotation.
+After production smoke runs, `npm run prepare:echo-evidence-drafts --
+--proxy-smoke-evidence docs/proxy-smoke-evidence.json` can prefill deployment
+smoke fields in the draft, but the final file still needs the rotation date,
+owner, key, revocation, and log-review evidence filled by the operator.
 
 ## Rotation Date
 

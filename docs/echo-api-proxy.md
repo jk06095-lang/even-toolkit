@@ -207,7 +207,12 @@ Manifest:
 
    `readiness:echo` accepts the evidence path as a repo-local JSON path and
    converts it to the correct `echo-api-proxy` relative path before invoking
-   `smoke:deploy`.
+   `smoke:deploy`. To prefill the key-rotation draft with the token-free smoke
+   metadata without marking rotation complete, run:
+
+   ```bash
+   npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence docs/proxy-smoke-evidence.json
+   ```
 12. Build and package the app with `cd even-app && npm run verify`.
 13. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
     tokens, direct provider hostnames, SDK imports, and development IPs.
