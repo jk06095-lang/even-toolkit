@@ -31,9 +31,23 @@ test('prepares draft evidence manifests without marking external evidence comple
   const pilotPath = path.join(tmpRoot, 'project-echo-pilot-evidence.draft.json');
   const actionPath = path.join(tmpRoot, 'project-echo-chatgpt-action-evidence.draft.json');
   const keyRotationPath = path.join(tmpRoot, 'key-rotation-evidence.draft.md');
+  const caseStudyKoPath = path.join(tmpRoot, 'project-echo-case-study.ko.draft.md');
+  const caseStudyEnPath = path.join(tmpRoot, 'project-echo-case-study.en.draft.md');
+  const architecturePath = path.join(tmpRoot, 'project-echo-architecture.draft.md');
+  const videoShotListPath = path.join(tmpRoot, 'project-echo-real-g2-video-shot-list.draft.md');
   const buildReportPath = path.join(tmpRoot, 'project-echo-build-artifact.md');
 
-  for (const filePath of [hardwarePath, pilotPath, actionPath, keyRotationPath, buildReportPath]) {
+  for (const filePath of [
+    hardwarePath,
+    pilotPath,
+    actionPath,
+    keyRotationPath,
+    caseStudyKoPath,
+    caseStudyEnPath,
+    architecturePath,
+    videoShotListPath,
+    buildReportPath,
+  ]) {
     assert.equal(existsSync(filePath), true, `${filePath} should exist`);
   }
 
@@ -60,6 +74,24 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(keyRotation, /Session token client artifact scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
   assert.match(keyRotation, /Follow-up issue or ticket: #1\/#27/);
   assert.doesNotMatch(keyRotation, /Date: \d{4}-\d{2}-\d{2}/);
+
+  const caseStudyKo = readFileSync(caseStudyKoPath, 'utf8');
+  const caseStudyEn = readFileSync(caseStudyEnPath, 'utf8');
+  const architecture = readFileSync(architecturePath, 'utf8');
+  const videoShotList = readFileSync(videoShotListPath, 'utf8');
+
+  assert.match(caseStudyKo, /Draft only/);
+  assert.match(caseStudyKo, /project-echo-case-study-ko/);
+  assert.match(caseStudyKo, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
+  assert.match(caseStudyEn, /Draft only/);
+  assert.match(caseStudyEn, /project-echo-case-study-en/);
+  assert.match(caseStudyEn, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
+  assert.match(architecture, /flowchart LR/);
+  assert.match(architecture, /ECHO API proxy/);
+  assert.match(videoShotList, /project-echo-real-g2-video/);
+  assert.match(videoShotList, /G2 shows READY/);
+  assert.doesNotMatch(caseStudyKo, /\]\(docs\/project-echo-case-study\.ko\.md\)/);
+  assert.doesNotMatch(caseStudyEn, /\]\(docs\/project-echo-case-study\.en\.md\)/);
 
   await assertValidatorPasses('scripts/validate-hardware-qa.mjs', hardwarePath);
   await assertValidatorPasses('scripts/validate-pilot-evidence.mjs', pilotPath);

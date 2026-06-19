@@ -59,6 +59,7 @@ prepareHardwareDraft(hardware);
 preparePilotDraft(pilot);
 prepareActionDraft(action, actionSpec);
 prepareKeyRotationDraft(keyRotationTemplate);
+writeCaseStudyDrafts();
 
 writeJson('project-echo-hardware-qa.draft.json', hardware);
 writeJson('project-echo-pilot-evidence.draft.json', pilot);
@@ -141,6 +142,225 @@ function prepareKeyRotationDraft(template) {
   });
 
   writeText(path.join(outDir, 'key-rotation-evidence.draft.md'), draft);
+}
+
+function writeCaseStudyDrafts() {
+  writeText(
+    path.join(outDir, 'project-echo-case-study.ko.draft.md'),
+    caseStudyKoDraft(),
+  );
+  writeText(
+    path.join(outDir, 'project-echo-case-study.en.draft.md'),
+    caseStudyEnDraft(),
+  );
+  writeText(
+    path.join(outDir, 'project-echo-architecture.draft.md'),
+    architectureDraft(),
+  );
+  writeText(
+    path.join(outDir, 'project-echo-real-g2-video-shot-list.draft.md'),
+    realG2VideoShotListDraft(),
+  );
+}
+
+function caseStudyKoDraft() {
+  return `# Project ECHO Case Study Draft (KO)
+
+Draft only. Do not link this file from README as project-echo-case-study-ko until
+the completed pilot manifest passes validation and the final file is copied to a
+stable non-draft path such as docs/project-echo-case-study.ko.md.
+
+## 제품 문제
+
+- 대상 사용자:
+- 실제 회화 상황:
+- 기존 문제:
+- Project ECHO의 개입 방식:
+
+## 빌드 범위
+
+- App version: ${appVersion}
+- G2 HUD states: READY, LISTENING, CUE, PAUSED
+- Audio sources: G2 Mic, Phone Mic
+- Privacy boundary: server-side ECHO API proxy, local fallback cues
+- Evidence status: draft
+
+## 파일럿 요약
+
+| 항목 | 결과 |
+| --- | --- |
+| 참가자 수 | TBD |
+| 조건 A: No assistance | TBD |
+| 조건 B: Full sentence suggestion | TBD |
+| 조건 C: 3-5 word cue | TBD |
+| 가장 낮은 방해감 조건 | TBD |
+| 가장 높은 신뢰 조건 | TBD |
+
+## 정량 결과
+
+| Metric | A | B | C |
+| --- | ---: | ---: | ---: |
+| Time to first utterance | TBD | TBD | TBD |
+| Cue p50 latency | 0 | TBD | TBD |
+| Cue p95 latency | 0 | TBD | TBD |
+| Cue usage rate | 0 | TBD | TBD |
+| False cue rate | 0 | TBD | TBD |
+| Interruption rating | TBD | TBD | TBD |
+| Trust rating | TBD | TBD | TBD |
+
+## 실제 G2 증거
+
+- Real G2 video: TBD
+- Hardware QA manifest: TBD
+- Pilot evidence manifest: TBD
+- Architecture evidence: TBD
+
+## 한계
+
+- 표본 수:
+- 통제된 시나리오:
+- 영어 회화 초점:
+- G2 하드웨어/Even Hub 제약:
+
+## README 전환 조건
+
+- Final manifest: docs/project-echo-pilot-evidence.completed.json
+- Required marker: project-echo-case-study-ko
+- Link only after README target matches the completed pilot manifest.
+`;
+}
+
+function caseStudyEnDraft() {
+  return `# Project ECHO Case Study Draft (EN)
+
+Draft only. Do not link this file from README as project-echo-case-study-en until
+the completed pilot manifest passes validation and the final file is copied to a
+stable non-draft path such as docs/project-echo-case-study.en.md.
+
+## Product Problem
+
+- Target learner:
+- Conversation setting:
+- Current failure mode:
+- Project ECHO intervention:
+
+## Build Scope
+
+- App version: ${appVersion}
+- G2 HUD states: READY, LISTENING, CUE, PAUSED
+- Audio sources: G2 Mic, Phone Mic
+- Privacy boundary: server-side ECHO API proxy, local fallback cues
+- Evidence status: draft
+
+## Pilot Summary
+
+| Item | Result |
+| --- | --- |
+| Participants | TBD |
+| Condition A: No assistance | TBD |
+| Condition B: Full sentence suggestion | TBD |
+| Condition C: 3-5 word cue | TBD |
+| Lowest-interruption condition | TBD |
+| Highest-trust condition | TBD |
+
+## Quantitative Results
+
+| Metric | A | B | C |
+| --- | ---: | ---: | ---: |
+| Time to first utterance | TBD | TBD | TBD |
+| Cue p50 latency | 0 | TBD | TBD |
+| Cue p95 latency | 0 | TBD | TBD |
+| Cue usage rate | 0 | TBD | TBD |
+| False cue rate | 0 | TBD | TBD |
+| Interruption rating | TBD | TBD | TBD |
+| Trust rating | TBD | TBD | TBD |
+
+## Real G2 Evidence
+
+- Real G2 video: TBD
+- Hardware QA manifest: TBD
+- Pilot evidence manifest: TBD
+- Architecture evidence: TBD
+
+## Limitations
+
+- Sample size:
+- Controlled scenarios:
+- English-practice focus:
+- G2 hardware / Even Hub constraints:
+
+## README Promotion Conditions
+
+- Final manifest: docs/project-echo-pilot-evidence.completed.json
+- Required marker: project-echo-case-study-en
+- Link only after README target matches the completed pilot manifest.
+`;
+}
+
+function architectureDraft() {
+  return `# Project ECHO Architecture Draft
+
+Draft only. This is a portfolio architecture evidence starting point, not final
+release evidence. Copy to a stable non-draft path only after the pilot and
+hardware QA manifests are complete.
+
+## App Version
+
+- echo-app: ${appVersion}
+- Evidence status: draft
+
+## Boundary Diagram
+
+\`\`\`mermaid
+flowchart LR
+  Learner["Learner"] --> Phone["Phone-hosted Even Hub WebView"]
+  Phone --> G2["Even Realities G2 HUD and input"]
+  Phone --> Local["Local privacy controls and fallback cues"]
+  Phone --> Proxy["ECHO API proxy"]
+  Proxy --> Provider["Server-side AI/STT provider"]
+  Phone --> Review["Review export and active recall"]
+  Review --> CustomGPT["Manual Custom GPT handoff / Action evidence"]
+\`\`\`
+
+## Claims To Prove Before Portfolio Use
+
+- The G2 HUD shows only READY, LISTENING, CUE, and PAUSED during live speech.
+- G2 Mic and Phone Mic paths remain explicit; no silent phone microphone fallback.
+- Raw transcripts/audio do not leave the client unless the user opted into cloud processing.
+- Provider keys, session tokens, and direct provider hosts are absent from dist and .ehpk artifacts.
+- The completed pilot manifest links this architecture artifact.
+`;
+}
+
+function realG2VideoShotListDraft() {
+  return `# Project ECHO Real G2 Video Shot List Draft
+
+Draft only. This checklist helps capture the project-echo-real-g2-video evidence
+required by issue #10. It is not a substitute for the final video file or HTTPS
+video URL.
+
+## Required Continuous Takes
+
+| Take | Required proof | Captured |
+| --- | --- | --- |
+| 1 | Install/open the same echo.ehpk package used in hardware QA | TBD |
+| 2 | G2 shows READY before a session starts | TBD |
+| 3 | Start G2 Mic; phone mic permission remains closed | TBD |
+| 4 | G2 shows LISTENING during live speech | TBD |
+| 5 | Manual Assist request shows one short CUE on G2 | TBD |
+| 6 | Swipe/dismiss clears the cue | TBD |
+| 7 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
+| 8 | End Practice returns to READY without duplicate audio capture | TBD |
+| 9 | Exit ECHO shuts down the Even Hub page container | TBD |
+| 10 | Phone review shows timeline/details while G2 stays minimal | TBD |
+
+## File Requirements
+
+- Final target marker: project-echo-real-g2-video
+- Final evidence must be an HTTPS URL or repo path ending in mp4, mov, webm, or mkv.
+- README must link the final target only after docs/project-echo-pilot-evidence.completed.json passes validation.
+- Do not publish participant faces, names, raw transcripts, audio payloads, provider keys, or session tokens.
+`;
 }
 
 function writeBuildArtifactReport(packagePath, packageAbs) {

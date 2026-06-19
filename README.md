@@ -68,9 +68,10 @@ npm run prepare:echo-evidence-drafts
 
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when
-available, and local client artifact scan counts. They stay in `draft` status
-and do not replace the required `*.completed.json` evidence files or the final
-`docs/key-rotation-evidence.md`.
+available, local client artifact scan counts, and draft case-study/video
+package outlines. They stay in `draft` status and do not replace the required
+`*.completed.json` evidence files, the final `docs/key-rotation-evidence.md`,
+or the final README portfolio links.
 
 The readiness gate is aligned with the
 [official Even Realities developer docs](https://hub.evenrealities.com/docs/get-started/overview):

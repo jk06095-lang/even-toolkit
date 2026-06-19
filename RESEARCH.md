@@ -147,6 +147,12 @@ aggregate metrics.
 
 ## Case Study Package
 
+Run `npm run prepare:echo-evidence-drafts` before the field run to create
+draft Korean/English case-study outlines, an architecture draft, and a real G2
+video shot list under `docs/evidence-drafts/`. These files are planning aids
+only; copy them to stable non-draft paths and link them from README only after
+the completed pilot evidence manifest passes validation.
+
 - One short product problem statement.
 - One architecture diagram showing G2, phone UI, local privacy controls, and ECHO API proxy.
 - One real G2 video showing READY, LISTENING, CUE, PAUSED, END PRACTICE, and EXIT ECHO.
