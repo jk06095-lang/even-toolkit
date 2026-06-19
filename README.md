@@ -41,8 +41,9 @@ is also kept at [docs/github-actions-verify.yml](./docs/github-actions-verify.ym
 
 Run `npm run readiness:echo` when preparing to close the remaining Project ECHO
 issues. It intentionally fails until the completed pilot manifest, completed
-hardware QA manifest, deployed proxy smoke check, key-rotation evidence, and
-final README case-study/video links are all present. Use
+hardware QA manifest, deployed proxy smoke check for #1/#27, key-rotation and
+session-token evidence for #1/#27, and final README case-study/video links are
+all present. Use
 [docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
 as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`, including the ISO

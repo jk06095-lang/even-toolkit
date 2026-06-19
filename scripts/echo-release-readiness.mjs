@@ -80,6 +80,7 @@ const PLACEHOLDER_PATTERNS = [
 ];
 const OFFICIAL_EVENHUB_EDITION = '202601';
 const OFFICIAL_EVENHUB_SDK_FLOOR = '0.0.10';
+const PROXY_EVIDENCE_ISSUES = '#1/#27';
 const OFFICIAL_EVENHUB_PERMISSION_NAMES = new Set([
   'album',
   'camera',
@@ -122,7 +123,7 @@ async function checkProxySmoke() {
       'production proxy smoke',
       'blocked',
       'Set ECHO_PROXY_BASE_URL and ECHO_PROXY_SMOKE_ORIGIN, then run readiness again.',
-      '#1',
+      PROXY_EVIDENCE_ISSUES,
     );
     return false;
   }
@@ -140,11 +141,11 @@ async function checkProxySmoke() {
   ]);
 
   if (result.code !== 0) {
-    addCheck('production proxy smoke', 'blocked', firstUsefulLine(result.output), '#1');
+    addCheck('production proxy smoke', 'blocked', firstUsefulLine(result.output), PROXY_EVIDENCE_ISSUES);
     return false;
   }
 
-  addCheck('production proxy smoke', 'passed', `smoke:deploy passed for ${baseUrl}`, '#1');
+  addCheck('production proxy smoke', 'passed', `smoke:deploy passed for ${baseUrl}`, PROXY_EVIDENCE_ISSUES);
   return true;
 }
 
@@ -185,19 +186,19 @@ async function checkKeyRotationEvidence() {
     addCheck(
       'provider key rotation evidence',
       'blocked',
-      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, deployment smoke JSON, artifact scan, and log review notes.',
-      '#1',
+      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, deployment smoke JSON, session-token rotation evidence, artifact scan, and log review notes.',
+      PROXY_EVIDENCE_ISSUES,
     );
     return false;
   }
 
   const result = await runNpm(['run', 'validate:key-rotation-evidence', '--', 'docs/key-rotation-evidence.md']);
   if (result.code !== 0) {
-    addCheck('provider key rotation evidence', 'blocked', firstUsefulLine(result.output), '#1');
+    addCheck('provider key rotation evidence', 'blocked', firstUsefulLine(result.output), PROXY_EVIDENCE_ISSUES);
     return false;
   }
 
-  addCheck('provider key rotation evidence', 'passed', 'docs/key-rotation-evidence.md passed production evidence validation.', '#1');
+  addCheck('provider key rotation evidence', 'passed', 'docs/key-rotation-evidence.md passed production evidence validation.', PROXY_EVIDENCE_ISSUES);
   return true;
 }
 

@@ -108,7 +108,7 @@ Manifest:
    untrusted origins, missing-token rejection, `qaDelayMs: 0`, configured
    session-token policy metadata, and safe non-echoing error responses. The
    `--evidence-out` JSON is required by the final key-rotation evidence
-   validator. Use
+   validator and by the #1/#27 readiness blockers. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
    only for local dry-runs.
 10. Build and package the app with `cd even-app && npm run verify`.
@@ -122,7 +122,8 @@ Manifest:
    the `smoke:deploy` result, reference the checked-in deployment smoke JSON,
    mark smoke/log/session-token confirmations as passed or verified, prove a
    TTL and rotation cadence inside policy limits, prove old-token revocation,
-   and record clean artifact scans such as `0 matches` or `no matches`.
+   and record clean artifact scans such as `0 matches` or `no matches`. This
+   same evidence is required before both #1 and #27 can be closed.
 13. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 
