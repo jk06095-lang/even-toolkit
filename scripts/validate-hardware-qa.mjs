@@ -17,6 +17,13 @@ const LIFECYCLE_EXIT_ZERO_METRICS = [
   'pendingIntervalCount',
   'lateHudUpdatesAfterExit',
 ];
+const ASSIST_METRICS = [
+  { key: 'manual_request_count', min: 1 },
+  { key: 'auto_trigger_count', min: 1 },
+  { key: 'cue_dismissed_count', min: 2 },
+  { key: 'false_trigger_count', min: 0 },
+  { key: 'cue_used_count', min: 0 },
+];
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
@@ -198,6 +205,29 @@ function validateExpectedNumber(object, key, expected, pointer) {
   }
 }
 
+function validateCountMetric(object, metric, pointer) {
+  const fieldPointer = `${pointer}.${metric.key}`;
+  if (!hasOwn(object, metric.key)) {
+    addError(fieldPointer, 'missing required count metric');
+    return;
+  }
+
+  const value = object[metric.key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, `draft count must become an integer >= ${metric.min}`);
+    return;
+  }
+
+  if (!Number.isInteger(value)) {
+    addError(fieldPointer, 'must be an integer count');
+    return;
+  }
+
+  if (value < metric.min) {
+    addError(fieldPointer, `must be >= ${metric.min}`);
+  }
+}
+
 function validateAllowedKeys(object, allowedKeys, pointer) {
   const allowed = new Set(allowedKeys);
   for (const key of Object.keys(object)) {
@@ -301,6 +331,12 @@ function validateAssist(manifestObject) {
     'metricsCaptured',
   ]) {
     validateExpected(manifestObject.assist, key, true, 'assist');
+  }
+  validateExpected(manifestObject.assist, 'rawTranscriptInMetrics', false, 'assist');
+  if (validateObject(manifestObject.assist.metrics, 'assist.metrics')) {
+    for (const metric of ASSIST_METRICS) {
+      validateCountMetric(manifestObject.assist.metrics, metric, 'assist.metrics');
+    }
   }
   validateEvidenceLink(manifestObject.assist, 'evidenceRef', 'assist');
 }

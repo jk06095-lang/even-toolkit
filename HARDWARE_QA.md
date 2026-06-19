@@ -146,6 +146,12 @@ Still requires real G2 validation:
 - Switch to `Auto`, stay silent past the threshold, and confirm an auto cue appears.
 - Dismiss two auto cues and confirm the phone UI shows `Assist: Auto paused`.
 - Confirm auto cue count never exceeds 3 in one session.
+- Record final Assist metrics under `assist.metrics`: `manual_request_count`,
+  `auto_trigger_count`, `cue_dismissed_count`, `false_trigger_count`, and
+  `cue_used_count`. Final hardware QA requires at least one manual request, one
+  auto trigger, and two dismissed cues to prove the safety path was exercised.
+- Confirm `rawTranscriptInMetrics` is `false`; Assist metrics must be counts and
+  flags only, not raw learner utterances or cue text.
 
 Automated coverage added on 2026-06-19:
 

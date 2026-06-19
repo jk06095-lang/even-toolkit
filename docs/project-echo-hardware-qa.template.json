@@ -210,6 +210,14 @@
     "twoDismissAutoPause": null,
     "interventionCapEnforced": null,
     "metricsCaptured": null,
+    "rawTranscriptInMetrics": null,
+    "metrics": {
+      "manual_request_count": null,
+      "auto_trigger_count": null,
+      "cue_dismissed_count": null,
+      "false_trigger_count": null,
+      "cue_used_count": null
+    },
     "evidenceRef": "TBD"
   },
   "delayedProxy": {
