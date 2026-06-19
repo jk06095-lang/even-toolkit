@@ -17,6 +17,17 @@ export interface LivePracticeControllerContext {
   getCalibration: () => CalibrationResult | null;
 }
 
+export type LivePracticeAudioSource = 'bridge' | 'browser';
+
+const PREFERRED_AUDIO_SOURCE_KEY = 'preferredAudioSource';
+export const G2_MIC_FALLBACK_PROMPT = [
+  'G2 microphone unavailable.',
+  '',
+  'Use Phone Mic instead?',
+  '',
+  'Phone Mic opens this device microphone only after you confirm.',
+].join('\n');
+
 let context: LivePracticeControllerContext | null = null;
 let session: SessionEngine | null = null;
 let currentWeek = 1;
@@ -24,7 +35,7 @@ let selectedScenario: TopicScenario | null = null;
 let expressionUsage: Map<string, boolean> = new Map();
 let currentActiveHint: string | null = null;
 let currentMode: 'general' | 'scenario' | null = null;
-let preferredAudioSource: 'bridge' | 'browser' = (localStorage.getItem('preferredAudioSource') as 'bridge' | 'browser') || 'bridge';
+let preferredAudioSource: LivePracticeAudioSource = loadPreferredAudioSource();
 let endingPracticePromise: Promise<void> | null = null;
 let selectedAssistMode: AssistMode = 'manual';
 let privacySettings: PrivacySettings = loadPrivacySettings();
@@ -38,8 +49,54 @@ let latestAssistMetrics: AssistMetrics = {
 };
 let silenceAnimFrame: number | null = null;
 
-function audioSourceCopy(source: 'bridge' | 'browser', suffix = ''): string {
+export function normalizeAudioSource(input: unknown): LivePracticeAudioSource {
+  return input === 'browser' ? 'browser' : 'bridge';
+}
+
+export function shouldOfferPhoneMicFallback(error: unknown, source: LivePracticeAudioSource): boolean {
+  return source === 'bridge'
+    && error instanceof Error
+    && error.message.toLowerCase().includes('g2 microphone unavailable');
+}
+
+function loadPreferredAudioSource(): LivePracticeAudioSource {
+  try {
+    return normalizeAudioSource(localStorage.getItem(PREFERRED_AUDIO_SOURCE_KEY));
+  } catch {
+    return 'bridge';
+  }
+}
+
+function savePreferredAudioSource(source: LivePracticeAudioSource): void {
+  try {
+    localStorage.setItem(PREFERRED_AUDIO_SOURCE_KEY, source);
+  } catch {
+    // Preferred audio source is a convenience setting; the in-memory value is authoritative.
+  }
+}
+
+function setPreferredAudioSource(source: LivePracticeAudioSource): void {
+  preferredAudioSource = source;
+  savePreferredAudioSource(source);
+}
+
+function audioSourceCopy(source: LivePracticeAudioSource, suffix = ''): string {
   return `${source === 'bridge' ? 'G2 Mic' : 'Phone Mic'}${suffix}`;
+}
+
+function updateAudioSourceToggleLabel(): void {
+  const span = document.querySelector('#btn-toggle-audio-source span');
+  if (span) {
+    span.textContent = audioSourceCopy(preferredAudioSource);
+  }
+}
+
+function updateSelectedAudioSourceLabel(source: LivePracticeAudioSource): void {
+  const label = document.getElementById('audio-source-label');
+  if (!label) return;
+  label.style.display = 'inline-block';
+  label.textContent = audioSourceCopy(source, ' (selected)');
+  label.style.color = source === 'bridge' ? 'var(--color-positive)' : 'var(--phase4)';
 }
 
 export function bindLivePracticeEvents(nextContext: LivePracticeControllerContext): void {
@@ -121,21 +178,16 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
 
   const toggleBtnSpan = document.querySelector('#btn-toggle-audio-source span');
   if (toggleBtnSpan) {
-    toggleBtnSpan.textContent = audioSourceCopy(preferredAudioSource);
+    updateAudioSourceToggleLabel();
   }
 
   document.getElementById('btn-toggle-audio-source')?.addEventListener('click', async () => {
     const isSessionActive = session && session.state !== 'idle';
     const newSource = preferredAudioSource === 'bridge' ? 'browser' : 'bridge';
-    preferredAudioSource = newSource;
-    localStorage.setItem('preferredAudioSource', newSource);
+    setPreferredAudioSource(newSource);
 
     console.log('[LivePractice] Switched preferred mic source to:', newSource);
-
-    const span = document.querySelector('#btn-toggle-audio-source span');
-    if (span) {
-      span.textContent = audioSourceCopy(newSource);
-    }
+    updateAudioSourceToggleLabel();
 
     if (isSessionActive) {
       const label = document.getElementById('audio-source-label');
@@ -149,17 +201,7 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
         await startSession();
       }, 500);
     } else {
-      const label = document.getElementById('audio-source-label');
-      if (label) {
-        label.style.display = 'inline-block';
-        if (newSource === 'bridge') {
-          label.textContent = audioSourceCopy(newSource, ' (selected)');
-          label.style.color = 'var(--color-positive)';
-        } else {
-          label.textContent = audioSourceCopy(newSource, ' (selected)');
-          label.style.color = 'var(--phase4)';
-        }
-      }
+      updateSelectedAudioSourceLabel(newSource);
     }
   });
 }
@@ -453,12 +495,29 @@ async function startSession(): Promise<void> {
     await session.start(hud);
   } catch (err: any) {
     console.error('[LivePractice] Failed to start session:', err);
+    const failedSource = preferredAudioSource;
+    const canOfferPhoneFallback = shouldOfferPhoneMicFallback(err, failedSource);
+    await endLivePracticeSession();
+
+    if (canOfferPhoneFallback) {
+      const usePhoneMic = window.confirm(G2_MIC_FALLBACK_PROMPT);
+      if (usePhoneMic) {
+        setPreferredAudioSource('browser');
+        updateAudioSourceToggleLabel();
+        updateSelectedAudioSourceLabel('browser');
+        updatePrivacySettingsUI(privacySettings, 'Phone Mic selected. Starting Live Practice...', 'success');
+        await startSession();
+      } else {
+        updatePrivacySettingsUI(privacySettings, 'Phone Mic was not started. Select Phone Mic to retry.', 'normal');
+      }
+      return;
+    }
+
     if (err.message === 'SECURE_ORIGIN_REQUIRED') {
       alert('Secure origin required\n\nTo use the microphone on a mobile device, you must:\n1. Use an HTTPS connection\n2. OR enable "Insecure origins treated as secure" in chrome://flags\n\nPlease add http://' + window.location.host + ' to the allowed list.');
     } else {
       alert('Failed to start microphone: ' + err.message);
     }
-    endLivePracticeSession();
   }
 }
 

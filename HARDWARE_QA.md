@@ -203,6 +203,8 @@ Automated coverage added on 2026-06-19:
 - `session-engine-core` verifies Phone Mic starts browser recognition only when
   that source is explicitly selected.
 - `session-engine-core` verifies pause/resume keeps G2 recognition in bridge mode.
+- `live-practice-controller` verifies the Phone Mic fallback prompt is offered
+  only after a G2 Mic start failure, never as a silent fallback.
 
 Still requires real G2 validation:
 
