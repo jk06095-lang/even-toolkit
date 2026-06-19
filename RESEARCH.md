@@ -86,6 +86,11 @@ noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.
 Each final A/B/C aggregate must include `sampleSize`, and that value must match
 the number of participant runs recorded for the same condition.
+Condition A is the no-assistance baseline, so final evidence must record
+`cueP50LatencyMs`, `cueP95LatencyMs`, `cueUsageRate`, `cueDismissalRate`, and
+`falseCueRate` as `0` for both per-user runs and aggregate metrics. If any of
+those values is non-zero, condition A was not actually measured as no
+assistance.
 
 ## UX Metrics
 

@@ -38,6 +38,9 @@ const VAD_METRICS = [
   { key: 'missedSpeechEvents', min: 0 },
 ];
 
+const NO_ASSIST_SYSTEM_ZERO_METRICS = ['cueP50LatencyMs', 'cueP95LatencyMs'];
+const NO_ASSIST_UX_ZERO_METRICS = ['cueUsageRate', 'cueDismissalRate', 'falseCueRate'];
+
 const PLACEHOLDER_PATTERNS = [
   /^$/,
   /^TBD$/i,
@@ -233,6 +236,36 @@ function validateMetricGroup(object, metrics, pointer) {
   }
 }
 
+function validateMetricEquals(object, key, expected, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!isPlainObject(object) || !hasOwn(object, key)) {
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    return;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value) && value !== expected) {
+    addError(fieldPointer, `must be ${expected} for condition A no-assistance evidence`);
+  }
+}
+
+function validateConditionSemantics(condition, systemMetrics, uxMetrics, pointer) {
+  if (condition !== 'A') {
+    return;
+  }
+
+  for (const key of NO_ASSIST_SYSTEM_ZERO_METRICS) {
+    validateMetricEquals(systemMetrics, key, 0, `${pointer}.systemMetrics`);
+  }
+
+  for (const key of NO_ASSIST_UX_ZERO_METRICS) {
+    validateMetricEquals(uxMetrics, key, 0, `${pointer}.uxMetrics`);
+  }
+}
+
 function validateAggregateSampleSize(conditionAggregate, condition, pointer, participants) {
   const fieldPointer = `${pointer}.sampleSize`;
   if (!hasOwn(conditionAggregate, 'sampleSize')) {
@@ -311,6 +344,7 @@ function validateRun(run, pointer) {
   validateText(run, 'mode', pointer);
   validateMetricGroup(run.systemMetrics, SYSTEM_METRICS, `${pointer}.systemMetrics`);
   validateMetricGroup(run.uxMetrics, UX_METRICS, `${pointer}.uxMetrics`);
+  validateConditionSemantics(run.condition, run.systemMetrics, run.uxMetrics, pointer);
 
   if (validateObject(run.artifacts, `${pointer}.artifacts`)) {
     validateText(run.artifacts, 'qaExportPath', `${pointer}.artifacts`);
@@ -363,6 +397,12 @@ function validateAggregate(manifestObject) {
     validateAggregateSampleSize(conditionAggregate, condition, conditionPointer, manifestObject.participants);
     validateMetricGroup(conditionAggregate.systemMetrics, SYSTEM_METRICS, `${conditionPointer}.systemMetrics`);
     validateMetricGroup(conditionAggregate.uxMetrics, UX_METRICS, `${conditionPointer}.uxMetrics`);
+    validateConditionSemantics(
+      condition,
+      conditionAggregate.systemMetrics,
+      conditionAggregate.uxMetrics,
+      conditionPointer,
+    );
     validateText(conditionAggregate, 'decision', conditionPointer);
   }
 }
