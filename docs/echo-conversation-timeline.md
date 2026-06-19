@@ -43,6 +43,11 @@ that snapshot without adding conversation history to the glasses HUD. Placeholde
 speech-detection events remain analytics/cache events and are not displayed as
 phone timeline turns.
 
+Cue recovery is evaluated in the `SessionEngine` outcome path. The phone
+controller no longer emits ACKs from exact hint-string matches, so the glasses
+only show `ACK` after the shared cue outcome evaluator marks a cue as
+`assisted_exact` or `assisted_adapted`.
+
 Imported line transcripts can be converted into v2 `ConversationTurn` rows with
 speaker prefixes such as `Partner:`, `Me:`, `Speaker 1:`, and `Speaker 2:`.
 Imported rows use `source: "import"`, deterministic import turn IDs, ordered

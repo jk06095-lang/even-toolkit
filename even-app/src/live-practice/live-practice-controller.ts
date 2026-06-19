@@ -35,7 +35,6 @@ let session: SessionEngine | null = null;
 let currentWeek = 1;
 let selectedScenario: TopicScenario | null = null;
 let expressionUsage: Map<string, boolean> = new Map();
-let currentActiveHint: string | null = null;
 let currentMode: 'general' | 'scenario' | null = null;
 let preferredAudioSource: LivePracticeAudioSource = loadPreferredAudioSource();
 let endingPracticePromise: Promise<void> | null = null;
@@ -224,7 +223,6 @@ export function dismissLivePracticeCue(): void {
   const dismissed = session.dismissActiveCue();
   if (!dismissed) return;
 
-  currentActiveHint = null;
   hideChunkDisplay();
   latestAssistMetrics = session.currentAssistMetrics;
   updateAssistModeUI();
@@ -443,7 +441,6 @@ async function startSession(): Promise<void> {
   session = new SessionEngine(currentWeek, {
     onStateChange: handleSessionState,
     onChunkGenerated: async (result) => {
-      currentActiveHint = result.chunk;
       await handleChunkGenerated(result);
     },
     onSpeechDetected: handleSpeechDetected,
@@ -533,7 +530,6 @@ function handleTranscript(transcript: string): void {
     display.style.display = 'block';
     if (timing) timing.textContent = nowTimeLabel();
     checkExpressionUsage(transcript);
-    markActiveHintUsedIfPresent(transcript);
   }
 }
 
@@ -545,7 +541,6 @@ function handleLiveTranscript(text: string, isFinal: boolean): void {
   if (!text.trim()) return;
   liveContainer.style.display = 'block';
   liveText.textContent = text;
-  markActiveHintUsedIfPresent(text);
 
   if (isFinal) {
     const display = document.getElementById('transcript-display');
@@ -1054,16 +1049,6 @@ function updateExpressionUI(): void {
 
   const score = document.getElementById('expr-score');
   if (score) score.textContent = `${usedCount}/${expressionUsage.size} used`;
-}
-
-function markActiveHintUsedIfPresent(text: string): void {
-  if (!currentActiveHint) return;
-  const cleanText = text.toLowerCase().replace(/[^\\w\\s]/g, '');
-  const cleanHint = currentActiveHint.toLowerCase().replace(/[^\\w\\s]/g, '');
-  if (cleanText.includes(cleanHint)) {
-    getHud()?.showGoodJob();
-    currentActiveHint = null;
-  }
 }
 
 function nowTimeLabel(): string {
