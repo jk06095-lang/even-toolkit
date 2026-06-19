@@ -118,8 +118,10 @@ Still requires real G2 validation:
   `generation_latency_ms`, `hud_render_latency_ms`, `end_to_end_latency_ms`,
   `late_response_latency_ms`, and `rawTranscriptInMetadata`.
 - When a delayed response is ignored after cleanup, `cue_displayed_at`,
-  `hud_render_latency_ms`, and `end_to_end_latency_ms` may be `null`, but the
-  request/response timing and latency fields must still be numeric.
+  `hud_render_latency_ms`, and `end_to_end_latency_ms` must be `null`; otherwise
+  the evidence says the stale cue was still displayed. The request/response
+  timing and latency fields must still be numeric, and the response timestamp
+  must be later than the request timestamp.
 - Confirm debug logs do not print raw transcript text as part of latency metadata.
 
 Automated coverage added on 2026-06-19:

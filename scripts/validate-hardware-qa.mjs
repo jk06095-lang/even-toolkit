@@ -57,6 +57,11 @@ const DELAYED_PROXY_NULLABLE_METADATA = [
   'hud_render_latency_ms',
   'end_to_end_latency_ms',
 ];
+const DELAYED_PROXY_IGNORED_DISPLAY_METADATA = [
+  'cue_displayed_at',
+  'hud_render_latency_ms',
+  'end_to_end_latency_ms',
+];
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
@@ -566,6 +571,10 @@ function validateDelayedProxyMetadata(metadata, pointer) {
     validateNullableNonNegativeNumber(metadata, key, pointer);
   }
 
+  for (const key of DELAYED_PROXY_IGNORED_DISPLAY_METADATA) {
+    validateExpected(metadata, key, null, pointer);
+  }
+
   const startedAt = metadata.cue_request_started_at;
   const responseAt = metadata.cue_response_received_at;
   if (
@@ -576,6 +585,16 @@ function validateDelayedProxyMetadata(metadata, pointer) {
     && responseAt < startedAt
   ) {
     addError(`${pointer}.cue_response_received_at`, 'must be >= cue_request_started_at');
+  }
+
+  if (
+    typeof startedAt === 'number'
+    && Number.isFinite(startedAt)
+    && typeof responseAt === 'number'
+    && Number.isFinite(responseAt)
+    && responseAt === startedAt
+  ) {
+    addError(`${pointer}.cue_response_received_at`, 'must be > cue_request_started_at for delayed proxy evidence');
   }
 }
 
