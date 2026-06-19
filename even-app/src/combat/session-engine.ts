@@ -325,6 +325,7 @@ export class SessionEngine {
   private cueVisible = false;
   private activeAssistEpisodeId: string | null = null;
   private lastTurnId: string | null = null;
+  private currentSpeechSegmentHasFinalTranscript = false;
 
   constructor(
     week: number,
@@ -511,6 +512,66 @@ export class SessionEngine {
     }
     this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
     this.emitConversationTimeline();
+  }
+
+  private recordFinalTranscript(
+    text: string,
+    source: TranscriptEntry['source'],
+    confidence?: number,
+    emitLiveTranscript = true,
+  ): void {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    this.currentSpeechSegmentHasFinalTranscript = true;
+    this.lastLiveTranscript = trimmed;
+    if (emitLiveTranscript) {
+      this.callbacks.onLiveTranscript?.(trimmed, true, confidence);
+    }
+
+    this.resetTranscriptActivity();
+    this.recordSpeech(trimmed, source, true, confidence);
+    this.analyzer?.addUtterance(trimmed, true);
+
+    if (this.hudRef) {
+      this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
+    }
+
+    this.resolveActiveHintFromTranscript(trimmed);
+  }
+
+  private resolveActiveHintFromTranscript(transcript: string): void {
+    if (!this.analyzer?.getActiveHint()) return;
+
+    const evaluation = this.analyzer.evaluateActiveHintUsage(transcript);
+    const activeHint = this.analyzer.getActiveHint()!;
+
+    if (evaluation?.status !== 'used') return;
+
+    this.analyzer.resolveActiveHint('used', transcript, evaluation);
+    this.transcriptStore?.addHintUsed(activeHint.text, transcript);
+    this.resolveActiveAssistEpisode({
+      outcome: evaluation.outcome,
+      cueLevelUsed: evaluation.cueLevelUsed,
+      speechAct: evaluation.speechAct,
+      userAttempt: transcript,
+      acceptedPhrase: activeHint.text,
+      acknowledgedAt: this.clock.now(),
+    });
+    this.callbacks.onHintUsageResult?.({
+      hint: activeHint.text,
+      status: 'used',
+      outcome: evaluation.outcome,
+    });
+    this.assistMetrics.cue_used_count++;
+    this.autoDismissStreak = 0;
+    this.emitAssistMetrics();
+    if (this.hudRef) {
+      this.hudRef.showGoodJob();
+    }
+    console.log(
+      `[Session] Hint used (${activeHint.text.length} cue chars, ${transcript.length} transcript chars)`,
+    );
   }
 
   private currentConversationTurnSource(): ConversationTurnSource {
@@ -903,6 +964,7 @@ export class SessionEngine {
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
     this.lastTurnId = null;
+    this.currentSpeechSegmentHasFinalTranscript = false;
     this.activeAssistEpisodeId = null;
     this.resetAssistMetrics();
 
@@ -947,7 +1009,9 @@ export class SessionEngine {
         // Evaluate the speech for poor grammar/nonsense while silence timer ticks
         if (this.isGenerating || this._state !== 'listening') return;
         if (!this.cloudProcessingEnabled) {
-          this.recordSpeech('[speech detected]', 'speech_api');
+          if (!this.currentSpeechSegmentHasFinalTranscript) {
+            this.recordSpeech('[speech detected]', 'speech_api');
+          }
           return;
         }
 
@@ -978,26 +1042,11 @@ export class SessionEngine {
               this.callbacks.onTranscript(result.transcript, result.confidence);
             }
 
-            // Record to cache
-            this.recordSpeech(result.transcript, 'gemini_eval', true, result.confidence);
-
-            // If the audio source is 'bridge', reuse this transcript as the final recognized speech if not already finalized
-            if (this.vad?.audioSource === 'bridge') {
-              const alreadyFinalized = this.lastLiveTranscript && !this.lastLiveTranscript.startsWith('🎤');
-              if (!alreadyFinalized) {
-                this.lastLiveTranscript = result.transcript;
-                this.callbacks.onLiveTranscript?.(result.transcript, true, result.confidence);
-                const trimmed = result.transcript.trim();
-                if (trimmed) {
-                  this.recordSpeech(trimmed, 'live_final', true, result.confidence);
-                  this.resetTranscriptActivity();
-                  if (this.hudRef) {
-                    this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
-                  }
-                }
-              } else {
-                console.log('[Session] Bridge transcript already finalized by fast speech recognizer.');
-              }
+            const trimmedTranscript = result.transcript.trim();
+            if (trimmedTranscript && !this.currentSpeechSegmentHasFinalTranscript) {
+              this.recordFinalTranscript(trimmedTranscript, 'gemini_eval', result.confidence);
+            } else if (trimmedTranscript) {
+              console.log('[Session] Speech evaluation transcript already reconciled with a live final result.');
             }
 
             // If Gemini returned a hint chunk (meaning speech was bad) and we are still listening
@@ -1048,7 +1097,9 @@ export class SessionEngine {
             }
           } else {
             // Gemini evaluation returned null — still record that speech was detected
-            this.recordSpeech('[speech detected]', 'speech_api');
+            if (!this.currentSpeechSegmentHasFinalTranscript) {
+              this.recordSpeech('[speech detected]', 'speech_api');
+            }
           }
         } finally {
           this.finishRequest(request.controller);
@@ -1142,60 +1193,11 @@ export class SessionEngine {
       },
       onFinalResult: (text, confidence) => {
         if (!isCurrentRecognizer()) return;
-        this.lastLiveTranscript = text;
-        this.callbacks.onLiveTranscript?.(text, true, confidence);
-        const trimmed = text.trim();
-        if (!trimmed) return;
-
-        // Reset silence timer on final transcript
-        this.resetTranscriptActivity();
-
-        // Record finalized speech recognition to cache and analyzer
-        this.recordSpeech(trimmed, 'live_final', true, confidence);
-        this.analyzer?.addUtterance(trimmed, true);
-
-        // Update glasses bottom zone with confirmed text
-        if (this.hudRef) {
-          this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
-        }
-
-        // Check if user used the active hint
-        if (this.analyzer?.getActiveHint()) {
-          const evaluation = this.analyzer.evaluateActiveHintUsage(trimmed);
-          const activeHint = this.analyzer.getActiveHint()!;
-
-          if (evaluation?.status === 'used') {
-            // User successfully used the recommended expression!
-            this.analyzer.resolveActiveHint('used', trimmed, evaluation);
-            this.transcriptStore?.addHintUsed(activeHint.text, trimmed);
-            this.resolveActiveAssistEpisode({
-              outcome: evaluation.outcome,
-              cueLevelUsed: evaluation.cueLevelUsed,
-              speechAct: evaluation.speechAct,
-              userAttempt: trimmed,
-              acceptedPhrase: activeHint.text,
-              acknowledgedAt: this.clock.now(),
-            });
-            this.callbacks.onHintUsageResult?.({
-              hint: activeHint.text,
-              status: 'used',
-              outcome: evaluation.outcome,
-            });
-            this.assistMetrics.cue_used_count++;
-            this.autoDismissStreak = 0;
-            this.emitAssistMetrics();
-            if (this.hudRef) {
-              this.hudRef.showGoodJob();
-            }
-            console.log(
-              `[Session] Hint used (${activeHint.text.length} cue chars, ${trimmed.length} transcript chars)`,
-            );
-          }
-          // If not used, we don't mark as missed yet — wait for silence threshold
-        }
+        this.recordFinalTranscript(text, 'live_final', confidence);
       },
       onSpeechStart: () => {
         // Additional speech detection feedback
+        this.currentSpeechSegmentHasFinalTranscript = false;
       },
       onSpeechEnd: () => {
         // Silence after speech

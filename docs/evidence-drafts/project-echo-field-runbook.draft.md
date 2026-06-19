@@ -9,7 +9,7 @@ GPT Action deployment proof, or real G2 video.
 
 - App version: 0.1.8
 - Package path: even-app/echo.ehpk
-- Package SHA-256: 02c1f5d4e5ce6ca9e19b6b83f57a98b89c039d63871df89024721472637e6877
+- Package SHA-256: 80e7495d080ea8d0c7ffe78aa0c2d9cedafedb2d2ad646526f23724b614e260c
 - Package evidence draft: docs/evidence-drafts/project-echo-build-artifact.md
 - Bundle evidence draft: docs/evidence-drafts/project-echo-bundle-report.md
 - Evidence status: draft

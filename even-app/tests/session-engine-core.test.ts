@@ -481,6 +481,76 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.chunks[0]?.cue?.level).toBe(2);
   });
 
+  it('reconciles live final and speech-evaluation transcripts into one conversation turn', async () => {
+    const transcript = 'I need a moment to check.';
+    const harness = createHarness({
+      speechEvaluationResult: {
+        transcript,
+        chunk: null,
+        source: 'gemini',
+        latencyMs: 8,
+        confidence: 0.86,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult(transcript, 0.86);
+    await harness.vad.triggerSpeechEnd();
+
+    const latest = harness.conversationSnapshots.at(-1);
+    const turns = latest?.conversationTurns?.filter((turn) => turn.transcript === transcript) ?? [];
+    const speechEntries = latest?.entries.filter((entry) => (
+      entry.type === 'user_speech' &&
+      entry.text === transcript
+    )) ?? [];
+
+    expect(harness.cueProvider.evaluateCalls).toBe(1);
+    expect(turns).toHaveLength(1);
+    expect(speechEntries).toHaveLength(1);
+    expect(latest?.entries.some((entry) => entry.text === '[speech detected]')).toBe(false);
+  });
+
+  it('records a speech-evaluation transcript once when no live final arrives first', async () => {
+    const transcript = 'Let me answer the renewal question.';
+    const harness = createHarness({
+      speechEvaluationResult: {
+        transcript,
+        chunk: null,
+        source: 'gemini',
+        latencyMs: 8,
+        confidence: 0.82,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    await harness.vad.triggerSpeechEnd();
+
+    const latest = harness.conversationSnapshots.at(-1);
+    expect(harness.liveTranscripts).toContainEqual({ text: transcript, isFinal: true });
+    expect(latest?.conversationTurns?.filter((turn) => turn.transcript === transcript)).toHaveLength(1);
+    expect(latest?.entries.filter((entry) => (
+      entry.type === 'user_speech' &&
+      entry.text === transcript &&
+      entry.source === 'gemini_eval'
+    ))).toHaveLength(1);
+  });
+
+  it('does not add a speech-detected placeholder after a live final transcript', async () => {
+    const transcript = 'I can explain the onboarding risk.';
+    const harness = createHarness({
+      speechEvaluationResult: null,
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult(transcript, 0.81);
+    await harness.vad.triggerSpeechEnd();
+
+    const latest = harness.conversationSnapshots.at(-1);
+    expect(harness.cueProvider.evaluateCalls).toBe(1);
+    expect(latest?.conversationTurns?.filter((turn) => turn.transcript === transcript)).toHaveLength(1);
+    expect(latest?.entries.some((entry) => entry.text === '[speech detected]')).toBe(false);
+  });
+
   it('shows a fallback manual cue without real hardware', async () => {
     const harness = createHarness({
       chunkResult: {
