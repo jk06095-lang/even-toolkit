@@ -536,6 +536,34 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.requests[0]?.lastUtterance).toBe(sensitiveTranscript);
   });
 
+  it('passes speaker-labeled conversation turns to cue generation context', async () => {
+    const harness = createHarness({
+      audioSource: 'browser',
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?', 0.88);
+    const partnerTurnId = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)?.id;
+    expect(partnerTurnId).toBeTruthy();
+    expect(harness.engine.correctConversationTurnSpeaker(partnerTurnId!, 'partner')).toBe(true);
+
+    harness.recognizers[0]!.emitFinalResult('I can explain the segment.', 0.9);
+    const learnerTurnId = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)?.id;
+    expect(learnerTurnId).toBeTruthy();
+    expect(harness.engine.correctConversationTurnSpeaker(learnerTurnId!, 'learner')).toBe(true);
+
+    harness.recognizers[0]!.emitFinalResult('The renewal timeline is still unclear.', 0.8);
+
+    await harness.engine.requestManualCue();
+
+    expect(harness.cueProvider.requests[0]?.conversationContext).toBe([
+      'Partner: Could you clarify the customer segment?',
+      'Learner: I can explain the segment.',
+      'Unknown speaker: The renewal timeline is still unclear.',
+    ].join('\n'));
+    expect(harness.cueProvider.requests[0]?.conversationContext).not.toContain('User said');
+  });
+
   it('persists ECHO domain v2 Cue and AssistEpisode records for shown cues', async () => {
     const clock = new FakeClock();
     const harness = createHarness({

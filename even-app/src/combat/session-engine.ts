@@ -92,6 +92,8 @@ export const WEEK_CONFIGS: Record<number, WeekConfig> = {
   4: { week: 4, silenceThresholdMs: 2000, hintFlashDurationMs: 1200, blackoutProbability: 0.4,  label: 'Independent Practice' },
 };
 const AUTO_ASSIST_GRACE_MS = 400;
+const CUE_CONTEXT_TURN_LIMIT = 5;
+const CUE_CONTEXT_TEXT_LIMIT = 240;
 const FILLER_WORD_PATTERN = /\b(?:uh|um|erm|hmm|like|maybe|well|so)\b/g;
 const REPEATED_WORD_PATTERN = /\b([a-z']{2,})\b(?:\s+\1\b)+/i;
 const TRAILING_FRAGMENT_PATTERN = /\b(?:i think|i mean|maybe|around|because|and|but|so|if|when|where|what|how|to|for|with)$/i;
@@ -425,6 +427,21 @@ export class SessionEngine {
   private latestConversationTurnSpeaker(): SpeakerRole | null {
     const turns = this.transcriptStore?.getSnapshot().conversationTurns ?? [];
     return turns[turns.length - 1]?.speaker ?? null;
+  }
+
+  private buildConversationContext(): string | undefined {
+    const turns = this.transcriptStore?.getSnapshot().conversationTurns ?? [];
+    const lines = turns
+      .filter((turn) => turn.isFinal)
+      .map(formatConversationTurnForCueContext)
+      .filter((line): line is string => Boolean(line))
+      .slice(-CUE_CONTEXT_TURN_LIMIT);
+
+    if (lines.length > 0) {
+      return lines.join('\n');
+    }
+
+    return this.analyzer?.getConversationContext() ?? undefined;
   }
 
   private hasAutoAssistBreakdownSignal(): boolean {
@@ -1629,7 +1646,7 @@ export class SessionEngine {
     try {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
       const requestedCueLevel = this.maxCueLevelForTrigger(trigger, adaptiveDifficulty);
-      const conversationContext = this.analyzer?.getConversationContext() ?? undefined;
+      const conversationContext = this.buildConversationContext();
 
       const generatedResult = await this.cueProvider.generateChunk({
         topic: this._topic,
@@ -1735,6 +1752,27 @@ function cleanDomainId(value: string): string {
 function clampCueLevel(value: number): CueLevel {
   const level = Math.max(1, Math.min(3, Math.round(value)));
   return level as CueLevel;
+}
+
+function formatConversationTurnForCueContext(turn: ConversationTurn): string | null {
+  const transcript = sanitizeCueContextText(turn.transcript);
+  if (!transcript || transcript.toLowerCase() === '[speech detected]') return null;
+
+  return `${cueContextSpeakerLabel(turn.speaker)}: ${transcript}`;
+}
+
+function cueContextSpeakerLabel(speaker: SpeakerRole): string {
+  if (speaker === 'learner') return 'Learner';
+  if (speaker === 'partner') return 'Partner';
+  return 'Unknown speaker';
+}
+
+function sanitizeCueContextText(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CUE_CONTEXT_TEXT_LIMIT);
 }
 
 function inferSpeechAct(phrase: string): SpeechAct {

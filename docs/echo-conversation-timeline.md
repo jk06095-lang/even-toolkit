@@ -90,6 +90,12 @@ controller no longer emits ACKs from exact hint-string matches, so the glasses
 only show `ACK` after the shared cue outcome evaluator marks a cue as
 `assisted_exact` or `assisted_adapted`.
 
+Manual and auto cue generation now build the provider `recentTranscript` from
+recent finalized `ConversationTurn` records instead of the legacy single-speaker
+analyzer transcript. The request context keeps speaker uncertainty explicit with
+`Partner:`, `Learner:`, or `Unknown speaker:` prefixes, so a corrected partner
+turn is not sent upstream as `User said`.
+
 Imported line transcripts can be converted into v2 `ConversationTurn` rows with
 speaker prefixes such as `Partner:`, `Me:`, `Speaker 1:`, and `Speaker 2:`.
 Imported rows use `source: "import"`, deterministic import turn IDs, ordered
