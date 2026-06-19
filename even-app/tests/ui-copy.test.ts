@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import { renderAmbientView } from '../src/ui/ambient-view';
+import { renderAppShell } from '../src/ui/app-shell';
+import { renderCalibrationView } from '../src/ui/calibration-view';
 import { renderCombatView } from '../src/ui/combat-view';
 import { renderDebriefView } from '../src/ui/debrief-view';
 import { renderTopicSelector } from '../src/ui/topic-selector-view';
@@ -11,8 +14,11 @@ const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = path.resolve(appRoot, '..');
 
 const renderedTemplates = [
+  ['app shell', renderAppShell()],
+  ['calibration', renderCalibrationView()],
   ['live practice', renderCombatView()],
   ['review', renderDebriefView()],
+  ['echo reminders', renderAmbientView()],
   ['topic selector', renderTopicSelector()],
 ] as const;
 
@@ -21,15 +27,22 @@ describe('Project ECHO UI copy', () => {
     for (const [name, html] of renderedTemplates) {
       expect(html, name).not.toMatch(/\?\?\/(?:span|div)>/);
       expect(html, name).not.toContain('\uFFFD');
+      expect(html, name).not.toMatch(/[🎙📡⏰📭📈📊]/u);
     }
   });
 
   it('uses product-facing Live Practice and Review labels instead of internal phase labels', () => {
-    expect(renderCombatView()).toContain('Live Practice');
-    expect(renderCombatView()).not.toContain('Phase 2');
+    expect(renderAppShell()).toContain('Calibration');
+    expect(renderAppShell()).toContain('Live Practice');
+    expect(renderAppShell()).toContain('Review');
+    expect(renderAppShell()).toContain('Echo Reminders');
 
+    expect(renderCombatView()).toContain('Live Practice');
     expect(renderDebriefView()).toContain('Review');
-    expect(renderDebriefView()).not.toContain('Phase 3');
+
+    for (const [name, html] of renderedTemplates) {
+      expect(html, name).not.toMatch(/Phase\s+\d/i);
+    }
   });
 
   it('keeps app shell metadata ASCII-safe for packaged output', () => {

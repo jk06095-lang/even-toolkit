@@ -1,5 +1,5 @@
 /**
- * Review View - Phase 3 UI
+ * Review View.
  * Uses Even Realities design system tokens.
  */
 

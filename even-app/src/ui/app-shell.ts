@@ -13,10 +13,10 @@ export function renderAppShell(): string {
 
     <div style="padding: 24px 20px; max-width: 600px; margin: 0 auto; width: 100%;">
       <nav class="phase-nav" id="phase-nav">
-        <button class="phase-tab" data-phase="1">Phase 1: Calibration</button>
-        <button class="phase-tab" data-phase="2">Phase 2: Live Practice</button>
-        <button class="phase-tab" data-phase="3">Phase 3: Review</button>
-        <button class="phase-tab" data-phase="4">Phase 4: Echoes</button>
+        <button class="phase-tab" data-phase="1">Calibration</button>
+        <button class="phase-tab" data-phase="2">Live Practice</button>
+        <button class="phase-tab" data-phase="3">Review</button>
+        <button class="phase-tab" data-phase="4">Echo Reminders</button>
       </nav>
 
       <main id="phase-content"></main>

@@ -1,16 +1,16 @@
 /**
- * Calibration View — Phase 1 UI
+ * Calibration View.
  * Uses Even Realities design system tokens.
  */
 
 export function renderCalibrationView(): string {
   return `
     <div class="phase-view" id="phase1-view">
-      <div class="phase-indicator p1">● Phase 1 — Calibration</div>
+      <div class="phase-indicator p1">Calibration</div>
 
       <div class="card">
         <div class="card-header">
-          <div class="icon" style="background: var(--phase1-alpha); color: var(--phase1)">🎙</div>
+          <div class="icon" style="background: var(--phase1-alpha); color: var(--phase1)">MIC</div>
           <h3>Voice Calibration</h3>
           <span class="badge badge-neutral" id="cal-status">Ready</span>
         </div>
@@ -21,7 +21,7 @@ export function renderCalibrationView(): string {
 
         <div class="calibration-ring" id="cal-ring">
           <div style="text-align: center">
-            <div class="freq" id="cal-freq">—</div>
+            <div class="freq" id="cal-freq">--</div>
             <div class="unit">Hz</div>
           </div>
         </div>
@@ -30,7 +30,7 @@ export function renderCalibrationView(): string {
         <div class="soundwave idle" id="cal-soundwave" style="display: none; margin-bottom: var(--spacing-cross);">
           <div class="soundwave-bars">
             ${Array.from({ length: 8 }, (_, i) => `<div class="sw-bar" id="cal-sw-l${7 - i}"></div>`).join('')}
-            <div class="soundwave-mic">🎙</div>
+            <div class="soundwave-mic">MIC</div>
             ${Array.from({ length: 8 }, (_, i) => `<div class="sw-bar" id="cal-sw-r${i}"></div>`).join('')}
           </div>
           <div class="soundwave-status" id="cal-soundwave-status">Waiting for voice input...</div>
@@ -46,19 +46,19 @@ export function renderCalibrationView(): string {
         <div id="cal-result" style="display: none; margin-top: var(--spacing-cross);">
           <div class="stats-grid">
             <div class="stat-item">
-              <div class="value" id="cal-f0" style="color: var(--phase1)">—</div>
+              <div class="value" id="cal-f0" style="color: var(--phase1)">--</div>
               <div class="label">Fundamental F0</div>
             </div>
             <div class="stat-item">
-              <div class="value" id="cal-range" style="color: var(--phase1)">—</div>
+              <div class="value" id="cal-range" style="color: var(--phase1)">--</div>
               <div class="label">Voice Range</div>
             </div>
             <div class="stat-item">
-              <div class="value" id="cal-persona" style="color: var(--color-text)">—</div>
+              <div class="value" id="cal-persona" style="color: var(--color-text)">--</div>
               <div class="label">AI Persona</div>
             </div>
             <div class="stat-item">
-              <div class="value" id="cal-filter" style="color: var(--color-text)">—</div>
+              <div class="value" id="cal-filter" style="color: var(--color-text)">--</div>
               <div class="label">Filter Type</div>
             </div>
             <div class="stat-item">

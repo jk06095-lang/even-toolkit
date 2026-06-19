@@ -1,5 +1,5 @@
 /**
- * Live Practice View - Phase 2 UI
+ * Live Practice View.
  * Uses Even Realities design system tokens.
  *
  * Layout: Mode Selector -> (General Practice OR Scenario Practice) -> Live Practice -> Stats
