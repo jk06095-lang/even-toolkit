@@ -6,7 +6,7 @@ It records local package facts only; it is not physical G2 install evidence.
 - App version: 0.1.8
 - Package path: even-app/echo.ehpk
 - Package exists: true
-- Package SHA-256: 07e3e6eb7a9528b6bd80a4b856d36af66bea5c674dd09ff1ac43425cb9bb976e
-- Package bytes: 28363037
+- Package SHA-256: 18a50f839895804091c650dec80e9c606f634594309357874a81dbf47d3d4160
+- Package bytes: 28363175
 - Packaging command: npm --prefix even-app run pack
 - Physical install evidence: TBD

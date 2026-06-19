@@ -54,10 +54,66 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+function fallbackVadCalibration(calibratedAt: number): VadCalibration {
+  return { ...FALLBACK_VAD_CALIBRATION, calibratedAt };
+}
+
 export function resolveVadSpeechThreshold(calibration?: Pick<VadCalibration, 'speechThreshold'> | null): number {
   const candidate = calibration?.speechThreshold;
   if (typeof candidate !== 'number' || !Number.isFinite(candidate)) return FALLBACK_VAD_SPEECH_THRESHOLD;
   return clamp(candidate, FALLBACK_VAD_SPEECH_THRESHOLD, MAX_VAD_SPEECH_THRESHOLD);
+}
+
+export function normalizeVadCalibration(
+  input?: Partial<VadCalibration> | null,
+  calibratedAt = Date.now(),
+): VadCalibration {
+  const resolvedCalibratedAt =
+    typeof input?.calibratedAt === 'number' && Number.isFinite(input.calibratedAt)
+      ? input.calibratedAt
+      : calibratedAt;
+
+  if (!input) return fallbackVadCalibration(resolvedCalibratedAt);
+
+  if (
+    typeof input.noiseFloorRms !== 'number' ||
+    typeof input.speechFloorRms !== 'number' ||
+    typeof input.speechThreshold !== 'number' ||
+    !Number.isFinite(input.noiseFloorRms) ||
+    !Number.isFinite(input.speechFloorRms) ||
+    !Number.isFinite(input.speechThreshold)
+  ) {
+    return fallbackVadCalibration(resolvedCalibratedAt);
+  }
+
+  const noiseFloorRms = roundRms(clamp(input.noiseFloorRms, 0, 1));
+  const speechFloorRms = roundRms(clamp(input.speechFloorRms, 0, 1));
+  const separation = speechFloorRms - noiseFloorRms;
+
+  if (separation < 0.01 || speechFloorRms <= FALLBACK_VAD_SPEECH_THRESHOLD) {
+    return fallbackVadCalibration(resolvedCalibratedAt);
+  }
+
+  const derivedThreshold = roundRms(clamp(
+    noiseFloorRms + separation * 0.35,
+    FALLBACK_VAD_SPEECH_THRESHOLD,
+    MAX_VAD_SPEECH_THRESHOLD,
+  ));
+  const savedThreshold = roundRms(resolveVadSpeechThreshold({ speechThreshold: input.speechThreshold }));
+  const speechThreshold = savedThreshold > noiseFloorRms && savedThreshold < speechFloorRms
+    ? savedThreshold
+    : derivedThreshold;
+
+  if (speechThreshold <= noiseFloorRms || speechThreshold >= speechFloorRms) {
+    return fallbackVadCalibration(resolvedCalibratedAt);
+  }
+
+  return {
+    noiseFloorRms,
+    speechFloorRms,
+    speechThreshold,
+    calibratedAt: resolvedCalibratedAt,
+  };
 }
 
 /**
@@ -73,29 +129,24 @@ export function deriveVadCalibration(
     .map((value) => clamp(value, 0, 1))
     .sort((a, b) => a - b);
 
-  if (samples.length < 4) {
-    return { ...FALLBACK_VAD_CALIBRATION, calibratedAt };
-  }
+  if (samples.length < 4) return fallbackVadCalibration(calibratedAt);
 
   const noiseFloorRms = percentile(samples, 0.2);
   const speechFloorRms = Math.max(percentile(samples, 0.7), percentile(samples, 0.9) * 0.75);
   const separation = speechFloorRms - noiseFloorRms;
 
-  const speechThreshold =
-    separation >= 0.01
-      ? noiseFloorRms + separation * 0.35
-      : Math.max(FALLBACK_VAD_CALIBRATION.speechThreshold, noiseFloorRms * 2.2);
+  if (separation < 0.01 || speechFloorRms <= FALLBACK_VAD_SPEECH_THRESHOLD) {
+    return fallbackVadCalibration(calibratedAt);
+  }
 
-  return {
-    noiseFloorRms: roundRms(noiseFloorRms),
-    speechFloorRms: roundRms(speechFloorRms),
-    speechThreshold: roundRms(clamp(
-      speechThreshold,
-      FALLBACK_VAD_SPEECH_THRESHOLD,
-      MAX_VAD_SPEECH_THRESHOLD,
-    )),
+  const speechThreshold = noiseFloorRms + separation * 0.35;
+
+  return normalizeVadCalibration({
+    noiseFloorRms,
+    speechFloorRms,
+    speechThreshold,
     calibratedAt,
-  };
+  }, calibratedAt);
 }
 
 function roundRms(value: number): number {
@@ -104,19 +155,7 @@ function roundRms(value: number): number {
 
 function normalizeCalibrationResult(input: CalibrationResult): CalibrationResult {
   const calibratedAt = input.calibratedAt ?? input.timestamp ?? Date.now();
-  const hasVadCalibration =
-    Number.isFinite(input.noiseFloorRms) &&
-    Number.isFinite(input.speechFloorRms) &&
-    Number.isFinite(input.speechThreshold);
-
-  const vadCalibration = hasVadCalibration
-    ? {
-        noiseFloorRms: input.noiseFloorRms,
-        speechFloorRms: input.speechFloorRms,
-        speechThreshold: input.speechThreshold,
-        calibratedAt,
-      }
-    : { ...FALLBACK_VAD_CALIBRATION, calibratedAt };
+  const vadCalibration = normalizeVadCalibration(input, calibratedAt);
 
   return {
     ...input,

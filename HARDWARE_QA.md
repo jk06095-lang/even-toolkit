@@ -202,6 +202,9 @@ Still requires real G2 validation:
   cafe/air-conditioner/outdoor noise floor and threshold values at or above the
   quiet-room values.
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
+- Automated calibration coverage also treats enough-but-unseparated samples as
+  unavailable calibration and falls back to `0.015`, so silent or malformed
+  saved calibration cannot be exported as a valid VAD threshold.
 - After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
 - Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json`.
 - Record quiet room, cafe background, air-conditioner noise, and outdoor wind

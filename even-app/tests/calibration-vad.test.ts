@@ -3,6 +3,7 @@ import {
   FALLBACK_VAD_SPEECH_THRESHOLD,
   MAX_VAD_SPEECH_THRESHOLD,
   deriveVadCalibration,
+  normalizeVadCalibration,
   resolveVadSpeechThreshold,
 } from '../src/dsp/calibration';
 
@@ -56,6 +57,32 @@ describe('calibration-derived VAD thresholds', () => {
     expect(result.speechFloorRms).toBe(0.04);
   });
 
+  it('falls back when calibration samples do not separate speech from background', () => {
+    const result = deriveVadCalibration([
+      0.001, 0.0012, 0.0014, 0.0015, 0.0016, 0.0018, 0.002,
+    ], capturedAt);
+
+    expect(result).toEqual({
+      noiseFloorRms: 0.005,
+      speechFloorRms: 0.04,
+      speechThreshold: 0.015,
+      calibratedAt: capturedAt,
+    });
+  });
+
+  it('falls back when clamped thresholds would sit below the measured noise floor', () => {
+    const result = deriveVadCalibration([
+      0.36, 0.38, 0.4, 0.42, 0.5, 0.6, 0.7, 0.8,
+    ], capturedAt);
+
+    expect(result).toEqual({
+      noiseFloorRms: 0.005,
+      speechFloorRms: 0.04,
+      speechThreshold: 0.015,
+      calibratedAt: capturedAt,
+    });
+  });
+
   it('raises threshold as the measured noise floor increases', () => {
     const quiet = deriveVadCalibration([
       0.002, 0.003, 0.004, 0.006, 0.08, 0.1, 0.12, 0.14,
@@ -73,5 +100,31 @@ describe('calibration-derived VAD thresholds', () => {
     expect(resolveVadSpeechThreshold({ speechThreshold: 0.001 })).toBe(FALLBACK_VAD_SPEECH_THRESHOLD);
     expect(resolveVadSpeechThreshold({ speechThreshold: 0.07 })).toBe(0.07);
     expect(resolveVadSpeechThreshold({ speechThreshold: 0.9 })).toBe(MAX_VAD_SPEECH_THRESHOLD);
+  });
+
+  it('normalizes saved calibration before it reaches telemetry or bridge VAD', () => {
+    expect(normalizeVadCalibration({
+      noiseFloorRms: 0.02,
+      speechFloorRms: 0.025,
+      speechThreshold: 0.02,
+      calibratedAt: capturedAt,
+    })).toEqual({
+      noiseFloorRms: 0.005,
+      speechFloorRms: 0.04,
+      speechThreshold: 0.015,
+      calibratedAt: capturedAt,
+    });
+
+    const repaired = normalizeVadCalibration({
+      noiseFloorRms: 0.02,
+      speechFloorRms: 0.12,
+      speechThreshold: 0.9,
+      calibratedAt: capturedAt,
+    });
+
+    expect(repaired.noiseFloorRms).toBe(0.02);
+    expect(repaired.speechFloorRms).toBe(0.12);
+    expect(repaired.speechThreshold).toBeGreaterThan(repaired.noiseFloorRms);
+    expect(repaired.speechThreshold).toBeLessThan(repaired.speechFloorRms);
   });
 });
