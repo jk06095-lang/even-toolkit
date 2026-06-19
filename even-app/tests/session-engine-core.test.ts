@@ -363,6 +363,44 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.states).toContain('hud_flash');
   });
 
+  it('records cue latency metadata without raw transcript text', async () => {
+    const sensitiveTranscript = 'my private lunch order and phone number should not be in latency metadata';
+    const harness = createHarness({
+      chunkResult: {
+        chunk: 'Latency-safe cue',
+        source: 'gemini',
+        latencyMs: 42,
+        networkLatencyMs: 31,
+        generationLatencyMs: 11,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult(sensitiveTranscript);
+    await harness.engine.requestManualCue();
+    await harness.engine.stop();
+
+    const log = harness.logs[0]!;
+    expect(log.cueLatencyRecords).toHaveLength(1);
+    expect(log.cueLatencyRecords[0]).toEqual({
+      session_request_scope_id: 'echo-1000-test-scope',
+      request_id: 'echo-1000-test-scope:cue:1',
+      request_kind: 'cue',
+      trigger: 'manual',
+      silence_detected_at: null,
+      cue_request_started_at: 1000,
+      cue_response_received_at: 1000,
+      cue_displayed_at: 1000,
+      network_latency_ms: 31,
+      generation_latency_ms: 11,
+      hud_render_latency_ms: 0,
+      end_to_end_latency_ms: 0,
+      source: 'gemini',
+    });
+    expect(JSON.stringify(log.cueLatencyRecords)).not.toContain(sensitiveTranscript);
+    expect(harness.cueProvider.requests[0]?.lastUtterance).toBe(sensitiveTranscript);
+  });
+
   it('prevents duplicate cue requests while one is in flight', async () => {
     const deferredCue = deferred<ChunkResult>();
     const harness = createHarness({ pendingChunk: deferredCue.promise });

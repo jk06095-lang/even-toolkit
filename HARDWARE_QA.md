@@ -127,6 +127,7 @@ Automated coverage added on 2026-06-19:
 - `session-engine-core` verifies `END PRACTICE` aborts an in-flight cue request and ignores its delayed response.
 - `session-engine-core` verifies Pause during cue generation aborts the cue request, keeps the engine paused, leaves no pending timers, and does not update HUD/cue callbacks.
 - `session-engine-core` verifies live recognizer transcription receives the current session request scope and per-request ID generator.
+- `session-engine-core` verifies cue latency records include request scope, request ID, timing fields, and latency values without raw transcript text.
 - `transcript-export` verifies session-analysis requests carry scoped request metadata, skip already-aborted requests, and ignore delayed aborted responses by returning fallback handoff data.
 - `security-release` verifies bridge recognizers do not log raw final or interim transcript text.
 
