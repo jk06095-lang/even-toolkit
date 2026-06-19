@@ -100,6 +100,50 @@ test('rejects audio-source evidence that silently opens Phone Mic for G2 session
   assert.match(output, /audioSources\.g2Failure\.cancelKeepsAudioOff: must be true/);
 });
 
+test('rejects wear-state evidence that treats connection as wearing', async () => {
+  const template = JSON.parse(readFileSync(templatePath, 'utf8'));
+  const invalidWear = structuredClone(template);
+  invalidWear.wearingState.connectedWearing.inputStatus = {
+    connectType: 'connected',
+    isWearing: true,
+  };
+  invalidWear.wearingState.connectedWearing.parsedState = 'wearing';
+  invalidWear.wearingState.connectedWearing.phoneLabel = 'Wearing';
+
+  invalidWear.wearingState.connectedNotWearing.inputStatus = {
+    connectType: 'connected',
+    isWearing: true,
+  };
+  invalidWear.wearingState.connectedNotWearing.parsedState = 'wearing';
+  invalidWear.wearingState.connectedNotWearing.phoneLabel = 'Wearing';
+
+  invalidWear.wearingState.sensorUnavailable.inputStatus = {
+    connectType: 'connected',
+    isWearing: true,
+  };
+  invalidWear.wearingState.sensorUnavailable.parsedState = 'wearing';
+  invalidWear.wearingState.sensorUnavailable.phoneLabel = 'Wearing';
+  invalidWear.wearingState.connectedDoesNotForceWearing = false;
+
+  const invalidWearPath = path.join(tmpRoot, 'hardware-invalid-wear-state.json');
+  writeFileSync(invalidWearPath, `${JSON.stringify(invalidWear, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidWearPath),
+    '--allow-draft',
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /wearingState\.connectedNotWearing\.inputStatus\.isWearing: must be false/);
+  assert.match(output, /wearingState\.connectedNotWearing\.parsedState: must be "not-wearing"/);
+  assert.match(output, /wearingState\.connectedNotWearing\.phoneLabel: must include Not wearing/);
+  assert.match(output, /wearingState\.sensorUnavailable\.inputStatus: must omit wear sensor fields for unavailable evidence/);
+  assert.match(output, /wearingState\.sensorUnavailable\.parsedState: must be "unavailable"/);
+  assert.match(output, /wearingState\.sensorUnavailable\.phoneLabel: must include Wear status unavailable/);
+  assert.match(output, /wearingState\.connectedDoesNotForceWearing: must be true/);
+});
+
 function runNode(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
