@@ -38,6 +38,10 @@ let latestAssistMetrics: AssistMetrics = {
 };
 let silenceAnimFrame: number | null = null;
 
+function audioSourceCopy(source: 'bridge' | 'browser', suffix = ''): string {
+  return `${source === 'bridge' ? 'G2 Mic' : 'Phone Mic'}${suffix}`;
+}
+
 export function bindLivePracticeEvents(nextContext: LivePracticeControllerContext): void {
   context = nextContext;
   bindPrivacyControls({
@@ -117,7 +121,7 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
 
   const toggleBtnSpan = document.querySelector('#btn-toggle-audio-source span');
   if (toggleBtnSpan) {
-    toggleBtnSpan.textContent = preferredAudioSource === 'bridge' ? '🔄 G2 Mic' : '🔄 Phone Mic';
+    toggleBtnSpan.textContent = audioSourceCopy(preferredAudioSource);
   }
 
   document.getElementById('btn-toggle-audio-source')?.addEventListener('click', async () => {
@@ -130,13 +134,13 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
 
     const span = document.querySelector('#btn-toggle-audio-source span');
     if (span) {
-      span.textContent = newSource === 'bridge' ? '🔄 G2 Mic' : '🔄 Phone Mic';
+      span.textContent = audioSourceCopy(newSource);
     }
 
     if (isSessionActive) {
       const label = document.getElementById('audio-source-label');
       if (label) {
-        label.textContent = '🔄 Reconnecting...';
+        label.textContent = 'Reconnecting...';
         label.style.color = 'var(--color-text-dim)';
       }
 
@@ -149,10 +153,10 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
       if (label) {
         label.style.display = 'inline-block';
         if (newSource === 'bridge') {
-          label.textContent = '🔊 G2 Mic (Pref)';
+          label.textContent = audioSourceCopy(newSource, ' (selected)');
           label.style.color = 'var(--color-positive)';
         } else {
-          label.textContent = '🎤 Phone Mic (Pref)';
+          label.textContent = audioSourceCopy(newSource, ' (selected)');
           label.style.color = 'var(--phase4)';
         }
       }
@@ -450,7 +454,7 @@ async function startSession(): Promise<void> {
   } catch (err: any) {
     console.error('[LivePractice] Failed to start session:', err);
     if (err.message === 'SECURE_ORIGIN_REQUIRED') {
-      alert('🔒 SECURE ORIGIN REQUIRED\n\nTo use the microphone on a mobile device, you must:\n1. Use an HTTPS connection\n2. OR enable "Insecure origins treated as secure" in chrome://flags\n\nPlease add http://' + window.location.host + ' to the allowed list.');
+      alert('Secure origin required\n\nTo use the microphone on a mobile device, you must:\n1. Use an HTTPS connection\n2. OR enable "Insecure origins treated as secure" in chrome://flags\n\nPlease add http://' + window.location.host + ' to the allowed list.');
     } else {
       alert('Failed to start microphone: ' + err.message);
     }
@@ -503,10 +507,10 @@ function handleAudioSource(source: string): void {
   if (label) {
     label.style.display = 'inline-block';
     if (source === 'bridge') {
-      label.textContent = '🔊 G2 Mic';
+      label.textContent = 'G2 Mic';
       label.style.color = 'var(--color-positive)';
     } else {
-      label.textContent = '🎤 Phone Mic';
+      label.textContent = 'Phone Mic';
       label.style.color = 'var(--phase4)';
     }
   }
@@ -544,7 +548,7 @@ function updateSoundwaveVolume(volume: number): void {
 
   const swStatus = document.getElementById('soundwave-status');
   if (swStatus) {
-    swStatus.textContent = volume > 0.1 ? '● Audio detected' : 'Waiting for audio...';
+    swStatus.textContent = volume > 0.1 ? 'Audio detected' : 'Waiting for audio...';
   }
 }
 
@@ -556,7 +560,7 @@ function handleHintUsageResult(result: { status: 'used' | 'simplified' | 'missed
     if (liveContainer && liveText) {
       liveContainer.style.display = 'block';
       liveContainer.style.borderLeftColor = 'var(--color-positive)';
-      liveText.textContent = `✅ Great! You used: "${result.hint}"`;
+      liveText.textContent = `Nice recovery: "${result.hint}"`;
       setTimeout(() => {
         liveContainer.style.borderLeftColor = 'var(--color-accent)';
       }, 2000);
@@ -566,12 +570,12 @@ function handleHintUsageResult(result: { status: 'used' | 'simplified' | 'missed
     if (liveContainer && liveText) {
       liveContainer.style.display = 'block';
       liveContainer.style.borderLeftColor = 'var(--phase4)';
-      liveText.textContent = `🔄 Easier: "${result.simplifiedTo}"`;
+      liveText.textContent = `Try simpler: "${result.simplifiedTo}"`;
       setTimeout(() => {
         liveContainer.style.borderLeftColor = 'var(--color-accent)';
       }, 2000);
     }
-    console.log(`[LivePractice] Hint simplified: "${result.hint}" → "${result.simplifiedTo}"`);
+    console.log(`[LivePractice] Hint simplified: "${result.hint}" -> "${result.simplifiedTo}"`);
   } else if (result.status === 'missed') {
     console.log(`[LivePractice] Hint missed: "${result.hint}"`);
   }
@@ -662,9 +666,9 @@ function updateAssistModeUI(): void {
   const metricsLabel = document.getElementById('assist-metrics-label');
   if (metricsLabel) {
     metricsLabel.textContent =
-      `Manual ${latestAssistMetrics.manual_request_count} · ` +
-      `Auto ${latestAssistMetrics.auto_trigger_count} · ` +
-      `Dismissed ${latestAssistMetrics.cue_dismissed_count} · ` +
+      `Manual ${latestAssistMetrics.manual_request_count} | ` +
+      `Auto ${latestAssistMetrics.auto_trigger_count} | ` +
+      `Dismissed ${latestAssistMetrics.cue_dismissed_count} | ` +
       `Used ${latestAssistMetrics.cue_used_count}`;
   }
 }

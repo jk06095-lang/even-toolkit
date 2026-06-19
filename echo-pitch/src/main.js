@@ -311,7 +311,7 @@ document.getElementById('app').innerHTML = `
 <footer class="footer">
   <div class="container">
     <div class="footer-brand">★ PROJECT ECHO</div>
-    <p>AR Stealth Tutor — EVEN G2 × Gemini AI × Open Source</p>
+    <p>Glanceable Fluency Coach - EVEN G2 x Gemini AI x Open Source</p>
     <p style="margin-top:4px">© 2026 CHEATKEY. All rights reserved.</p>
   </div>
 </footer>
@@ -408,7 +408,7 @@ const TIMELINE = [
   }},
   { t: 6000, fn() { simEl.phase.textContent = 'SITUATION: 외국인 질문 감지'; } },
   { t: 8000, fn() {
-    simEl.phase.textContent = '⚠ SILENCE DETECTED';
+    simEl.phase.textContent = 'NEED A CUE?';
     simCaption('머릿속에 답은 있지만... 입이 떨어지지 않습니다.');
     simEl.gauge.style.opacity = '1';
     startGauge(3000);
@@ -416,14 +416,14 @@ const TIMELINE = [
   { t: 11000, fn() {
     simEl.gauge.style.opacity = '0';
     simEl.hud.style.opacity = '1';
-    simEl.phase.textContent = '★ STEALTH TUTOR ACTIVATED';
+    simEl.phase.textContent = 'CUE READY';
     simCaption('');
   }},
-  { t: 11500, fn() { simAddChat('system', 'Silence threshold reached (3s)'); } },
-  { t: 12200, fn() { simAddChat('system', 'Generating context-aware chunk...'); } },
+  { t: 11500, fn() { simAddChat('system', 'Pause reached 3s'); } },
+  { t: 12200, fn() { simAddChat('system', 'Preparing a context cue...'); } },
   { t: 13000, fn() {
     simAddChat('hint', '▶ Actually, you should try...');
-    simEl.status.textContent = '▶ HINT DELIVERED  ·  Latency: 0.8s';
+    simEl.status.textContent = 'Cue ready - latency: 0.8s';
     simCaption('안경에 첫 세 단어가 뜹니다. 반사적으로 입을 엽니다!');
   }},
   { t: 16000, fn() {
@@ -436,8 +436,8 @@ const TIMELINE = [
     simCaption('유창하게 대화를 이어갑니다. 눈 맞춤을 유지한 채로.');
   }},
   { t: 20500, fn() {
-    simAddChat('system', '★ PATTERN ACQUIRED ★');
-    simEl.status.textContent = '★ GREAT JOB';
+    simAddChat('system', 'Nice recovery');
+    simEl.status.textContent = 'Nice recovery';
   }},
   { t: 22000, fn() {
     simEl.speech.textContent = 'Wow, that sounds amazing! Thank you!';
