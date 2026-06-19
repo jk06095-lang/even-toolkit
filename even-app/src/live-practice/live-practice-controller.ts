@@ -7,6 +7,7 @@ import type { SessionTranscript } from '../combat/transcript-store';
 import { getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from '../combat/topic-registry';
 import { createTopicSelectorElement, fillScenarioGrid, fillTopicDetail } from '../ui/topic-selector-view';
 import type { HUDController } from '../hud/hud-controller';
+import type { SpeakerRole } from '@toolkit/echo-domain-v2';
 import { bindPrivacyControls, updatePrivacySettingsUI } from './privacy-controls';
 import {
   loadPrivacySettings,
@@ -592,20 +593,49 @@ function renderLiveConversationTimeline(sessionData: SessionTranscript): void {
 
 function createLiveConversationTimelineItem(row: ConversationTimelineRow): HTMLElement {
   const item = document.createElement('div');
+  item.className = `conversation-turn conversation-turn-${row.speaker}`;
   item.style.cssText = 'border: 1px solid var(--color-border); border-radius: 6px; padding: 8px; background: var(--color-surface);';
 
   const meta = document.createElement('div');
   meta.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px;';
 
-  const speaker = document.createElement('span');
-  speaker.className = 'text-detail';
-  speaker.style.cssText = 'color: var(--phase2); font-weight: 600;';
-  speaker.textContent = row.speakerLabel;
+  const speaker = document.createElement('select');
+  speaker.className = 'conversation-speaker-select';
+  speaker.setAttribute('data-live-speaker-turn', row.turnId);
+  speaker.setAttribute('aria-label', `Speaker for ${row.timeLabel}`);
+  for (const [value, label] of [
+    ['learner', 'Me'],
+    ['partner', 'Partner'],
+    ['unknown', 'Unknown'],
+  ] as const) {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    option.selected = row.speaker === value;
+    speaker.append(option);
+  }
+  speaker.addEventListener('change', () => {
+    const nextSpeaker = speaker.value;
+    if (!isSpeakerRole(nextSpeaker)) {
+      speaker.value = row.speaker;
+      return;
+    }
+
+    const updated = session?.correctConversationTurnSpeaker(row.turnId, nextSpeaker);
+    if (!updated) {
+      speaker.value = row.speaker;
+    }
+  });
 
   const timing = document.createElement('span');
   timing.className = 'text-detail';
   timing.style.cssText = 'color: var(--color-text-muted); font-family: var(--font-mono);';
-  timing.textContent = `${row.timeLabel} | ${row.sourceLabel}`;
+  timing.textContent = [
+    row.timeLabel,
+    row.sourceLabel,
+    row.confidenceLabel,
+    row.correctedByUser ? 'corrected' : '',
+  ].filter(Boolean).join(' | ');
 
   meta.append(speaker, timing);
 
@@ -626,6 +656,10 @@ function createLiveConversationTimelineItem(row: ConversationTimelineRow): HTMLE
   }
 
   return item;
+}
+
+function isSpeakerRole(value: string): value is SpeakerRole {
+  return value === 'learner' || value === 'partner' || value === 'unknown';
 }
 
 function handleAudioSource(source: string): void {

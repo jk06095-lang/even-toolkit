@@ -21,6 +21,7 @@ import {
   type CueLevel,
   type CueLevelUsed,
   type ConversationTurnSource,
+  type SpeakerRole,
   type SpeechAct,
 } from '@toolkit/echo-domain-v2';
 
@@ -362,6 +363,17 @@ export class SessionEngine {
 
   setVadCalibration(vadCalibration: VadCalibration | null): void {
     this.vadCalibration = vadCalibration;
+  }
+
+  correctConversationTurnSpeaker(turnId: string, speaker: SpeakerRole): boolean {
+    const updated = this.transcriptStore?.updateConversationTurn(turnId, {
+      speaker,
+      correctedByUser: true,
+    });
+    if (!updated) return false;
+
+    this.emitConversationTimeline();
+    return true;
   }
 
   private emitAssistMetrics(): void {

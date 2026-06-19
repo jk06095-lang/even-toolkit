@@ -100,6 +100,8 @@ describe('Project ECHO UI copy', () => {
     expect(livePracticeSource).toContain('Try simpler');
     expect(livePracticeSource).toContain('G2 Mic');
     expect(livePracticeSource).toContain('Phone Mic');
+    expect(livePracticeSource).toContain('data-live-speaker-turn');
+    expect(livePracticeSource).toContain('correctConversationTurnSpeaker');
     expect(livePracticeSource).not.toContain('currentActiveHint');
     expect(livePracticeSource).not.toContain('markActiveHintUsedIfPresent');
     expect(livePracticeSource).not.toMatch(/\?[\uAC00-\uD7A3]/);

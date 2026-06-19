@@ -43,6 +43,14 @@ that snapshot without adding conversation history to the glasses HUD. Placeholde
 speech-detection events remain analytics/cache events and are not displayed as
 phone timeline turns.
 
+The Live Practice timeline also exposes a compact speaker selector for each
+final turn. Changing `Me`, `Partner`, or `Unknown` updates the active in-memory
+`ConversationTurn`, sets `correctedByUser: true`, and immediately re-emits the
+phone timeline snapshot. When raw transcript retention is enabled, the same
+update path flushes to saved session storage; when retention is disabled, the
+correction remains session-local and is not written to persistent transcript
+history.
+
 Live final turns now preserve the selected audio input boundary explicitly:
 G2/bridge recognition writes `source: "g2"`, while phone Web Speech recognition
 writes `source: "phone"`. This is input provenance only; real speaker

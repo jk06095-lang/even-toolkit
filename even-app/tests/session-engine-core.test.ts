@@ -759,6 +759,27 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
 
+  it('persists live speaker corrections on the active conversation turn', async () => {
+    const harness = createHarness({ audioSource: 'browser' });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?', 0.87);
+    const turnId = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)?.id;
+    expect(turnId).toBeTruthy();
+
+    const updated = harness.engine.correctConversationTurnSpeaker(turnId!, 'partner');
+
+    expect(updated).toBe(true);
+    const latest = harness.conversationSnapshots.at(-1);
+    expect(latest?.conversationTurns?.at(-1)).toMatchObject({
+      id: turnId,
+      speaker: 'partner',
+      correctedByUser: true,
+      source: 'phone',
+      transcript: 'Could you clarify the customer segment?',
+    });
+  });
+
   it('stops audio detector and recognizer during cleanup', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
