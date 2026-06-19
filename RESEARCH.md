@@ -92,6 +92,10 @@ Condition A is the no-assistance baseline, so final evidence must record
 `falseCueRate` as `0` for both per-user runs and aggregate metrics. If any of
 those values is non-zero, condition A was not actually measured as no
 assistance.
+For all conditions, `cueP95LatencyMs` must be greater than or equal to
+`cueP50LatencyMs`. Conditions B and C are assist conditions, so their cue p50
+and p95 latency values must be greater than `0` for both per-user runs and
+aggregate metrics.
 
 ## UX Metrics
 

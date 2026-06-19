@@ -45,6 +45,15 @@ links must be markdown links carrying the markers `project-echo-case-study-ko`,
 `project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
 match the completed pilot manifest targets.
 
+The readiness gate is aligned with the
+[official Even Realities developer docs](https://hub.evenrealities.com/docs/get-started/overview):
+Even Hub apps run as phone-hosted WebView plugins, G2 hardware is the display
+and input surface, production network access must be limited to whitelisted
+origins with working CORS, and released `.ehpk` bundles must not contain API
+keys or secrets. The manifest check also enforces the current official package
+shape (`edition: 202601`, `min_sdk_version: 0.0.10`, permission objects with
+human-readable descriptions, and supported language codes).
+
 ## Built with
 
 - Even Hub SDK

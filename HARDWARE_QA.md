@@ -17,6 +17,14 @@ status text such as `done` is not accepted as evidence.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
 
+Official Even Realities
+[simulator docs](https://hub.evenrealities.com/docs/test/simulator) treat the
+simulator as a layout and logic preview, not a hardware emulator. Use simulator
+screenshots and headless automation as pre-submission smoke evidence only;
+timing, BLE behavior, background lifecycle, locked-phone operation, and
+microphone permission behavior must be confirmed on real G2 hardware through a
+private or beta build before release.
+
 ## Session lifecycle
 
 - Start and end a practice session 10 times.

@@ -77,6 +77,17 @@ const PLACEHOLDER_PATTERNS = [
   /^fill/i,
   /^https?:\/\/example\.com/i,
 ];
+const OFFICIAL_EVENHUB_EDITION = '202601';
+const OFFICIAL_EVENHUB_SDK_FLOOR = '0.0.10';
+const OFFICIAL_EVENHUB_PERMISSION_NAMES = new Set([
+  'album',
+  'camera',
+  'g2-microphone',
+  'location',
+  'network',
+  'phone-microphone',
+]);
+const OFFICIAL_EVENHUB_LANGUAGES = new Set(['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'zh']);
 
 async function validateFinalManifest({
   label,
@@ -282,6 +293,8 @@ function checkEchoAppManifest() {
         findings.push(`app.json version ${appJson.version} must match package.json version ${packageJson.version}`);
       }
 
+      validateOfficialEvenHubManifestShape(appJson, packageJson, findings);
+
       const permissions = Array.isArray(appJson.permissions) ? appJson.permissions : [];
       const permissionNames = permissions.map((permission) => permission?.name).filter(Boolean);
       for (const unusedPermission of ['camera', 'location']) {
@@ -323,8 +336,97 @@ function checkEchoAppManifest() {
     return false;
   }
 
-  addCheck('single-source minimal app manifest', 'passed', 'even-app/app.json is synchronized, unique, and whitelists only the ECHO API proxy.', '#17');
+  addCheck(
+    'single-source minimal app manifest',
+    'passed',
+    'even-app/app.json is synchronized, unique, follows the official Even Hub manifest shape, and whitelists only the ECHO API proxy.',
+    '#17',
+  );
   return true;
+}
+
+function validateOfficialEvenHubManifestShape(appJson, packageJson, findings) {
+  if (!/^([a-z][a-z0-9]*)(\.[a-z][a-z0-9]*)+$/.test(String(appJson.package_id ?? ''))) {
+    findings.push('app.json package_id must use lowercase reverse-domain format with no hyphens or underscores');
+  }
+
+  if (appJson.edition !== OFFICIAL_EVENHUB_EDITION) {
+    findings.push(`app.json edition must be ${OFFICIAL_EVENHUB_EDITION}`);
+  }
+
+  if (!isSemver(appJson.version)) {
+    findings.push('app.json version must use x.y.z semver with no prefix or suffix');
+  }
+
+  if (typeof appJson.name !== 'string' || appJson.name.length === 0 || appJson.name.length > 20) {
+    findings.push('app.json name must be 1-20 characters');
+  }
+
+  if (typeof appJson.name === 'string' && /even/i.test(appJson.name)) {
+    findings.push('app.json name must not include Even without written approval');
+  }
+
+  if (appJson.entrypoint !== 'index.html') {
+    findings.push('app.json entrypoint must be index.html for the packaged Vite build');
+  }
+
+  if (appJson.min_app_version !== '2.0.0') {
+    findings.push('app.json min_app_version must be 2.0.0');
+  }
+
+  if (appJson.min_sdk_version !== OFFICIAL_EVENHUB_SDK_FLOOR) {
+    findings.push(`app.json min_sdk_version must be ${OFFICIAL_EVENHUB_SDK_FLOOR}`);
+  }
+
+  if (packageJson.dependencies?.['@evenrealities/even_hub_sdk'] !== OFFICIAL_EVENHUB_SDK_FLOOR) {
+    findings.push(`@evenrealities/even_hub_sdk must be pinned to ${OFFICIAL_EVENHUB_SDK_FLOOR}`);
+  }
+
+  if (!Array.isArray(appJson.supported_languages) || appJson.supported_languages.length === 0) {
+    findings.push('app.json supported_languages must be a non-empty array');
+  } else {
+    for (const language of appJson.supported_languages) {
+      if (!OFFICIAL_EVENHUB_LANGUAGES.has(language)) {
+        findings.push(`app.json supported_languages contains unsupported language ${language}`);
+      }
+    }
+  }
+
+  if (!Array.isArray(appJson.permissions)) {
+    findings.push('app.json permissions must be an array of permission objects');
+    return;
+  }
+
+  for (const permission of appJson.permissions) {
+    if (!permission || typeof permission !== 'object' || Array.isArray(permission)) {
+      findings.push('app.json permissions must contain only objects');
+      continue;
+    }
+
+    if (!OFFICIAL_EVENHUB_PERMISSION_NAMES.has(permission.name)) {
+      findings.push(`app.json permission ${permission.name ?? '<missing>'} is not in the Even Hub permission set`);
+    }
+
+    if (typeof permission.desc !== 'string' || permission.desc.length < 1 || permission.desc.length > 300) {
+      findings.push(`app.json permission ${permission.name ?? '<missing>'} must include a 1-300 character desc`);
+    }
+
+    if (permission.name === 'network') {
+      if (!Array.isArray(permission.whitelist)) {
+        findings.push('app.json network permission must include a whitelist array');
+      } else {
+        for (const origin of permission.whitelist) {
+          if (!/^https:\/\/[^/?#]+$/i.test(String(origin))) {
+            findings.push(`app.json network whitelist origin must be full https origin without path: ${origin}`);
+          }
+        }
+      }
+    }
+  }
+}
+
+function isSemver(value) {
+  return /^\d+\.\d+\.\d+$/.test(String(value ?? ''));
 }
 
 function checkManifestSummaries() {

@@ -258,16 +258,48 @@ function validateMetricEquals(object, key, expected, pointer) {
 }
 
 function validateConditionSemantics(condition, systemMetrics, uxMetrics, pointer) {
-  if (condition !== 'A') {
+  validateCueLatencyConsistency(condition, systemMetrics, `${pointer}.systemMetrics`);
+
+  if (condition === 'A') {
+    for (const key of NO_ASSIST_SYSTEM_ZERO_METRICS) {
+      validateMetricEquals(systemMetrics, key, 0, `${pointer}.systemMetrics`);
+    }
+
+    for (const key of NO_ASSIST_UX_ZERO_METRICS) {
+      validateMetricEquals(uxMetrics, key, 0, `${pointer}.uxMetrics`);
+    }
+  }
+}
+
+function validateCueLatencyConsistency(condition, systemMetrics, pointer) {
+  if (!isPlainObject(systemMetrics)) {
     return;
   }
 
-  for (const key of NO_ASSIST_SYSTEM_ZERO_METRICS) {
-    validateMetricEquals(systemMetrics, key, 0, `${pointer}.systemMetrics`);
+  const p50 = systemMetrics.cueP50LatencyMs;
+  const p95 = systemMetrics.cueP95LatencyMs;
+
+  if (allowDraft && ([p50, p95].some((value) => value === null || value === 'TBD'))) {
+    return;
   }
 
-  for (const key of NO_ASSIST_UX_ZERO_METRICS) {
-    validateMetricEquals(uxMetrics, key, 0, `${pointer}.uxMetrics`);
+  if (
+    typeof p50 === 'number'
+    && Number.isFinite(p50)
+    && typeof p95 === 'number'
+    && Number.isFinite(p95)
+  ) {
+    if (p95 < p50) {
+      addError(`${pointer}.cueP95LatencyMs`, 'must be >= cueP50LatencyMs');
+    }
+
+    if (condition !== 'A' && p50 <= 0) {
+      addError(`${pointer}.cueP50LatencyMs`, `must be > 0 for condition ${condition} assist evidence`);
+    }
+
+    if (condition !== 'A' && p95 <= 0) {
+      addError(`${pointer}.cueP95LatencyMs`, `must be > 0 for condition ${condition} assist evidence`);
+    }
   }
 }
 
