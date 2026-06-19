@@ -121,7 +121,7 @@ without moving heavy review text onto the glasses:
 | Issues | Evidence artifact | Completion gate |
 | --- | --- | --- |
 | #1/#27 | `docs/key-rotation-evidence.md` and checked-in production proxy smoke JSON | `npm run readiness:echo` production proxy and key-rotation checks pass |
-| #2/#3/#4/#6/#12/#13/#14/#28 | `docs/project-echo-hardware-qa.completed.json` | `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json` |
+| #2/#3/#6/#12/#13/#14/#28 | `docs/project-echo-hardware-qa.completed.json` | `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json` |
 | #5/#10 | `docs/project-echo-pilot-evidence.completed.json`, case studies, architecture, real G2 video | `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json` |
 | #10 | README portfolio links | `npm run promote:echo-portfolio-links` after the completed pilot manifest passes |
 | #29 | `docs/project-echo-chatgpt-action-evidence.completed.json` | `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json` |

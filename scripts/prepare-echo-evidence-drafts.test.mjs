@@ -158,7 +158,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_SESSION_TOKEN/);
   assert.match(fieldRunbook, new RegExp(`ECHO_PROXY_SMOKE_EVIDENCE_OUT=${escapeRegExp(repoRelative(proxySmokePath))}`));
   assert.match(fieldRunbook, new RegExp(`npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence ${escapeRegExp(repoRelative(proxySmokePath))}`));
-  assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
+  assert.match(fieldRunbook, /#2\/#3\/#6\/#12\/#13\/#14\/#28/);
+  assert.doesNotMatch(fieldRunbook, /#2\/#3\/#4\/#6/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
   assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);
