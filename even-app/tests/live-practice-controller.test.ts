@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AUTO_ASSIST_CONFIRM_PROMPT,
   G2_MIC_FALLBACK_PROMPT,
   normalizeAudioSource,
+  shouldApplyAssistModeChange,
   shouldOfferPhoneMicFallback,
 } from '../src/live-practice/live-practice-controller';
 
@@ -27,5 +29,28 @@ describe('Live Practice audio fallback gating', () => {
     expect(G2_MIC_FALLBACK_PROMPT).toContain('G2 microphone unavailable.');
     expect(G2_MIC_FALLBACK_PROMPT).toContain('Use Phone Mic instead?');
     expect(G2_MIC_FALLBACK_PROMPT).toContain('only after you confirm');
+  });
+
+  it('requires an explicit confirmation before switching from Manual to Auto Assist', () => {
+    const prompts: string[] = [];
+    const cancelled = shouldApplyAssistModeChange('manual', 'auto', (message) => {
+      prompts.push(message);
+      return false;
+    });
+    expect(cancelled).toBe(false);
+    expect(prompts).toEqual([AUTO_ASSIST_CONFIRM_PROMPT]);
+    expect(AUTO_ASSIST_CONFIRM_PROMPT).toContain('Auto Assist is experimental.');
+  });
+
+  it('does not prompt when staying in Auto Assist or switching back to Manual', () => {
+    const prompts: string[] = [];
+    const confirm = (message: string) => {
+      prompts.push(message);
+      return true;
+    };
+
+    expect(shouldApplyAssistModeChange('auto', 'auto', confirm)).toBe(true);
+    expect(shouldApplyAssistModeChange('auto', 'manual', confirm)).toBe(true);
+    expect(prompts).toEqual([]);
   });
 });

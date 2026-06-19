@@ -101,6 +101,22 @@ test('rejects audio-source evidence that silently opens Phone Mic for G2 session
   assert.match(output, /audioSources\.g2Failure\.cancelKeepsAudioOff: must be true/);
 });
 
+test('rejects assist evidence without Auto Assist confirmation proof', async () => {
+  const fixture = writeCompletedHardwareFixture('assist-auto-confirmation');
+  const invalidAssist = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  invalidAssist.assist.autoConfirmationPromptShown = false;
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-assist-auto-confirmation.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidAssist, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  assert.match(combinedOutput(result), /assist\.autoConfirmationPromptShown: must be true/);
+});
+
 test('rejects conversation timeline evidence without source-specific input evidence', async () => {
   const fixture = writeCompletedHardwareFixture('conversation-input-evidence');
   const invalidTimeline = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
@@ -387,6 +403,7 @@ function writeCompletedHardwareFixture(name) {
     assist: {
       manualDefault: true,
       autoOptInOnly: true,
+      autoConfirmationPromptShown: true,
       doubleClickRequestsCue: true,
       swipeDismissesCue: true,
       speechClearsCue: true,

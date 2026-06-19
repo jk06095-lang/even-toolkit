@@ -271,6 +271,7 @@
   "assist": {
     "manualDefault": null,
     "autoOptInOnly": null,
+    "autoConfirmationPromptShown": null,
     "doubleClickRequestsCue": null,
     "swipeDismissesCue": null,
     "speechClearsCue": null,

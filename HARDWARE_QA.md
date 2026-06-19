@@ -270,6 +270,10 @@ Automated coverage added on 2026-06-19:
 - Press `Cue` on the phone and confirm the same manual cue path works in simulator/browser checks.
 - Swipe while a cue is visible and confirm it disappears.
 - Start speaking while a cue is visible and confirm the cue clears immediately.
+- Switch to `Auto`, confirm the experimental Auto Assist prompt is shown, cancel
+  it once, and verify the mode remains `Manual`.
+- Switch to `Auto` again, accept the prompt, and verify the phone UI changes to
+  `Assist: Auto`.
 - Switch to `Auto`, stay silent past the threshold without a recent breakdown signal, and confirm no auto cue appears.
 - In Auto, say a breakdown phrase such as `I think maybe...` or repeated filler words, then stay silent past the threshold and confirm an auto cue appears.
 - In Auto, say a breakdown phrase, cross the silence threshold, start speaking again within the 400 ms grace window, and confirm the pending auto cue is cancelled.

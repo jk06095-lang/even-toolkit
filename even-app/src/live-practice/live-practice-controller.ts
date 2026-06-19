@@ -30,6 +30,13 @@ export const G2_MIC_FALLBACK_PROMPT = [
   '',
   'Phone Mic opens this device microphone only after you confirm.',
 ].join('\n');
+export const AUTO_ASSIST_CONFIRM_PROMPT = [
+  'Auto Assist is experimental.',
+  '',
+  'It may show cues at the wrong moment.',
+  '',
+  'Keep Manual Assist unless you are intentionally testing Auto Assist.',
+].join('\n');
 
 let context: LivePracticeControllerContext | null = null;
 let session: SessionEngine | null = null;
@@ -59,6 +66,15 @@ export function shouldOfferPhoneMicFallback(error: unknown, source: LivePractice
   return source === 'bridge'
     && error instanceof Error
     && error.message.toLowerCase().includes('g2 microphone unavailable');
+}
+
+export function shouldApplyAssistModeChange(
+  currentMode: AssistMode,
+  nextMode: AssistMode,
+  confirmAutoAssist: (message: string) => boolean,
+): boolean {
+  if (nextMode !== 'auto' || currentMode === 'auto') return true;
+  return confirmAutoAssist(AUTO_ASSIST_CONFIRM_PROMPT);
 }
 
 function loadPreferredAudioSource(): LivePracticeAudioSource {
@@ -172,6 +188,10 @@ export function bindLivePracticeEvents(nextContext: LivePracticeControllerContex
   document.querySelectorAll('.assist-mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const mode = ((btn as HTMLElement).dataset.assistMode as AssistMode | undefined) ?? 'manual';
+      if (!shouldApplyAssistModeChange(selectedAssistMode, mode, (message) => window.confirm(message))) {
+        updateAssistModeUI();
+        return;
+      }
       selectedAssistMode = mode;
       session?.setAssistMode(mode);
       updateAssistModeUI();

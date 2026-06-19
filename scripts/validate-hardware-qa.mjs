@@ -694,6 +694,7 @@ function validateAssist(manifestObject) {
   for (const key of [
     'manualDefault',
     'autoOptInOnly',
+    'autoConfirmationPromptShown',
     'doubleClickRequestsCue',
     'swipeDismissesCue',
     'speechClearsCue',
