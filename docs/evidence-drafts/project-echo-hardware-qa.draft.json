@@ -10,7 +10,7 @@
   },
   "buildArtifact": {
     "packagePath": "even-app/echo.ehpk",
-    "sha256": "4e0fe62aed7073eedcc6c0243f7d847c29689a5eae62dfc16a9113b7a5a51b0a",
+    "sha256": "02c1f5d4e5ce6ca9e19b6b83f57a98b89c039d63871df89024721472637e6877",
     "packCommand": "npm --prefix even-app run pack",
     "sourceAppJson": "even-app/app.json",
     "sourceDistDir": "even-app/dist",
@@ -468,7 +468,7 @@
     "bundleReportRef": "docs/evidence-drafts/project-echo-bundle-report.md",
     "deviceEvidenceRef": "TBD",
     "bundleMetrics": {
-      "largestInitialJsKb": 246.24,
+      "largestInitialJsKb": 246.51,
       "initialJsLimitKb": 500,
       "voiceRuntimeJsKb": 763.4,
       "voiceRuntimeGzipKb": 207.66,

@@ -94,7 +94,9 @@ Manual and auto cue generation now build the provider `recentTranscript` from
 recent finalized `ConversationTurn` records instead of the legacy single-speaker
 analyzer transcript. The request context keeps speaker uncertainty explicit with
 `Partner:`, `Learner:`, or `Unknown speaker:` prefixes, so a corrected partner
-turn is not sent upstream as `User said`.
+turn is not sent upstream as `User said`. The legacy analyzer fallback also uses
+`Unknown speaker:` for final utterances because it does not carry diarization
+metadata.
 
 Imported line transcripts can be converted into v2 `ConversationTurn` rows with
 speaker prefixes such as `Partner:`, `Me:`, `Speaker 1:`, and `Speaker 2:`.

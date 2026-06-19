@@ -80,4 +80,31 @@ describe('TranscriptAnalyzer outcome records', () => {
       outcome: 'failed',
     });
   });
+
+  it('formats legacy conversation context without assuming the learner spoke every turn', () => {
+    const analyzer = new TranscriptAnalyzer(2);
+    analyzer.addUtterance('interim should stay out', false);
+    analyzer.addUtterance('first final should roll off', true);
+    analyzer.addUtterance('Could you clarify the customer segment?', true);
+    analyzer.addUtterance('I can explain the segment.', true);
+    analyzer.addUtterance('The renewal timeline is still unclear.', true);
+    analyzer.addUtterance('Can you share the deadline?', true);
+    analyzer.addUtterance('I need a moment to check.', true);
+
+    expect(analyzer.getConversationContext()).toBe([
+      'Unknown speaker: Could you clarify the customer segment?',
+      'Unknown speaker: I can explain the segment.',
+      'Unknown speaker: The renewal timeline is still unclear.',
+      'Unknown speaker: Can you share the deadline?',
+      'Unknown speaker: I need a moment to check.',
+    ].join('\n'));
+    expect(analyzer.getConversationContext()).not.toContain('User said');
+  });
+
+  it('ignores placeholder speech markers in legacy conversation context', () => {
+    const analyzer = new TranscriptAnalyzer(2);
+    analyzer.addUtterance('[speech detected]', true);
+
+    expect(analyzer.getConversationContext()).toBe('No conversation yet.');
+  });
 });

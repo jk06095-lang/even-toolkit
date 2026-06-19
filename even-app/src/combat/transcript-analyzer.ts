@@ -29,6 +29,7 @@ const STOP_WORDS = new Set([
   'so', 'than', 'too', 'very', 'just',
   'what', 'which', 'who', 'whom', 'how', 'when', 'where', 'why',
 ]);
+const CONTEXT_UTTERANCE_TEXT_LIMIT = 240;
 
 // ── Interfaces ──
 
@@ -125,6 +126,23 @@ function extractKeyWords(phrase: string): string[] {
 }
 
 // ── TranscriptAnalyzer ──
+
+/**
+ * Format analyzer-only utterances without inventing a learner speaker role.
+ */
+function formatLegacyContextUtterance(text: string): string {
+  const transcript = sanitizeContextUtterance(text);
+  if (!transcript || transcript.toLowerCase() === '[speech detected]') return '';
+  return `Unknown speaker: ${transcript}`;
+}
+
+function sanitizeContextUtterance(value: string): string {
+  return value
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, CONTEXT_UTTERANCE_TEXT_LIMIT);
+}
 
 /**
  * Tracks the running Combat Mode transcript, manages hints, and computes
@@ -286,22 +304,20 @@ export class TranscriptAnalyzer {
   // ── Context helpers ──
 
   /**
-   * Get the last 5 **final** utterances formatted for Gemini context.
-   *
-   * @returns A newline-separated string of recent utterances, e.g.:
-   * ```
-   * User said: "I'd like a coffee"
-   * User said: "With oat milk please"
-   * ```
+   * Get the last 5 **final** utterances formatted for legacy cue context.
+   * This analyzer has no diarization metadata, so it keeps speaker attribution
+   * unresolved instead of assuming every utterance came from the learner.
    */
   getConversationContext(): string {
     const finals = this.utterances.filter((u) => u.isFinal);
     if (finals.length === 0) return 'No conversation yet.';
 
-    return finals
+    const lines = finals
       .slice(-5)
-      .map((u) => `User said: "${u.text}"`)
-      .join('\n');
+      .map((u) => formatLegacyContextUtterance(u.text))
+      .filter((line) => line.length > 0);
+
+    return lines.length > 0 ? lines.join('\n') : 'No conversation yet.';
   }
 
   // ── Adaptive difficulty ──
