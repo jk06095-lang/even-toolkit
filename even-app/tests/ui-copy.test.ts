@@ -55,11 +55,20 @@ describe('Project ECHO UI copy', () => {
   });
 
   it('keeps dynamic learner-facing copy calm and free of mojibake fragments', () => {
+    const calibrationSource = readFileSync(
+      path.join(appRoot, 'src', 'calibration', 'calibration-controller.ts'),
+      'utf8',
+    );
     const livePracticeSource = readFileSync(
       path.join(appRoot, 'src', 'live-practice', 'live-practice-controller.ts'),
       'utf8',
     );
     const pitchSource = readFileSync(path.join(repoRoot, 'echo-pitch', 'src', 'main.js'), 'utf8');
+
+    expect(calibrationSource).toContain('Voice detected');
+    expect(calibrationSource).not.toContain('??Voice detected');
+    expect(calibrationSource).not.toContain('\u25CF Voice detected');
+    expect(calibrationSource).not.toContain('\uFFFD');
 
     expect(livePracticeSource).toContain('Nice recovery');
     expect(livePracticeSource).toContain('Try simpler');

@@ -103,7 +103,7 @@ function driveCalibrationSoundwave(volume: number): void {
   }
   const swStatus = document.getElementById('cal-soundwave-status');
   if (swStatus) {
-    swStatus.textContent = volume > 0.1 ? '● Voice detected' : 'Waiting for voice input...';
+    swStatus.textContent = volume > 0.1 ? 'Voice detected' : 'Waiting for voice input...';
   }
 }
 
