@@ -345,6 +345,8 @@ Still requires real G2 validation:
   confirm the phone UI shows `Not wearing`, not `Wearing`.
 - With the G2 connected but no wear sensor field available, confirm the phone UI
   shows `Wear status unavailable`.
+- With the G2 connected and an unexpected/unknown wear token, confirm the phone
+  UI keeps `Wear status unavailable` rather than treating it as `Not wearing`.
 - Confirm connection alone never forces `wearing`.
 - Record the three cases under `wearingState` in
   [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json),
@@ -354,7 +356,9 @@ Automated coverage added on 2026-06-19:
 
 - `hud-controller` verifies boolean, numeric, string, absent, and
   connected-but-not-wearing status payloads map to `wearing`, `not-wearing`, or
-  `unavailable` without using connection as a forced success state.
+  `unavailable` without using connection as a forced success state. It also
+  rejects unknown wear tokens as `unavailable` instead of silently converting
+  them to `not-wearing`.
 
 Still requires real G2 validation:
 

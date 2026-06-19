@@ -1,5 +1,10 @@
 import { EchoDisplay } from '../ambient/echo-display';
-import { HUDController, parseWearingState, type WearingState } from './hud-controller';
+import {
+  HUDController,
+  formatWearingStatePhoneLabel,
+  parseWearingState,
+  type WearingState,
+} from './hud-controller';
 
 export interface HudLifecycleContext {
   getHud: () => HUDController | null;
@@ -95,9 +100,7 @@ function renderG2Badge(badge: HTMLElement, dotState: 'idle' | 'listening', text:
 }
 
 function wearStatusLabel(state: WearingState): string {
-  if (state === 'wearing') return ' (Wearing)';
-  if (state === 'not-wearing') return ' (Not wearing)';
-  return ' (Wear status unavailable)';
+  return ` (${formatWearingStatePhoneLabel(state)})`;
 }
 
 function formatConnectType(value: unknown): string {

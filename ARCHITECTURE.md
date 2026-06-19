@@ -133,7 +133,9 @@ and prevents abort rejections or delayed responses from showing a cue later.
 G2 connection state and wear state are separate signals. `parseWearingState`
 preserves `wearing`, `not-wearing`, and `unavailable`; a connected bridge status
 does not force the UI into `wearing` when the sensor reports false or omits wear
-data.
+data. Only explicit true/false wear sensor tokens are accepted as
+`wearing`/`not-wearing`; unknown or unexpected wear payload values remain
+`unavailable` for hardware QA and phone UI reporting.
 
 ## Assist modes
 

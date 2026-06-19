@@ -37,6 +37,31 @@ export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
 export type HUDAction = 'resume' | 'end-practice' | 'exit-echo' | 'request-cue' | 'dismiss-cue';
 export type CombatHUDState = 'READY' | 'LISTENING' | 'CUE' | 'ACK' | 'PAUSED';
 
+const WEARING_TRUE_TOKENS = new Set([
+  '1',
+  'true',
+  'yes',
+  'y',
+  'wearing',
+  'worn',
+  'on-head',
+  'onhead',
+]);
+
+const WEARING_FALSE_TOKENS = new Set([
+  '0',
+  'false',
+  'no',
+  'n',
+  'not-wearing',
+  'notwearing',
+  'not-worn',
+  'notworn',
+  'off-head',
+  'offhead',
+  'unworn',
+]);
+
 export function parseWearingState(status: any): WearingState {
   const rawWearing =
     status?.isWearing ??
@@ -53,15 +78,24 @@ export function parseWearingState(status: any): WearingState {
     return 'unavailable';
   }
 
-  const normalized = String(rawWearing).toLowerCase();
-  return rawWearing === true ||
-    rawWearing === 1 ||
-    rawWearing === '1' ||
-    normalized === 'true' ||
-    normalized === 'yes' ||
-    normalized === 'wearing'
-    ? 'wearing'
-    : 'not-wearing';
+  if (rawWearing === true || rawWearing === 1) return 'wearing';
+  if (rawWearing === false || rawWearing === 0) return 'not-wearing';
+
+  const normalized = String(rawWearing)
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
+
+  if (WEARING_TRUE_TOKENS.has(normalized)) return 'wearing';
+  if (WEARING_FALSE_TOKENS.has(normalized)) return 'not-wearing';
+
+  return 'unavailable';
+}
+
+export function formatWearingStatePhoneLabel(state: WearingState): string {
+  if (state === 'wearing') return 'Wearing';
+  if (state === 'not-wearing') return 'Not wearing';
+  return 'Wear status unavailable';
 }
 
 export class HUDController {

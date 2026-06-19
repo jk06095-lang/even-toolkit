@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HUDController, parseWearingState, type HUDAction } from '../src/hud/hud-controller';
+import {
+  HUDController,
+  formatWearingStatePhoneLabel,
+  parseWearingState,
+  type HUDAction,
+  type WearingState,
+} from '../src/hud/hud-controller';
 
 function createHudHarness() {
   const hud = new HUDController();
@@ -36,14 +42,34 @@ describe('HUDController simplified live HUD contract', () => {
   });
 
   it('preserves explicit wear sensor states without forcing connected devices to wearing', () => {
-    expect(parseWearingState({ connectType: 'connected', isWearing: true })).toBe('wearing');
-    expect(parseWearingState({ connectType: 'connected', isWearing: false })).toBe('not-wearing');
-    expect(parseWearingState({ connectType: 'connected', wearing: 1 })).toBe('wearing');
-    expect(parseWearingState({ connectType: 'connected', wearing: 0 })).toBe('not-wearing');
-    expect(parseWearingState({ connectType: 'connected', wearStatus: 'wearing' })).toBe('wearing');
-    expect(parseWearingState({ connectType: 'connected', wearStatus: 'not-wearing' })).toBe('not-wearing');
-    expect(parseWearingState({ connectType: 'connected' })).toBe('unavailable');
-    expect(parseWearingState({ connectType: 'connected', isWearing: null })).toBe('unavailable');
+    const cases: Array<[Record<string, unknown>, WearingState]> = [
+      [{ connectType: 'connected', isWearing: true }, 'wearing'],
+      [{ connectType: 'connected', isWearing: false }, 'not-wearing'],
+      [{ connectType: 'connected', wearing: 1 }, 'wearing'],
+      [{ connectType: 'connected', wearing: 0 }, 'not-wearing'],
+      [{ connectType: 'connected', wearStatus: 'wearing' }, 'wearing'],
+      [{ connectType: 'connected', wearStatus: 'not-wearing' }, 'not-wearing'],
+      [{ connectType: 'connected', wearState: 'on_head' }, 'wearing'],
+      [{ connectType: 'connected', wearState: 'off_head' }, 'not-wearing'],
+      [{ connectType: 'connected', wearingState: 'worn' }, 'wearing'],
+      [{ connectType: 'connected', wearingState: 'not_worn' }, 'not-wearing'],
+      [{ connectType: 'connected', isWearing: 'true' }, 'wearing'],
+      [{ connectType: 'connected', isWearing: 'false' }, 'not-wearing'],
+      [{ connectType: 'connected', wearStatus: '1' }, 'wearing'],
+      [{ connectType: 'connected', wearStatus: '0' }, 'not-wearing'],
+      [{ connectType: 'connected' }, 'unavailable'],
+      [{ connectType: 'connected', isWearing: null }, 'unavailable'],
+      [{ connectType: 'connected', wearStatus: 'unknown' }, 'unavailable'],
+      [{ connectType: 'connected', wearing: 2 }, 'unavailable'],
+    ];
+
+    for (const [status, expected] of cases) {
+      expect(parseWearingState(status)).toBe(expected);
+    }
+
+    expect(formatWearingStatePhoneLabel('wearing')).toBe('Wearing');
+    expect(formatWearingStatePhoneLabel('not-wearing')).toBe('Not wearing');
+    expect(formatWearingStatePhoneLabel('unavailable')).toBe('Wear status unavailable');
   });
 
   it('renders READY, LISTENING, CUE, ACK, and PAUSED on the live G2 surface', async () => {
