@@ -71,6 +71,7 @@ describe('Project ECHO UI copy', () => {
       path.join(appRoot, 'src', 'live-practice', 'live-practice-controller.ts'),
       'utf8',
     );
+    const hudLifecycleSource = readFileSync(path.join(appRoot, 'src', 'hud', 'hud-lifecycle.ts'), 'utf8');
     const pitchSource = readFileSync(path.join(repoRoot, 'echo-pitch', 'src', 'main.js'), 'utf8');
 
     expect(calibrationSource).toContain('Voice detected');
@@ -88,6 +89,11 @@ describe('Project ECHO UI copy', () => {
     expect(livePracticeSource).not.toContain('\uCA0C');
     expect(livePracticeSource).not.toContain('Great! You used');
     expect(livePracticeSource).not.toContain('Easier:');
+
+    expect(hudLifecycleSource).toContain('replaceChildren');
+    expect(hudLifecycleSource).toContain('textContent');
+    expect(hudLifecycleSource).not.toContain('innerHTML');
+    expect(hudLifecycleSource).not.toContain('\uFFFD');
 
     expect(pitchSource).toContain('Glanceable Fluency Coach');
     expect(pitchSource).not.toMatch(/Stealth Tutor|STEALTH TUTOR|PATTERN ACQUIRED|GREAT JOB|SILENCE DETECTED/);

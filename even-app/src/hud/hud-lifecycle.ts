@@ -1,5 +1,5 @@
 import { EchoDisplay } from '../ambient/echo-display';
-import { HUDController, parseWearingState } from './hud-controller';
+import { HUDController, parseWearingState, type WearingState } from './hud-controller';
 
 export interface HudLifecycleContext {
   getHud: () => HUDController | null;
@@ -17,7 +17,7 @@ export async function initHudLifecycle(context: HudLifecycleContext): Promise<vo
   const badge = document.getElementById('g2-badge');
 
   if (badge) {
-    badge.innerHTML = `<span class="status-dot idle" id="g2-dot"></span><span id="g2-badge-text">G2 Glasses: Connecting...</span>`;
+    renderG2Badge(badge, 'idle', 'G2 Glasses: Connecting...');
     badge.style.cursor = 'wait';
   }
 
@@ -53,13 +53,10 @@ export async function initHudLifecycle(context: HudLifecycleContext): Promise<vo
 
     if (isConnected) {
       const wearingState = parseWearingState(status);
-      const wearStr = {
-        wearing: ' (● Wearing)',
-        'not-wearing': ' (○ Not wearing)',
-        unavailable: ' (— Wear status unavailable)',
-      }[wearingState];
       const battStr = status.batteryLevel !== undefined ? ` [${status.batteryLevel}%]` : '';
-      badge.innerHTML = `<span class="status-dot listening"></span> G2 Glasses: Connected${wearStr}${battStr}`;
+      renderG2Badge(badge, 'listening', `G2 Glasses: Connected${wearStatusLabel(wearingState)}${battStr}`);
+      badge.onclick = null;
+      badge.style.cursor = '';
 
       if (!context.getEchoDisplay() && currentHud) {
         const echoDisplay = new EchoDisplay();
@@ -69,7 +66,8 @@ export async function initHudLifecycle(context: HudLifecycleContext): Promise<vo
 
       currentHud?.enterStandby();
     } else {
-      badge.innerHTML = `<span class="status-dot idle"></span> G2 Glasses: ${status.connectType.toUpperCase()} (Retry)`;
+      renderG2Badge(badge, 'idle', `G2 Glasses: ${formatConnectType(status.connectType)} (Retry)`);
+      badge.style.cursor = 'pointer';
       badge.onclick = () => {
         badge.onclick = null;
         initHudLifecycle(context);
@@ -82,4 +80,27 @@ export async function initHudLifecycle(context: HudLifecycleContext): Promise<vo
   } catch (err) {
     console.warn('[App] Bridge initialization failed:', err);
   }
+}
+
+function renderG2Badge(badge: HTMLElement, dotState: 'idle' | 'listening', text: string): void {
+  const dot = document.createElement('span');
+  dot.className = `status-dot ${dotState}`;
+  dot.id = 'g2-dot';
+
+  const label = document.createElement('span');
+  label.id = 'g2-badge-text';
+  label.textContent = text;
+
+  badge.replaceChildren(dot, label);
+}
+
+function wearStatusLabel(state: WearingState): string {
+  if (state === 'wearing') return ' (Wearing)';
+  if (state === 'not-wearing') return ' (Not wearing)';
+  return ' (Wear status unavailable)';
+}
+
+function formatConnectType(value: unknown): string {
+  if (value === undefined || value === null || value === '') return 'Unavailable';
+  return String(value).replace(/\s+/g, ' ').trim().toUpperCase();
 }
