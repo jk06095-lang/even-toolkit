@@ -952,6 +952,50 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.startsWith('showGrammarFeedback:'))).toBe(false);
   });
 
+  it('updates live interim and final text on the same conversation turn', async () => {
+    const harness = createHarness({ audioSource: 'browser' });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitInterimResult('Could you', 0.44);
+    const firstPartial = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1);
+
+    expect(firstPartial).toMatchObject({
+      transcript: 'Could you',
+      source: 'phone',
+      confidence: 0.44,
+      isFinal: false,
+    });
+    expect(harness.conversationSnapshots.at(-1)?.entries.filter((entry) => entry.type === 'user_speech')).toHaveLength(0);
+
+    harness.recognizers[0]!.emitInterimResult('Could you clarify', 0.58);
+    const secondPartial = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1);
+
+    expect(secondPartial).toMatchObject({
+      id: firstPartial?.id,
+      transcript: 'Could you clarify',
+      confidence: 0.58,
+      isFinal: false,
+    });
+
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the timeline?', 0.88);
+    const finalTurn = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1);
+    const speechEntries = harness.conversationSnapshots.at(-1)?.entries.filter((entry) => entry.type === 'user_speech') ?? [];
+
+    expect(finalTurn).toMatchObject({
+      id: firstPartial?.id,
+      transcript: 'Could you clarify the timeline?',
+      confidence: 0.88,
+      isFinal: true,
+    });
+    expect(speechEntries).toHaveLength(1);
+    expect(speechEntries[0]).toMatchObject({
+      text: 'Could you clarify the timeline?',
+      source: 'live_final',
+      isFinal: true,
+      confidence: 0.88,
+    });
+  });
+
   it('emits live phone conversation timeline snapshots with unknown speaker until corrected', async () => {
     const harness = createHarness({ audioSource: 'browser' });
     await harness.engine.start(harness.hud);

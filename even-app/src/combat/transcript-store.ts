@@ -137,6 +137,10 @@ export interface AddConversationTurnInput {
 export type ConversationTurnUpdate = Partial<Pick<
   ConversationTurn,
   'speaker' |
+  'startedAt' |
+  'endedAt' |
+  'source' |
+  'transcript' |
   'translationKo' |
   'confidence' |
   'correctedByUser' |
@@ -279,6 +283,26 @@ export class TranscriptStore {
       isFinal,
       confidence: normalizeConfidence(confidence),
     }, turnSource, speaker);
+  }
+
+  addSpeechEntry(
+    text: string,
+    source: TranscriptEntry['source'] = 'speech_api',
+    isFinal = true,
+    confidence?: number,
+  ): boolean {
+    const cleaned = cleanOptionalPlainText(text, 4000);
+    if (!cleaned) return false;
+    this.session.entries.push({
+      t: this.now(),
+      type: 'user_speech',
+      text: cleaned,
+      source,
+      isFinal,
+      confidence: normalizeConfidence(confidence),
+    });
+    this.flush();
+    return true;
   }
 
   addHint(text: string, source: 'gemini_eval' | 'fallback' = 'gemini_eval'): void {
@@ -782,6 +806,20 @@ function applyConversationTurnUpdate(
   };
 
   if (patch.speaker !== undefined) updated.speaker = patch.speaker;
+  if (patch.startedAt !== undefined) updated.startedAt = coerceTimestamp(patch.startedAt, updated.startedAt);
+  if (patch.endedAt !== undefined) updated.endedAt = coerceTimestamp(patch.endedAt, updated.startedAt);
+  if (patch.source !== undefined) {
+    updated.source = patch.source;
+    updated.inputEvidence = createConversationInputEvidence(
+      patch.source,
+      updated.correctedByUser === true ? 'user_corrected' : 'single_stream_unresolved',
+    );
+  }
+  if (patch.transcript !== undefined) {
+    const transcript = cleanOptionalPlainText(patch.transcript, 4000);
+    if (!transcript) return null;
+    updated.transcript = transcript;
+  }
   if (patch.language !== undefined) updated.language = patch.language;
   if (patch.confidence !== undefined) updated.confidence = patch.confidence;
   if (patch.correctedByUser !== undefined) updated.correctedByUser = patch.correctedByUser;

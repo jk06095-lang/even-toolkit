@@ -162,7 +162,7 @@ export function renderCombatView(): string {
             <span class="text-detail" id="live-conversation-timeline-count" style="color: var(--color-text-muted); font-family: var(--font-mono);">0 turns</span>
           </div>
           <div id="live-conversation-timeline" style="display: grid; gap: 8px;"></div>
-          <div id="live-conversation-timeline-empty" class="text-detail" style="color: var(--color-text-muted);">Final phone/G2 turns appear here after recognition.</div>
+          <div id="live-conversation-timeline-empty" class="text-detail" style="color: var(--color-text-muted);">Phone/G2 turns appear here during recognition.</div>
         </div>
 
         <!-- Expression Usage Tracker -->

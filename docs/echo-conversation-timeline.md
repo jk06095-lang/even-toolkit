@@ -47,14 +47,18 @@ The current implementation does not invent Korean translations locally. It uses
 the deployed proxy boundary when cloud processing is allowed and otherwise keeps
 pending jobs local.
 
-Live Practice emits in-memory `SessionTranscript` snapshots whenever finalized
-turns are recorded. When cloud processing is enabled, each final non-Korean turn
-also schedules a Korean translation request; successful responses write
+Live Practice emits in-memory `SessionTranscript` snapshots for live partial
+and final `ConversationTurn` records. Interim recognizer text creates or updates
+one active partial turn, and the final recognizer result updates that same turn
+ID instead of appending a second turn. Legacy `entries` receive only the final
+speech event once, preserving older summary/export counts without duplicating
+the v2 phone timeline. When cloud processing is enabled, each final non-Korean
+turn also schedules a Korean translation request; successful responses write
 `translationKo` back to the active `ConversationTurn` and re-emit the phone
-timeline snapshot. The phone UI renders the latest recognized final turns from
-that snapshot without adding conversation history or translations to the glasses
-HUD. Placeholder speech-detection events remain analytics/cache events and are
-not displayed as phone timeline turns.
+timeline snapshot. The phone UI renders the latest recognized turns from that
+snapshot without adding conversation history or translations to the glasses HUD.
+Placeholder speech-detection events remain analytics/cache events and are not
+displayed as phone timeline turns.
 
 This boundary follows the current Even Hub device model: the glasses render a
 small fixed-canvas container UI, while richer review state belongs on the phone.
