@@ -115,6 +115,19 @@ describe('transcript export session-analysis guards', () => {
       cueId: 'cue-session-a-1',
       outcome: 'assisted_adapted',
     });
+    expect(exportJson.learner_profile).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      privacyMode: 'local_only',
+      metrics: {
+        conversationRecoveryRate: 1,
+        activeRecallDueCount: 1,
+      },
+    });
+    expect(exportJson.learner_profile.learningItems[0]).toMatchObject({
+      canonicalExpression: 'Could you say that again?',
+      sourceTurnIds: ['session-a:turn:1'],
+      lastOutcome: 'assisted',
+    });
   });
 
   it('ignores aborted delayed session-analysis responses and returns fallback handoff', async () => {

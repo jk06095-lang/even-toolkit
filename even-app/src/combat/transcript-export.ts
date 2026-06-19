@@ -18,7 +18,12 @@ import {
   type SessionTranscript,
 } from './transcript-store';
 import { getScenarioById } from './topic-registry';
-import type { AssistEpisode, ConversationTurn, Cue } from '@toolkit/echo-domain-v2';
+import {
+  buildCustomGptHandoffFiles,
+  buildLearnerProfile,
+  type CustomGptHandoffFiles,
+} from './learner-profile';
+import type { AssistEpisode, ConversationTurn, Cue, LearnerProfile } from '@toolkit/echo-domain-v2';
 
 // ── Export Types (strict, never changes) ──
 
@@ -67,6 +72,7 @@ export interface SessionExportJSON {
   stage_1_raw: ExportStage1;
   stage_2_analysis: ExportStage2;
   stage_3_handoff: ExportStage3;
+  learner_profile: LearnerProfile;
 }
 
 export interface GenerateExportOptions {
@@ -219,6 +225,7 @@ export async function generateExportJSON(
 ): Promise<SessionExportJSON> {
   const stage1 = buildStage1(session);
   const stage2 = buildStage2(session);
+  const learnerProfile = buildLearnerProfile(session);
   const stage3 = await buildStage3(stage1, stage2, {
     ...options,
     allowCloudProcessing: options.allowCloudProcessing ?? true,
@@ -237,7 +244,14 @@ export async function generateExportJSON(
     stage_1_raw: stage1,
     stage_2_analysis: stage2,
     stage_3_handoff: stage3,
+    learner_profile: learnerProfile,
   };
+}
+
+export function generateCustomGptHandoffFiles(
+  session: SessionTranscript,
+): CustomGptHandoffFiles {
+  return buildCustomGptHandoffFiles(session);
 }
 
 /**
