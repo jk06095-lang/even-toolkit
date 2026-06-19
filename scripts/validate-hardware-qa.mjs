@@ -79,6 +79,7 @@ const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const LOG_EXTENSIONS = ['md', 'txt', 'log', 'json'];
 const REPORT_EXTENSIONS = ['md', 'txt', 'log', 'json'];
 const INITIAL_JS_LIMIT_KB = 500;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
 const args = process.argv.slice(2);
@@ -163,6 +164,35 @@ function validateText(object, key, pointer, options = {}) {
 
   if (options.includes && !value.includes(options.includes)) {
     addError(fieldPointer, `must include ${options.includes}`);
+  }
+}
+
+function validateIsoDate(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required ISO date');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft ISO date placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a valid ISO date in YYYY-MM-DD format');
+    return;
+  }
+
+  const [year, month, day] = value.trim().split('-').map((part) => Number.parseInt(part, 10));
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    addError(fieldPointer, 'must be a real calendar date');
   }
 }
 
@@ -421,7 +451,7 @@ function validateManifestRoot(manifestObject) {
   if (!validateObject(manifestObject, 'manifest')) return;
 
   validateText(manifestObject, 'project', 'manifest', { includes: 'ECHO' });
-  validateText(manifestObject, 'runDate', 'manifest');
+  validateIsoDate(manifestObject, 'runDate', 'manifest');
   validateText(manifestObject, 'evidenceStatus', 'manifest');
   if (!allowDraft && manifestObject.evidenceStatus !== 'complete') {
     addError('manifest.evidenceStatus', 'must be "complete" for final hardware QA');

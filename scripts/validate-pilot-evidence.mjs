@@ -59,6 +59,7 @@ const PLACEHOLDER_PATTERNS = [
 const CASE_STUDY_EXTENSIONS = ['md', 'html', 'pdf'];
 const ARCHITECTURE_EXTENSIONS = ['md', 'html', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -143,6 +144,35 @@ function validateText(object, key, pointer, options = {}) {
 
   if (options.includes && !value.includes(options.includes)) {
     addError(fieldPointer, `must include ${options.includes}`);
+  }
+}
+
+function validateIsoDate(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required ISO date');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft ISO date placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a valid ISO date in YYYY-MM-DD format');
+    return;
+  }
+
+  const [year, month, day] = value.trim().split('-').map((part) => Number.parseInt(part, 10));
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    addError(fieldPointer, 'must be a real calendar date');
   }
 }
 
@@ -642,7 +672,7 @@ function validateManifest(manifestObject) {
   }
 
   validateText(manifestObject, 'project', 'manifest', { includes: 'ECHO' });
-  validateText(manifestObject, 'pilotDate', 'manifest');
+  validateIsoDate(manifestObject, 'pilotDate', 'manifest');
   validateText(manifestObject, 'evidenceStatus', 'manifest');
 
   if (!allowDraft && manifestObject.evidenceStatus !== 'complete') {

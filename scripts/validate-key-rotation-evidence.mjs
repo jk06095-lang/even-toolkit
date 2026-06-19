@@ -91,6 +91,8 @@ const SECRET_PATTERNS = [
   { name: 'bearer token', pattern: /\bBearer\s+[0-9A-Za-z._~+/=-]{20,}/i },
 ];
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
 const verbose = args.includes('--verbose');
@@ -120,6 +122,7 @@ try {
 
 const errors = [];
 const warnings = [];
+let currentEchoAppVersion = null;
 
 function addError(pointer, message) {
   errors.push(`${pointer}: ${message}`);
@@ -201,6 +204,8 @@ for (const field of REQUIRED_FIELDS) {
 }
 
 const proxyUrl = fields.get('Production proxy URL') ?? '';
+validateIsoDateField('Date');
+validateCurrentClientBuildVersion();
 validateProductionProxyUrl(proxyUrl);
 
 const smokeValue = fields.get('Deployment smoke command result') ?? '';
@@ -266,6 +271,57 @@ function validateProductionProxyUrl(value) {
   ) {
     addError(pointer, 'must not point to localhost or a private network host');
   }
+}
+
+function validateIsoDateField(field) {
+  const value = fields.get(field) ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+
+  if (!ISO_DATE_PATTERN.test(value.trim())) {
+    addError(`field.${field}`, 'must be a valid ISO date in YYYY-MM-DD format');
+    return;
+  }
+
+  const [year, month, day] = value.trim().split('-').map((part) => Number.parseInt(part, 10));
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    addError(`field.${field}`, 'must be a real calendar date');
+  }
+}
+
+function validateCurrentClientBuildVersion() {
+  const pointer = 'field.Client build or package version';
+  const value = fields.get('Client build or package version') ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+
+  const expected = getCurrentEchoAppVersion();
+  if (!expected) {
+    addError(pointer, 'could not read even-app/package.json version');
+    return;
+  }
+
+  if (!value.includes(expected)) {
+    addError(pointer, `must include current even-app/package.json version ${expected}`);
+  }
+}
+
+function getCurrentEchoAppVersion() {
+  if (currentEchoAppVersion !== null) {
+    return currentEchoAppVersion;
+  }
+
+  try {
+    const packagePath = path.resolve(process.cwd(), 'even-app/package.json');
+    const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+    currentEchoAppVersion = typeof packageJson.version === 'string' ? packageJson.version : '';
+  } catch {
+    currentEchoAppVersion = '';
+  }
+  return currentEchoAppVersion;
 }
 
 function isPrivateIpv4(host) {

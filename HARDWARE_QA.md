@@ -20,6 +20,7 @@ Final hardware QA must also record `buildArtifact.packagePath` as the exact
 `.ehpk` installed for the run, a 64-character SHA-256 digest, the packaging
 command, and confirmation that the same artifact was installed through a
 private or beta build before the physical G2 checks.
+The final `runDate` must be a valid ISO `YYYY-MM-DD` calendar date.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
 The final `device.appVersion` must match the current `even-app/package.json`
