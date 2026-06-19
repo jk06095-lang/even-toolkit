@@ -78,9 +78,11 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
     const networkLatencyMs = Date.now() - start;
     const generationLatencyMs = extractLatency(result);
     let chunk = cleanChunk(extractText(result, ['chunk', 'cue', 'text']));
+    let source: ChunkResult['source'] = 'gemini';
 
     if (chunk && req.usedHints?.some((hint) => hint.toLowerCase() === chunk.toLowerCase())) {
       chunk = getRandomFallbackChunk(req.category ?? 'general');
+      source = 'fallback';
     }
 
     if (!chunk) {
@@ -89,7 +91,7 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
 
     return {
       chunk,
-      source: 'gemini',
+      source,
       latencyMs: networkLatencyMs,
       networkLatencyMs,
       generationLatencyMs,

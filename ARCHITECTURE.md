@@ -112,6 +112,11 @@ Live final transcripts do not trigger grammar/session-analysis requests during
 conversation. Grammar and deeper analysis stay in the post-session/export path
 so the real-time path remains transcription plus cue only when needed.
 
+Cue generation remains usable without the proxy. When cloud processing is off,
+the proxy is unconfigured, the cue request fails, or the proxy repeats a cue
+already shown in the session, `generateChunk()` returns a local fallback cue and
+labels it as `source: "fallback"`.
+
 The default dependencies preserve production behavior. Tests can inject fake
 VAD, HUD, clock, random, and cue providers so Week 4 blackout, late responses,
 cue clearing, pause/resume timers, and audio cleanup run without G2 hardware or
