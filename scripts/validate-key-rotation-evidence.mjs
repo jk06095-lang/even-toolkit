@@ -403,6 +403,7 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
     qaDelayMs: 0,
     tokenPolicyConfigured: true,
     tokenPolicyIssuerPresent: true,
+    tokenPolicySignedTokenConfigured: true,
     corsOriginMatches: true,
     cacheControlNoStore: true,
   });

@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { after, before, test } from 'node:test';
@@ -138,6 +139,78 @@ test('invalid session token is rejected without echoing request content', async 
   assert.equal(response.status, 401);
   assert.equal(body.error.code, 'invalid_session_token');
   assert.equal(text.includes(sensitiveText), false);
+});
+
+test('signed short-lived session tokens are accepted and expired tokens are rejected', async () => {
+  const signedSecret = 'test-signed-session-token-secret-32-chars';
+  const proxy = await startProxy({
+    ECHO_PROXY_SESSION_TOKEN: '',
+    ECHO_PROXY_SESSION_TOKENS: '',
+    ECHO_PROXY_SESSION_TOKEN_SECRET: signedSecret,
+    ECHO_PROXY_SESSION_TOKEN_AUDIENCE: 'project-echo-api',
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const healthz = await fetch(`${proxy.baseUrl}/healthz`, {
+      headers: { Origin: allowedOrigin },
+    });
+    const healthBody = await healthz.json();
+    assert.equal(healthz.status, 200);
+    assert.equal(healthBody.authConfigured, true);
+    assert.equal(healthBody.tokenPolicy.configured, true);
+    assert.equal(healthBody.tokenPolicy.signedTokenConfigured, true);
+    assert.equal(healthBody.tokenPolicy.activeTokenCount, 1);
+    assert.equal(healthBody.tokenPolicy.audience, 'project-echo-api');
+
+    const signedToken = issueSignedTestToken({
+      secret: signedSecret,
+      issuer: 'test-session-issuer',
+      audience: 'project-echo-api',
+      sessionId: 'signed-session-1',
+      expiresInSeconds: 3600,
+    });
+    const accepted = await fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        Authorization: `Bearer ${signedToken}`,
+      },
+      body: JSON.stringify({
+        topic: 'signed token qa',
+        clientSessionId: 'signed-token-session',
+      }),
+    });
+    const acceptedBody = await accepted.json();
+    assert.equal(accepted.status, 503);
+    assert.equal(acceptedBody.error.code, 'proxy_not_configured');
+
+    const expiredToken = issueSignedTestToken({
+      secret: signedSecret,
+      issuer: 'test-session-issuer',
+      audience: 'project-echo-api',
+      sessionId: 'signed-session-2',
+      expiresInSeconds: -60,
+    });
+    const rejected = await fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        Authorization: `Bearer ${expiredToken}`,
+      },
+      body: JSON.stringify({
+        topic: 'expired token qa',
+        clientSessionId: 'expired-token-session',
+      }),
+    });
+    const rejectedBody = await rejected.json();
+    assert.equal(rejected.status, 401);
+    assert.equal(rejectedBody.error.code, 'invalid_session_token');
+  } finally {
+    await proxy.stop();
+  }
 });
 
 test('missing provider key fails safely without echoing request content', async () => {
@@ -474,4 +547,28 @@ async function startProxy(extraEnv = {}) {
 
   proxy.kill();
   throw new Error('Proxy test server did not become ready.');
+}
+
+function issueSignedTestToken({
+  secret,
+  issuer,
+  audience,
+  sessionId,
+  expiresInSeconds,
+}) {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: issuer,
+    aud: audience,
+    sub: 'test-subject',
+    sid: sessionId,
+    jti: `test-${Math.random().toString(36).slice(2)}`,
+    iat: nowSeconds,
+    exp: nowSeconds + expiresInSeconds,
+  };
+  const payloadPart = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signaturePart = createHmac('sha256', secret)
+    .update(payloadPart)
+    .digest('base64url');
+  return `echo1.${payloadPart}.${signaturePart}`;
 }

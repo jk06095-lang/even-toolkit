@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 const PORT = readNumberEnv('PORT', readNumberEnv('ECHO_PROXY_PORT', 8787));
 const MAX_BODY_BYTES = readNumberEnv('ECHO_PROXY_MAX_BODY_BYTES', 6_000_000);
@@ -16,7 +16,10 @@ const ALLOWED_ORIGINS = parseOrigins(
 const SESSION_TOKENS = parseTokens(
   process.env.ECHO_PROXY_SESSION_TOKENS || process.env.ECHO_PROXY_SESSION_TOKEN || '',
 );
+const SESSION_TOKEN_SECRET = process.env.ECHO_PROXY_SESSION_TOKEN_SECRET || '';
+const SIGNED_SESSION_TOKENS_ENABLED = SESSION_TOKEN_SECRET.length >= 32;
 const SESSION_TOKEN_ISSUER = clipString(process.env.ECHO_PROXY_SESSION_TOKEN_ISSUER, 160);
+const SESSION_TOKEN_AUDIENCE = clipString(process.env.ECHO_PROXY_SESSION_TOKEN_AUDIENCE, 120) || 'project-echo-api';
 const SESSION_TOKEN_TTL_SECONDS = readNumberEnv('ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS', 0);
 const SESSION_TOKEN_ROTATION_DAYS = readNumberEnv('ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS', 0);
 const SESSION_TOKEN_POLICY = buildSessionTokenPolicy();
@@ -60,7 +63,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 200, {
         ok: true,
         configured: Boolean(GEMINI_API_KEY),
-        authConfigured: SESSION_TOKENS.length > 0,
+        authConfigured: SESSION_TOKENS.length > 0 || SIGNED_SESSION_TOKENS_ENABLED,
         tokenPolicy: SESSION_TOKEN_POLICY,
         model: GEMINI_MODEL,
         qaDelayMs: QA_DELAY_MS,
@@ -143,7 +146,7 @@ function handleEndpoint(endpoint, body) {
 }
 
 function authenticateRequest(req) {
-  if (SESSION_TOKENS.length === 0) {
+  if (SESSION_TOKENS.length === 0 && !SIGNED_SESSION_TOKENS_ENABLED) {
     return { sessionId: 'anonymous' };
   }
 
@@ -151,11 +154,16 @@ function authenticateRequest(req) {
   if (!token) {
     throw new HttpError(401, 'missing_session_token', 'A valid ECHO session token is required.');
   }
-  if (!SESSION_TOKENS.some((expected) => safeTokenEquals(token, expected))) {
-    throw new HttpError(401, 'invalid_session_token', 'A valid ECHO session token is required.');
+  if (SESSION_TOKENS.some((expected) => safeTokenEquals(token, expected))) {
+    return { sessionId: tokenSessionId(token) };
   }
 
-  return { sessionId: token.slice(0, 12) };
+  const signedSession = verifySignedSessionToken(token);
+  if (signedSession) {
+    return { sessionId: signedSession.sessionId };
+  }
+
+  throw new HttpError(401, 'invalid_session_token', 'A valid ECHO session token is required.');
 }
 
 function readSessionToken(req) {
@@ -174,6 +182,61 @@ function safeTokenEquals(actual, expected) {
   const actualBuffer = Buffer.from(actual);
   const expectedBuffer = Buffer.from(expected);
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function verifySignedSessionToken(token) {
+  if (!SIGNED_SESSION_TOKENS_ENABLED || !token.startsWith('echo1.')) return null;
+
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts.some((part) => !part)) return null;
+
+  const [, payloadPart, signaturePart] = parts;
+  const expectedSignature = signTokenPayload(payloadPart, SESSION_TOKEN_SECRET);
+  if (!safeTokenEquals(signaturePart, expectedSignature)) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const exp = Number(payload.exp);
+  const iat = Number(payload.iat);
+  if (!Number.isFinite(exp) || exp <= nowSeconds) return null;
+  if (!Number.isFinite(iat) || iat > nowSeconds + 60) return null;
+
+  if (SESSION_TOKEN_TTL_SECONDS > 0 && exp - iat > SESSION_TOKEN_TTL_SECONDS) {
+    return null;
+  }
+
+  if (payload.iss !== SESSION_TOKEN_ISSUER || payload.aud !== SESSION_TOKEN_AUDIENCE) {
+    return null;
+  }
+
+  const sessionKey = clipString(payload.sid || payload.sub || payload.jti, 180);
+  if (!sessionKey) return null;
+
+  return {
+    sessionId: `signed:${hashSessionKey(sessionKey)}`,
+  };
+}
+
+function signTokenPayload(payloadPart, secret) {
+  return createHmac('sha256', secret)
+    .update(payloadPart)
+    .digest('base64url');
+}
+
+function tokenSessionId(token) {
+  return `static:${hashSessionKey(token)}`;
+}
+
+function hashSessionKey(value) {
+  return createHash('sha256').update(String(value)).digest('hex').slice(0, 16);
 }
 
 function applyRateLimit(req, auth, body, pathname) {
@@ -715,8 +778,10 @@ function normalizeBaseUrl(value) {
 function buildSessionTokenPolicy() {
   const ttlSeconds = SESSION_TOKEN_TTL_SECONDS || null;
   const rotationDays = SESSION_TOKEN_ROTATION_DAYS || null;
+  const signedTokenConfigured = SIGNED_SESSION_TOKENS_ENABLED;
+  const activeTokenCount = SESSION_TOKENS.length + (signedTokenConfigured ? 1 : 0);
   const configured =
-    SESSION_TOKENS.length > 0
+    activeTokenCount > 0
     && Boolean(SESSION_TOKEN_ISSUER)
     && Number.isFinite(SESSION_TOKEN_TTL_SECONDS)
     && SESSION_TOKEN_TTL_SECONDS > 0
@@ -728,9 +793,11 @@ function buildSessionTokenPolicy() {
   return {
     configured,
     issuer: SESSION_TOKEN_ISSUER || null,
+    audience: SESSION_TOKEN_AUDIENCE,
     ttlSeconds,
     rotationDays,
-    activeTokenCount: SESSION_TOKENS.length,
+    activeTokenCount,
+    signedTokenConfigured,
   };
 }
 

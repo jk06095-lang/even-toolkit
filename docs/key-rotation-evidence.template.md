@@ -7,12 +7,14 @@ Final confirmation fields should use clear positive results such as `true`,
 `passed`, `confirmed`, or `verified`. Artifact scan fields should state a clean
 result such as `0 matches`, `no matches`, `none found`, `clean`, or `passed`.
 The production smoke command result must include the production proxy URL and
-must not use local-only override flags. Final evidence must use an ISO
+must not use local-only override flags. Production smoke JSON must prove
+signed-token support is configured. Final evidence must use an ISO
 `YYYY-MM-DD` rotation date and list the current `even-app/package.json` version
 under `Client build or package version`. Final evidence must also point to the
 JSON file written by `smoke:deploy -- --evidence-out ...`. Session token
-evidence must prove short-lived server-side issuance, client artifact scans, and
-old-token revocation after rotation.
+evidence must prove short-lived server-side issuance, signed-token or server
+secret-manager storage, client artifact scans, and old-token revocation after
+rotation.
 
 ## Rotation Date
 

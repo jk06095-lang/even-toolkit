@@ -28,7 +28,7 @@ Environment alternatives:
   ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN
   ECHO_PROXY_SMOKE_EVIDENCE_OUT
 
-Default release behavior requires HTTPS, /healthz configured=true, authConfigured=true, tokenPolicy.configured=true, a supplied smoke session token, and qaDelayMs=0.
+Default release behavior requires HTTPS, /healthz configured=true, authConfigured=true, tokenPolicy.configured=true, signed-token support, a supplied smoke session token, and qaDelayMs=0.
 Use --allow-http, --allow-unconfigured, --allow-unauthenticated, and --allow-qa-delay only for local smoke testing.`);
   process.exit(wantsHelp ? 0 : 1);
 }
@@ -143,9 +143,11 @@ async function checkHealthz() {
     qaDelayMs: body?.qaDelayMs ?? 0,
     tokenPolicyConfigured: body?.tokenPolicy?.configured === true,
     tokenPolicyIssuerPresent: typeof body?.tokenPolicy?.issuer === 'string' && body.tokenPolicy.issuer.trim().length > 0,
+    tokenPolicyAudience: body?.tokenPolicy?.audience ?? null,
     tokenPolicyTtlSeconds: body?.tokenPolicy?.ttlSeconds ?? null,
     tokenPolicyRotationDays: body?.tokenPolicy?.rotationDays ?? null,
     tokenPolicyActiveTokenCount: body?.tokenPolicy?.activeTokenCount ?? null,
+    tokenPolicySignedTokenConfigured: body?.tokenPolicy?.signedTokenConfigured === true,
     idempotencyTtlMs: body?.idempotency?.ttlMs ?? null,
     idempotencyMaxEntries: body?.idempotency?.maxEntries ?? null,
     circuitBreakerFailureThreshold: body?.circuitBreaker?.failureThreshold ?? null,
@@ -164,6 +166,7 @@ async function checkHealthz() {
     assertEqual(body?.authConfigured, true, 'GET /healthz authConfigured');
     assertEqual(Boolean(sessionToken), true, 'smoke session token configured');
     assertEqual(body?.tokenPolicy?.configured, true, 'GET /healthz tokenPolicy.configured');
+    assertEqual(body?.tokenPolicy?.signedTokenConfigured, true, 'GET /healthz tokenPolicy.signedTokenConfigured');
     assertEqual(typeof body?.tokenPolicy?.issuer === 'string' && body.tokenPolicy.issuer.trim().length > 0, true, 'GET /healthz tokenPolicy.issuer');
     assertNumberInRange(body?.tokenPolicy?.ttlSeconds, 1, 86_400, 'GET /healthz tokenPolicy.ttlSeconds');
     assertNumberInRange(body?.tokenPolicy?.rotationDays, 1, 30, 'GET /healthz tokenPolicy.rotationDays');

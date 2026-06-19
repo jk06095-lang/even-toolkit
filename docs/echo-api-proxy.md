@@ -32,13 +32,15 @@ Required:
   provider adapter or staging stub is intentionally configured.
 - `ECHO_PROXY_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call
   the proxy.
-- `ECHO_PROXY_SESSION_TOKENS`: comma-separated short-lived ECHO session tokens
-  accepted by the proxy. Clients send one as `Authorization: Bearer <token>` or
-  `X-Echo-Session-Token`. Treat these as deploy/session guards, not provider
-  secrets; rotate them and prefer an issuer-backed short TTL before production
-  traffic.
+- `ECHO_PROXY_SESSION_TOKEN_SECRET`: HMAC secret for issuer-backed
+  short-lived session tokens. When set to at least 32 characters, the proxy also
+  accepts `echo1.<payload>.<signature>` tokens minted with
+  `npm run issue:session-token`; keep the secret in the server secret manager
+  only.
 - `ECHO_PROXY_SESSION_TOKEN_ISSUER`: non-secret identifier for the server-side
   issuer or secret-manager entry that minted the active session tokens.
+- `ECHO_PROXY_SESSION_TOKEN_AUDIENCE`: expected audience claim for signed
+  session tokens. Defaults to `project-echo-api`.
 - `ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS`: maximum client session-token lifetime.
   Release smoke expects a positive value no longer than 86400 seconds.
 - `ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS`: maximum operational rotation
@@ -47,6 +49,10 @@ Required:
 Recommended:
 
 - `GEMINI_MODEL=gemini-1.5-flash`
+- `ECHO_PROXY_SESSION_TOKENS`: optional comma-separated compatibility tokens.
+  Clients send a session token as `Authorization: Bearer <token>` or
+  `X-Echo-Session-Token`. Prefer signed `echo1.*` tokens for production smoke
+  and live traffic.
 - `ECHO_PROXY_PROVIDER_TIMEOUT_MS=20000`
 - `ECHO_PROXY_MAX_BODY_BYTES=6000000`
 - `ECHO_PROXY_RATE_LIMIT_WINDOW_MS=60000`
@@ -81,11 +87,25 @@ Manifest:
    `https://api.project-echo.app`.
 2. Set `GEMINI_API_KEY` in the server secret manager only.
 3. Set `ECHO_PROXY_ALLOWED_ORIGINS` to the final ECHO app origins.
-4. Configure `ECHO_PROXY_SESSION_TOKENS` from a server-side issuer or secret
-   manager, set `ECHO_PROXY_SESSION_TOKEN_ISSUER`, set a TTL of 86400 seconds or
-   less, and set a rotation cadence of 30 days or less. Keep session tokens out
-   of source control, `even-app/dist`, and `.ehpk` artifacts; revoke the old
-   smoke token after each production rotation.
+4. Configure signed session tokens from a server-side issuer or secret manager:
+   set `ECHO_PROXY_SESSION_TOKEN_SECRET`, set
+   `ECHO_PROXY_SESSION_TOKEN_ISSUER`, set a TTL of 86400 seconds or less, and
+   set a rotation cadence of 30 days or less. Keep token secrets and issued
+   session tokens out of source control, `even-app/dist`, and `.ehpk` artifacts;
+   revoke old smoke tokens after each production rotation. Static
+   `ECHO_PROXY_SESSION_TOKENS` may remain for local compatibility, but final
+   release smoke expects signed-token support. Mint a short-lived smoke token
+   from the deploy environment:
+
+   ```bash
+   cd echo-api-proxy
+   ECHO_PROXY_SESSION_TOKEN_SECRET="$SERVER_ONLY_SECRET" \
+   ECHO_PROXY_SESSION_TOKEN_ISSUER="server secret manager entry" \
+   npm run issue:session-token -- --subject smoke-test --session-id deploy-smoke-001
+   ```
+
+   The printed token is the only value that should be passed to
+   `smoke:deploy`; do not commit it.
 5. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
 6. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
@@ -104,9 +124,9 @@ Manifest:
    ```
 
    The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
-   CORS, `authConfigured: true`, a supplied smoke session token, blocked
-   untrusted origins, missing-token rejection, `qaDelayMs: 0`, configured
-   session-token policy metadata, and safe non-echoing error responses. The
+   CORS, `authConfigured: true`, signed-token support, a supplied smoke session
+   token, blocked untrusted origins, missing-token rejection, `qaDelayMs: 0`,
+   configured session-token policy metadata, and safe non-echoing error responses. The
    `--evidence-out` JSON is required by the final key-rotation evidence
    validator and by the #1/#27 readiness blockers. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
@@ -136,8 +156,8 @@ provider circuit opening against a local stub provider so retry and failure
 behavior does not require real provider traffic. `npm run smoke:deploy` performs
 the corresponding remote deployment checks and expects the deployed server to report
 `configured: true`, `authConfigured: true`, `tokenPolicy.configured: true`,
-and `qaDelayMs: 0` unless local-only override flags are passed for local
-testing.
+`tokenPolicy.signedTokenConfigured: true`, and `qaDelayMs: 0` unless local-only
+override flags are passed for local testing.
 For delayed-response QA, start a local or staging proxy with
 `ECHO_PROXY_QA_DELAY_MS=5000`; `/healthz` reports the active `qaDelayMs`.
 
