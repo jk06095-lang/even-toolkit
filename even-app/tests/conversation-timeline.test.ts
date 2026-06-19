@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION } from '@toolkit/echo-domain-v2';
 import { buildConversationTimelineRows, speakerLabel } from '../src/combat/conversation-timeline';
+import {
+  enqueueConversationTurnTranslation,
+  markConversationTranslationFailed,
+} from '../src/combat/translation-queue';
 import type { SessionTranscript } from '../src/combat/transcript-store';
+
+class MemoryStorage {
+  private data = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this.data.has(key) ? this.data.get(key)! : null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.data.set(key, String(value));
+  }
+
+  removeItem(key: string): void {
+    this.data.delete(key);
+  }
+}
 
 describe('conversation timeline rows', () => {
   it('sorts two-speaker turns and exposes Korean translations for debrief display', () => {
@@ -59,6 +79,7 @@ describe('conversation timeline rows', () => {
       confidenceLabel: '82%',
       correctedByUser: true,
       transcript: 'What problem are you solving first?',
+      translationStatus: 'translated',
       translationKo: '먼저 어떤 문제를 해결하려고 하나요?',
     });
     expect(rows[1]).toMatchObject({
@@ -67,6 +88,57 @@ describe('conversation timeline rows', () => {
       sourceLabel: 'G2 Mic',
       confidenceLabel: '91%',
       correctedByUser: false,
+      translationStatus: 'pending',
+      translationStatusLabel: 'Korean translation pending',
+    });
+  });
+
+  it('surfaces queued translation failures without removing the saved turn', () => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: new MemoryStorage(),
+      configurable: true,
+    });
+
+    const turn = {
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'partner-1',
+      sessionId: 'session-a',
+      speaker: 'partner',
+      startedAt: Date.UTC(2026, 5, 19, 10, 0, 5),
+      endedAt: Date.UTC(2026, 5, 19, 10, 0, 7),
+      source: 'phone',
+      language: 'en-US',
+      transcript: 'Could you clarify the customer segment?',
+      isFinal: true,
+      piiFlags: [],
+    } as const;
+    const session: SessionTranscript = {
+      sessionId: 'session-a',
+      startTime: Date.UTC(2026, 5, 19, 10, 0, 0),
+      endTime: Date.UTC(2026, 5, 19, 10, 1, 0),
+      week: 1,
+      topic: 'Project discussion',
+      category: 'business',
+      entries: [],
+      conversationTurns: [turn],
+    };
+
+    expect(enqueueConversationTurnTranslation(turn, 1_000)).toMatchObject({
+      status: 'pending',
+      attempts: 0,
+    });
+    expect(markConversationTranslationFailed('session-a', 'partner-1', '<b>provider timeout</b>', 2_000))
+      .toMatchObject({
+        status: 'failed',
+        attempts: 1,
+        error: 'provider timeout',
+      });
+
+    expect(buildConversationTimelineRows(session)[0]).toMatchObject({
+      turnId: 'partner-1',
+      transcript: 'Could you clarify the customer segment?',
+      translationStatus: 'failed',
+      translationStatusLabel: 'Korean translation unavailable',
     });
   });
 

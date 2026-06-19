@@ -1,5 +1,9 @@
 import type { ConversationTurn, SpeakerRole } from '@toolkit/echo-domain-v2';
 import { getConversationTurns, type SessionTranscript } from './transcript-store';
+import {
+  getConversationTranslationState,
+  type ConversationTranslationStatus,
+} from './translation-queue';
 
 export interface ConversationTimelineRow {
   turnId: string;
@@ -11,6 +15,8 @@ export interface ConversationTimelineRow {
   sourceLabel: string;
   confidenceLabel?: string;
   correctedByUser: boolean;
+  translationStatus: ConversationTranslationStatus;
+  translationStatusLabel?: string;
 }
 
 export function buildConversationTimelineRows(
@@ -29,6 +35,7 @@ export function speakerLabel(speaker: SpeakerRole): string {
 }
 
 function toTimelineRow(turn: ConversationTurn): ConversationTimelineRow {
+  const translationState = getConversationTranslationState(turn);
   return {
     turnId: turn.id,
     speaker: turn.speaker,
@@ -45,6 +52,10 @@ function toTimelineRow(turn: ConversationTurn): ConversationTimelineRow {
       ? `${Math.round(turn.confidence * 100)}%`
       : undefined,
     correctedByUser: turn.correctedByUser === true,
+    translationStatus: translationState.status,
+    translationStatusLabel: translationState.status === 'pending' || translationState.status === 'failed'
+      ? translationState.label
+      : undefined,
   };
 }
 
