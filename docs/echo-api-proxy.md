@@ -144,6 +144,12 @@ Manifest:
    TTL and rotation cadence inside policy limits, prove old-token revocation,
    and record clean artifact scans such as `0 matches` or `no matches`. This
    same evidence is required before both #1 and #27 can be closed.
+   Before the final production run, `npm run prepare:echo-evidence-drafts`
+   writes `docs/evidence-drafts/key-rotation-evidence.draft.md` with the
+   current client version, follow-up issue, and local client artifact scan
+   counts prefilled. Treat it as a draft only; rotation date, deployed smoke
+   JSON, session-token revocation, and log review still require production
+   evidence.
 13. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 

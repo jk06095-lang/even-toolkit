@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
-  /^TBD$/i,
+  /^TBD(?:\b|$)/i,
   /^TODO$/i,
   /^N\/A$/i,
   /^placeholder$/i,

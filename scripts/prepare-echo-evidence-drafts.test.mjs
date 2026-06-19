@@ -30,9 +30,10 @@ test('prepares draft evidence manifests without marking external evidence comple
   const hardwarePath = path.join(tmpRoot, 'project-echo-hardware-qa.draft.json');
   const pilotPath = path.join(tmpRoot, 'project-echo-pilot-evidence.draft.json');
   const actionPath = path.join(tmpRoot, 'project-echo-chatgpt-action-evidence.draft.json');
+  const keyRotationPath = path.join(tmpRoot, 'key-rotation-evidence.draft.md');
   const buildReportPath = path.join(tmpRoot, 'project-echo-build-artifact.md');
 
-  for (const filePath of [hardwarePath, pilotPath, actionPath, buildReportPath]) {
+  for (const filePath of [hardwarePath, pilotPath, actionPath, keyRotationPath, buildReportPath]) {
     assert.equal(existsSync(filePath), true, `${filePath} should exist`);
   }
 
@@ -52,9 +53,18 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(hardware.buildArtifact.installedViaBetaOrPrivateBuild, null);
   assert.equal(action.actionContractVersion, JSON.parse(readFileSync(path.join(repoRoot, 'integrations/chatgpt-action/openapi.json'), 'utf8')).info.version);
 
+  const keyRotation = readFileSync(keyRotationPath, 'utf8');
+  assert.match(keyRotation, new RegExp(`Client build or package version: echo-app ${escapeRegExp(appVersion)}`));
+  assert.match(keyRotation, /Provider: Gemini/);
+  assert.match(keyRotation, /Browser artifact key scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
+  assert.match(keyRotation, /Session token client artifact scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
+  assert.match(keyRotation, /Follow-up issue or ticket: #1\/#27/);
+  assert.doesNotMatch(keyRotation, /Date: \d{4}-\d{2}-\d{2}/);
+
   await assertValidatorPasses('scripts/validate-hardware-qa.mjs', hardwarePath);
   await assertValidatorPasses('scripts/validate-pilot-evidence.mjs', pilotPath);
   await assertValidatorPasses('scripts/validate-chatgpt-action-evidence.mjs', actionPath);
+  await assertValidatorPasses('scripts/validate-key-rotation-evidence.mjs', keyRotationPath);
 });
 
 async function assertValidatorPasses(scriptPath, targetPath) {
@@ -88,4 +98,8 @@ function runNode(args) {
 
 function repoRelative(filePath) {
   return path.relative(repoRoot, filePath).replace(/\\/g, '/');
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
