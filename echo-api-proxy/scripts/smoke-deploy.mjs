@@ -148,6 +148,8 @@ async function checkHealthz() {
     tokenPolicyRotationDays: body?.tokenPolicy?.rotationDays ?? null,
     tokenPolicyActiveTokenCount: body?.tokenPolicy?.activeTokenCount ?? null,
     tokenPolicySignedTokenConfigured: body?.tokenPolicy?.signedTokenConfigured === true,
+    rateLimitWindowMs: body?.rateLimit?.windowMs ?? null,
+    rateLimitMax: body?.rateLimit?.max ?? null,
     idempotencyTtlMs: body?.idempotency?.ttlMs ?? null,
     idempotencyMaxEntries: body?.idempotency?.maxEntries ?? null,
     circuitBreakerFailureThreshold: body?.circuitBreaker?.failureThreshold ?? null,
@@ -175,6 +177,8 @@ async function checkHealthz() {
   if (!allowQaDelay) {
     assertEqual(body?.qaDelayMs ?? 0, 0, 'GET /healthz qaDelayMs');
   }
+  assertNumberInRange(body?.rateLimit?.windowMs, 1, 86_400_000, 'GET /healthz rateLimit.windowMs');
+  assertNumberInRange(body?.rateLimit?.max, 1, 100_000, 'GET /healthz rateLimit.max');
   assertNumberInRange(body?.idempotency?.ttlMs, 1, 86_400_000, 'GET /healthz idempotency.ttlMs');
   assertNumberInRange(body?.idempotency?.maxEntries, 1, 100_000, 'GET /healthz idempotency.maxEntries');
   assertNumberInRange(body?.circuitBreaker?.failureThreshold, 1, 100, 'GET /healthz circuitBreaker.failureThreshold');

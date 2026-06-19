@@ -208,9 +208,11 @@ Manifest:
    retryable POST. The key must be a bounded token. The proxy caches only
    successful responses keyed by session, path, key, and request-body hash; it
    does not cache raw request bodies, audio, or transcript text.
-10. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
-   `circuitBreaker` metadata. If `circuitBreaker.open` is true, the proxy is
-   intentionally failing closed before making more provider calls.
+10. Confirm `/healthz` reports bounded `rateLimit`, `idempotency`, and
+   `circuitBreaker` metadata. Production smoke evidence must include
+   `rateLimitWindowMs` and `rateLimitMax` from `/healthz`, plus retry guard
+   metadata. If `circuitBreaker.open` is true, the proxy is intentionally
+   failing closed before making more provider calls.
 11. Smoke-test the deployed proxy without making a provider generation call:
 
    ```bash

@@ -810,6 +810,8 @@ function isValidProxySmokeForDraft(smoke) {
   if (healthz?.tokenPolicyConfigured !== true || healthz?.tokenPolicySignedTokenConfigured !== true || healthz?.tokenPolicyIssuerPresent !== true) return false;
   if (!Number.isFinite(healthz?.tokenPolicyTtlSeconds) || healthz.tokenPolicyTtlSeconds < 1 || healthz.tokenPolicyTtlSeconds > 86_400) return false;
   if (!Number.isFinite(healthz?.tokenPolicyRotationDays) || healthz.tokenPolicyRotationDays < 1 || healthz.tokenPolicyRotationDays > 30) return false;
+  if (!Number.isFinite(healthz?.rateLimitWindowMs) || healthz.rateLimitWindowMs < 1 || healthz.rateLimitWindowMs > 86_400_000) return false;
+  if (!Number.isFinite(healthz?.rateLimitMax) || healthz.rateLimitMax < 1 || healthz.rateLimitMax > 100_000) return false;
   if (!Number.isFinite(healthz?.idempotencyTtlMs) || healthz.idempotencyTtlMs < 1 || healthz.idempotencyTtlMs > 86_400_000) return false;
   if (!Number.isFinite(healthz?.idempotencyMaxEntries) || healthz.idempotencyMaxEntries < 1 || healthz.idempotencyMaxEntries > 100_000) return false;
   if (!Number.isFinite(healthz?.circuitBreakerFailureThreshold) || healthz.circuitBreakerFailureThreshold < 1 || healthz.circuitBreakerFailureThreshold > 100) return false;

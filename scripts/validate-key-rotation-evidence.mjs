@@ -436,6 +436,7 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
   if (safeStatus !== 400 && safeStatus !== 503) {
     addError(`${pointer}.checks.safeError.status`, 'must be 400 or 503');
   }
+  validateSmokeRateLimitPolicy(checks.healthz);
   validateSmokeRetryPolicy(checks.healthz);
 }
 
@@ -460,6 +461,14 @@ function validateSmokeTokenPolicy(healthz) {
   validateNumberRange(healthz.tokenPolicyTtlSeconds, 1, 86_400, `${pointer}.tokenPolicyTtlSeconds`);
   validateNumberRange(healthz.tokenPolicyRotationDays, 1, 30, `${pointer}.tokenPolicyRotationDays`);
   validateNumberRange(healthz.tokenPolicyActiveTokenCount, 1, 1_000, `${pointer}.tokenPolicyActiveTokenCount`);
+}
+
+function validateSmokeRateLimitPolicy(healthz) {
+  const pointer = 'deploymentSmokeEvidence.checks.healthz';
+  if (!healthz || typeof healthz !== 'object' || Array.isArray(healthz)) return;
+
+  validateNumberRange(healthz.rateLimitWindowMs, 1, 86_400_000, `${pointer}.rateLimitWindowMs`);
+  validateNumberRange(healthz.rateLimitMax, 1, 100_000, `${pointer}.rateLimitMax`);
 }
 
 function validateSmokeRetryPolicy(healthz) {

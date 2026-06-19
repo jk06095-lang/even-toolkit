@@ -310,6 +310,8 @@ function proxySmokeFixture() {
         tokenPolicyRotationDays: 7,
         tokenPolicyActiveTokenCount: 1,
         tokenPolicySignedTokenConfigured: true,
+        rateLimitWindowMs: 60000,
+        rateLimitMax: 60,
         idempotencyTtlMs: 300000,
         idempotencyMaxEntries: 500,
         circuitBreakerFailureThreshold: 3,

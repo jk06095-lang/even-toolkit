@@ -108,6 +108,22 @@ test('rejects deployment smoke evidence without retry guard metadata', async () 
   assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.options\.allowsIdempotencyKey/);
 });
 
+test('rejects deployment smoke evidence without rate-limit metadata', async () => {
+  const fixture = writeFixture('missing-rate-limit-policy', smokeEvidence({
+    checks: {
+      healthz: {
+        rateLimitWindowMs: null,
+        rateLimitMax: 0,
+      },
+    },
+  }));
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.rateLimitWindowMs/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.rateLimitMax/);
+});
+
 function writeFixture(name, evidence) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -152,6 +168,8 @@ function smokeEvidence(overrides = {}) {
         tokenPolicyRotationDays: 7,
         tokenPolicyActiveTokenCount: 1,
         tokenPolicySignedTokenConfigured: true,
+        rateLimitWindowMs: 60000,
+        rateLimitMax: 60,
         idempotencyTtlMs: 300000,
         idempotencyMaxEntries: 500,
         circuitBreakerFailureThreshold: 3,
