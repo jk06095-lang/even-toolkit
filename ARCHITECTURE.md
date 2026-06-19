@@ -147,16 +147,18 @@ data.
 
 ## G2 HUD contract
 
-During live conversation, the G2 display renders only one of four states:
+During live conversation, the G2 display renders only one of five states:
 
 - `READY`
 - `LISTENING`
 - `CUE`
+- `ACK`
 - `PAUSED`
 
 Transcript text, grammar feedback, hint history, expression usage, silence
 stats, debrief details, and review planning stay on the phone UI or exported
-session data. A `CUE` is clipped to a short glanceable phrase.
+session data. A `CUE` is clipped to a short glanceable phrase, and `ACK` is a
+brief OK confirmation after assisted/adapted cue use.
 
 ## Release checks
 

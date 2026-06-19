@@ -315,7 +315,7 @@ export class HUDController {
 
   /**
    * Topic details stay on the phone UI. The G2 live HUD only renders
-   * READY, LISTENING, CUE, or PAUSED.
+   * READY, LISTENING, CUE, ACK, or PAUSED.
    */
   setCombatTopic(_topic: string) {
     // Intentionally no-op for the simplified live HUD.

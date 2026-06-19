@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'PAUSED'];
+const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'ACK', 'PAUSED'];
 const REQUIRED_DELAYED_PROXY_SCENARIOS = ['endPractice', 'pause', 'exitEcho'];
 const WEARING_STATE_CASES = [
   {

@@ -208,7 +208,7 @@ stable non-draft path such as docs/project-echo-case-study.ko.md.
 ## 빌드 범위
 
 - App version: ${appVersion}
-- G2 HUD states: READY, LISTENING, CUE, PAUSED
+- G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED
 - Audio sources: G2 Mic, Phone Mic
 - Privacy boundary: server-side ECHO API proxy, local fallback cues
 - Evidence status: draft
@@ -275,7 +275,7 @@ stable non-draft path such as docs/project-echo-case-study.en.md.
 ## Build Scope
 
 - App version: ${appVersion}
-- G2 HUD states: READY, LISTENING, CUE, PAUSED
+- G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED
 - Audio sources: G2 Mic, Phone Mic
 - Privacy boundary: server-side ECHO API proxy, local fallback cues
 - Evidence status: draft
@@ -352,7 +352,7 @@ flowchart LR
 
 ## Claims To Prove Before Portfolio Use
 
-- The G2 HUD shows only READY, LISTENING, CUE, and PAUSED during live speech.
+- The G2 HUD shows only READY, LISTENING, CUE, ACK, and PAUSED during live speech.
 - G2 Mic and Phone Mic paths remain explicit; no silent phone microphone fallback.
 - Raw transcripts/audio do not leave the client unless the user opted into cloud processing.
 - Provider keys, session tokens, and direct provider hosts are absent from dist and .ehpk artifacts.
@@ -377,10 +377,11 @@ video URL.
 | 4 | G2 shows LISTENING during live speech | TBD |
 | 5 | Manual Assist request shows one short CUE on G2 | TBD |
 | 6 | Swipe/dismiss clears the cue | TBD |
-| 7 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
-| 8 | End Practice returns to READY without duplicate audio capture | TBD |
-| 9 | Exit ECHO shuts down the Even Hub page container | TBD |
-| 10 | Phone review shows timeline/details while G2 stays minimal | TBD |
+| 7 | Successful assisted/adapted cue use shows ACK/OK briefly | TBD |
+| 8 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
+| 9 | End Practice returns to READY without duplicate audio capture | TBD |
+| 10 | Exit ECHO shuts down the Even Hub page container | TBD |
+| 11 | Phone review shows timeline/details while G2 stays minimal | TBD |
 
 ## File Requirements
 

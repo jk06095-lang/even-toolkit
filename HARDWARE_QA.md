@@ -329,20 +329,22 @@ Still requires real G2 validation:
 - Live transcript, grammar corrections, hint history, expression usage, silence
   stats, and debrief details remain on the phone UI, not on G2.
 - Cue display shows `CUE` plus one short phrase only.
+- Successful assisted/adapted cue use shows a short `ACK` / `OK` state and then
+  returns to `LISTENING` without showing transcript or achievement detail.
 - Pause/menu flow never overlaps transcript, cue history, or status metrics.
 - Resume returns to `LISTENING`; End Practice returns to `READY`.
 - The completed hardware QA manifest must contain exactly `READY`, `LISTENING`,
-  `CUE`, and `PAUSED` under `hud.states`; extra live G2 HUD states are rejected.
+  `CUE`, `ACK`, and `PAUSED` under `hud.states`; extra live G2 HUD states are rejected.
 
 Automated coverage added on 2026-06-19:
 
-- `hud-controller` verifies live G2 rendering is limited to `READY`, `LISTENING`, `CUE`, and `PAUSED`.
+- `hud-controller` verifies live G2 rendering is limited to `READY`, `LISTENING`, `CUE`, `ACK`, and `PAUSED`.
 - `hud-controller` verifies transcript text, grammar feedback, and achievement detail do not render on the live G2 surface.
 - `hud-controller` verifies long cues are clipped to a glanceable phrase.
 
 Still requires real G2 validation:
 
-- Confirm READY, LISTENING, CUE, PAUSED, and the pause menu render without overlap on the physical glasses or Even Hub simulator.
+- Confirm READY, LISTENING, CUE, ACK, PAUSED, and the pause menu render without overlap on the physical glasses or Even Hub simulator.
 
 ## Voice runtime lazy-load QA
 

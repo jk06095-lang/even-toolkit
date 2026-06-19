@@ -128,13 +128,17 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(caseStudyKo, /Draft only/);
   assert.match(caseStudyKo, /project-echo-case-study-ko/);
   assert.match(caseStudyKo, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
+  assert.match(caseStudyKo, /G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED/);
   assert.match(caseStudyEn, /Draft only/);
   assert.match(caseStudyEn, /project-echo-case-study-en/);
   assert.match(caseStudyEn, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
+  assert.match(caseStudyEn, /G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED/);
   assert.match(architecture, /flowchart LR/);
   assert.match(architecture, /ECHO API proxy/);
+  assert.match(architecture, /READY, LISTENING, CUE, ACK, and PAUSED/);
   assert.match(videoShotList, /project-echo-real-g2-video/);
   assert.match(videoShotList, /G2 shows READY/);
+  assert.match(videoShotList, /shows ACK\/OK briefly/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);

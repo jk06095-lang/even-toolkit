@@ -39,6 +39,10 @@ const steps = [
     args: ['run', 'validate:hardware-template'],
   },
   {
+    label: 'Project ECHO hardware QA validator tests',
+    args: ['run', 'test:hardware-qa'],
+  },
+  {
     label: 'Project ECHO key-rotation template',
     args: ['run', 'validate:key-rotation-template'],
   },
