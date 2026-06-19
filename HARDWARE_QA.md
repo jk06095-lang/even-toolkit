@@ -139,6 +139,9 @@ Still requires real G2 validation:
 
 - With default settings, confirm Live Practice does not start until `Use microphone` is enabled.
 - With `Cloud processing` off, start a session and confirm no ECHO API proxy cue, transcription, grammar, or session-analysis requests are sent.
+- With `Cloud processing` on, confirm live final transcripts do not trigger
+  grammar/session-analysis calls during the conversation; deeper analysis should
+  wait for Review/export flows.
 - With `Save transcripts` off, complete a session and confirm `echo_transcripts` and `echo_transcript_buffer` do not contain raw utterance text.
 - Confirm `echo_session_events` contains only counts/flags and no utterance, hint, audio, or request body text.
 - Confirm `Export my data` includes privacy-safe QA telemetry such as cue latency p50/p95, assist counts, audio source, and VAD calibration fields without raw utterance or cue text when transcript saving is off.

@@ -42,6 +42,18 @@ describe('release safety checks', () => {
     expect(recognizerSource).not.toMatch(/console\.(?:log|info|warn|error|debug)\([^)]*\$\{clean\}/);
   });
 
+  it('keeps live grammar analysis out of the SessionEngine real-time path', () => {
+    const sessionEngineSource = readFileSync(
+      path.join(appRoot, 'src', 'combat', 'session-engine.ts'),
+      'utf8',
+    );
+
+    expect(sessionEngineSource).not.toContain('evaluateGrammar');
+    expect(sessionEngineSource).not.toContain("beginRequest('grammar')");
+    expect(sessionEngineSource).not.toMatch(/showGrammarFeedbackIfCurrent/);
+    expect(sessionEngineSource).not.toMatch(/Hint used:.*\$\{.*trimmed/);
+  });
+
   it('loads the heavy voice runtime only from the explicit Phone Mic path', () => {
     const vadManagerSource = readFileSync(path.join(appRoot, 'src', 'combat', 'vad-manager.ts'), 'utf8');
 

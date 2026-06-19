@@ -104,9 +104,13 @@ services enter through injected interfaces:
 
 - `AudioDetector` / `AudioDetectorFactory` for VAD and mic lifecycle.
 - `SpeechRecognizerFactory` for live speech recognition startup and cleanup.
-- `CueProvider` for cue, speech evaluation, grammar, and simplification calls.
+- `CueProvider` for cue, speech evaluation, and simplification calls.
 - `GlassDisplay` for the G2 HUD contract.
 - `Clock` and `Random` for timers, latency, request scopes, and blackout tests.
+
+Live final transcripts do not trigger grammar/session-analysis requests during
+conversation. Grammar and deeper analysis stay in the post-session/export path
+so the real-time path remains transcription plus cue only when needed.
 
 The default dependencies preserve production behavior. Tests can inject fake
 VAD, HUD, clock, random, and cue providers so Week 4 blackout, late responses,

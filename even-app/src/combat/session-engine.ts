@@ -6,7 +6,7 @@
  */
 
 import { VADManager, type VADConfig } from './vad-manager';
-import { generateChunk, evaluateSpeech, evaluateGrammar, simplifyHint, type ChunkResult } from './chunk-generator';
+import { generateChunk, evaluateSpeech, simplifyHint, type ChunkResult } from './chunk-generator';
 import type { ChunkCategory } from './fallback-chunks';
 import type { VadCalibration } from '../dsp/calibration';
 import { HybridRecognizer, type HybridMode, type HybridRecognizerCallbacks, type HybridRecognizerOptions } from './hybrid-recognizer';
@@ -166,7 +166,6 @@ export interface Random {
 export interface CueProvider {
   generateChunk: typeof generateChunk;
   evaluateSpeech: typeof evaluateSpeech;
-  evaluateGrammar: typeof evaluateGrammar;
   simplifyHint: typeof simplifyHint;
 }
 
@@ -208,7 +207,6 @@ const systemRandom: Random = {
 const defaultCueProvider: CueProvider = {
   generateChunk,
   evaluateSpeech,
-  evaluateGrammar,
   simplifyHint,
 };
 
@@ -638,11 +636,6 @@ export class SessionEngine {
                   this.resetTranscriptActivity();
                   if (this.hudRef) {
                     this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
-                    
-                    // Trigger grammar evaluation asynchronously
-                    (async () => {
-                      await this.showGrammarFeedbackIfCurrent(trimmed);
-                    })();
                   }
                 }
               } else {
@@ -819,15 +812,12 @@ export class SessionEngine {
             if (this.hudRef) {
               this.hudRef.showGoodJob();
             }
-            console.log(`[Session] ✓ Hint used: "${activeHint.text}" in "${trimmed}"`);
+            console.log(
+              `[Session] Hint used (${activeHint.text.length} cue chars, ${trimmed.length} transcript chars)`,
+            );
           }
           // If not used, we don't mark as missed yet — wait for silence threshold
         }
-
-        // Trigger grammar evaluation asynchronously
-        (async () => {
-          await this.showGrammarFeedbackIfCurrent(trimmed);
-        })();
       },
       onSpeechStart: () => {
         // Additional speech detection feedback
@@ -877,34 +867,6 @@ export class SessionEngine {
   private resetTranscriptActivity(): void {
     this.lastTranscriptActivityTime = this.clock.now();
     this.vad?.simulateSilenceRestart();
-  }
-
-  private async showGrammarFeedbackIfCurrent(transcript: string): Promise<void> {
-    if (this._state !== 'listening') return;
-    if (!this.cloudProcessingEnabled) return;
-
-    const request = this.beginRequest('grammar');
-    try {
-      const correction = await this.cueProvider.evaluateGrammar(transcript, this._topic, {
-        clientSessionId: request.sessionRequestScopeId,
-        requestId: request.requestId,
-        allowCloudProcessing: this.cloudProcessingEnabled,
-      }, request.controller.signal);
-      if (
-        correction &&
-        this.isCurrentRequest(request) &&
-        this.hudRef &&
-        this._state === 'listening'
-      ) {
-        this.hudRef.showGrammarFeedback(correction);
-      }
-    } catch (err) {
-      if (!request.controller.signal.aborted) {
-        console.warn('[Session] Grammar evaluation failed:', err);
-      }
-    } finally {
-      this.finishRequest(request.controller);
-    }
   }
 
   /**

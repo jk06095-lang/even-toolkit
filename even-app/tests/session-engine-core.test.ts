@@ -441,6 +441,18 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(options.createRequestId?.('transcription')).toBe('echo-1000-test-scope:transcription:1');
   });
 
+  it('keeps grammar analysis out of live final transcript handling', async () => {
+    const harness = createHarness();
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I need a little more time');
+
+    expect(harness.liveTranscripts).toEqual([
+      { text: 'I need a little more time', isFinal: true },
+    ]);
+    expect(harness.hud.events.some((event) => event.startsWith('showGrammarFeedback:'))).toBe(false);
+  });
+
   it('stops audio detector and recognizer during cleanup', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
@@ -633,9 +645,6 @@ function createCueProvider(options: {
       };
     },
     async evaluateSpeech() {
-      return null;
-    },
-    async evaluateGrammar() {
       return null;
     },
     async simplifyHint() {
