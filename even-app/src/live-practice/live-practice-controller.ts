@@ -5,7 +5,7 @@ import type { ChunkCategory } from '../combat/fallback-chunks';
 import { buildConversationTimelineRows, type ConversationTimelineRow } from '../combat/conversation-timeline';
 import type { SessionTranscript } from '../combat/transcript-store';
 import { getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from '../combat/topic-registry';
-import { renderTopicSelector, renderScenarioGrid, fillTopicDetail } from '../ui/topic-selector-view';
+import { createTopicSelectorElement, fillScenarioGrid, fillTopicDetail } from '../ui/topic-selector-view';
 import type { HUDController } from '../hud/hud-controller';
 import { bindPrivacyControls, updatePrivacySettingsUI } from './privacy-controls';
 import {
@@ -329,7 +329,7 @@ function initTopicSelector(): void {
   const area = document.getElementById('topic-selector-area');
   if (!area) return;
 
-  area.innerHTML = renderTopicSelector();
+  area.replaceChildren(createTopicSelectorElement());
 
   if (selectedScenario) {
     document.getElementById('topic-selector')!.style.display = 'none';
@@ -345,7 +345,7 @@ function initTopicSelector(): void {
         tab.classList.add('active');
         const grid = document.getElementById('topic-scenario-grid');
         if (grid) {
-          grid.innerHTML = renderScenarioGrid(cat, selectedScenario?.id);
+          fillScenarioGrid(grid, cat, selectedScenario?.id);
           bindScenarioCards();
         }
       });
@@ -356,7 +356,7 @@ function initTopicSelector(): void {
       firstTab.classList.add('active');
       const grid = document.getElementById('topic-scenario-grid');
       if (grid) {
-        grid.innerHTML = renderScenarioGrid(firstCat as TopicCategory);
+        fillScenarioGrid(grid, firstCat as TopicCategory);
         bindScenarioCards();
       }
     }

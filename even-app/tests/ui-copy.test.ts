@@ -71,6 +71,10 @@ describe('Project ECHO UI copy', () => {
       path.join(appRoot, 'src', 'live-practice', 'live-practice-controller.ts'),
       'utf8',
     );
+    const topicSelectorSource = readFileSync(
+      path.join(appRoot, 'src', 'ui', 'topic-selector-view.ts'),
+      'utf8',
+    );
     const hudLifecycleSource = readFileSync(path.join(appRoot, 'src', 'hud', 'hud-lifecycle.ts'), 'utf8');
     const pitchSource = readFileSync(path.join(repoRoot, 'echo-pitch', 'src', 'main.js'), 'utf8');
 
@@ -89,6 +93,13 @@ describe('Project ECHO UI copy', () => {
     expect(livePracticeSource).not.toContain('\uCA0C');
     expect(livePracticeSource).not.toContain('Great! You used');
     expect(livePracticeSource).not.toContain('Easier:');
+    expect(livePracticeSource).not.toContain('innerHTML = renderTopicSelector');
+    expect(livePracticeSource).not.toContain('innerHTML = renderScenarioGrid');
+
+    expect(topicSelectorSource).toContain('createTopicSelectorElement');
+    expect(topicSelectorSource).toContain('fillScenarioGrid');
+    expect(topicSelectorSource).toContain('replaceChildren');
+    expect(topicSelectorSource).toContain('textContent');
 
     expect(hudLifecycleSource).toContain('replaceChildren');
     expect(hudLifecycleSource).toContain('textContent');
