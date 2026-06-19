@@ -155,6 +155,16 @@ export function renderCombatView(): string {
           <span id="transcript-text" class="text-normal-body" style="color: var(--color-text); font-style: italic;"></span>
         </div>
 
+        <!-- Phone Conversation Timeline -->
+        <div id="live-conversation-timeline-container" style="display: none; background: var(--color-surface-light); padding: 10px 12px; border-radius: var(--radius); margin-bottom: var(--spacing-same); border-left: 3px solid var(--phase2);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
+            <span class="text-detail" style="color: var(--color-text-dim);">Conversation Timeline</span>
+            <span class="text-detail" id="live-conversation-timeline-count" style="color: var(--color-text-muted); font-family: var(--font-mono);">0 turns</span>
+          </div>
+          <div id="live-conversation-timeline" style="display: grid; gap: 8px;"></div>
+          <div id="live-conversation-timeline-empty" class="text-detail" style="color: var(--color-text-muted);">Final phone/G2 turns appear here after recognition.</div>
+        </div>
+
         <!-- Expression Usage Tracker -->
         <div id="expression-tracker" style="display: none; background: var(--color-surface-light); padding: 10px 12px; border-radius: var(--radius); margin-bottom: var(--spacing-same); border-left: 3px solid var(--phase1);">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">

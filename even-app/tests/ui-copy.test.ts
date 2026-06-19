@@ -45,6 +45,14 @@ describe('Project ECHO UI copy', () => {
     }
   });
 
+  it('keeps the phone conversation timeline mounted in Live Practice markup', () => {
+    const html = renderCombatView();
+
+    expect(html).toContain('id="live-conversation-timeline-container"');
+    expect(html).toContain('id="live-conversation-timeline"');
+    expect(html).toContain('Conversation Timeline');
+  });
+
   it('keeps app shell metadata ASCII-safe for packaged output', () => {
     const indexHtml = readFileSync(path.join(appRoot, 'index.html'), 'utf8');
 

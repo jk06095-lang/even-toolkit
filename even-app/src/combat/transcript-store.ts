@@ -233,6 +233,31 @@ export class TranscriptStore {
     return meta;
   }
 
+  getSnapshot(): SessionTranscript {
+    return {
+      ...this.session,
+      entries: this.session.entries.map((entry) => ({ ...entry })),
+      conversationTurns: this.session.conversationTurns?.map((turn) => ({
+        ...turn,
+        piiFlags: [...(turn.piiFlags ?? [])],
+      })),
+      cues: this.session.cues?.map((cue) => ({
+        ...cue,
+        alternatives: [...(cue.alternatives ?? [])],
+      })),
+      assistEpisodes: this.session.assistEpisodes?.map((episode) => ({
+        ...episode,
+        decision: { ...episode.decision },
+      })),
+      hintUsageStats: this.session.hintUsageStats
+        ? {
+            ...this.session.hintUsageStats,
+            difficultyProgression: [...this.session.hintUsageStats.difficultyProgression],
+          }
+        : undefined,
+    };
+  }
+
   addSpeech(text: string, source: TranscriptEntry['source'] = 'speech_api', isFinal = true): ConversationTurn | null {
     if (!text.trim()) return null;
     return this.addEntry({

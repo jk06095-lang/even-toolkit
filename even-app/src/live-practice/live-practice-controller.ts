@@ -2,6 +2,8 @@ import type { CalibrationResult } from '../dsp/calibration';
 import { SessionEngine, WEEK_CONFIGS, type AssistMetrics, type AssistMode, type SessionState } from '../combat/session-engine';
 import type { ChunkResult } from '../combat/chunk-generator';
 import type { ChunkCategory } from '../combat/fallback-chunks';
+import { buildConversationTimelineRows, type ConversationTimelineRow } from '../combat/conversation-timeline';
+import type { SessionTranscript } from '../combat/transcript-store';
 import { getScenarioById, getCategories, toLegacyCategory, type TopicScenario, type TopicCategory } from '../combat/topic-registry';
 import { renderTopicSelector, renderScenarioGrid, fillTopicDetail } from '../ui/topic-selector-view';
 import type { HUDController } from '../hud/hud-controller';
@@ -467,6 +469,7 @@ async function startSession(): Promise<void> {
       }
     },
     onAssistMetrics: updateAssistMetricsUI,
+    onConversationTimeline: renderLiveConversationTimeline,
   }, preferredAudioSource, getCalibration(), {
     cloudProcessingEnabled: privacySettings.allowCloudProcessing,
     transcriptOptions: {
@@ -559,6 +562,75 @@ function handleLiveTranscript(text: string, isFinal: boolean): void {
       liveText.textContent = '';
     }, 500);
   }
+}
+
+function resetLiveConversationTimeline(visible: boolean): void {
+  const container = document.getElementById('live-conversation-timeline-container');
+  const list = document.getElementById('live-conversation-timeline');
+  const empty = document.getElementById('live-conversation-timeline-empty');
+  const count = document.getElementById('live-conversation-timeline-count');
+
+  if (container) container.style.display = visible ? 'block' : 'none';
+  if (list) list.replaceChildren();
+  if (empty) empty.style.display = visible ? 'block' : 'none';
+  if (count) count.textContent = '0 turns';
+}
+
+function renderLiveConversationTimeline(sessionData: SessionTranscript): void {
+  const container = document.getElementById('live-conversation-timeline-container');
+  const list = document.getElementById('live-conversation-timeline');
+  const empty = document.getElementById('live-conversation-timeline-empty');
+  const count = document.getElementById('live-conversation-timeline-count');
+  if (!container || !list || !empty) return;
+
+  const rows = buildConversationTimelineRows(sessionData)
+    .filter((row) => row.transcript.trim() && !row.transcript.trim().startsWith('['))
+    .slice(-6);
+
+  container.style.display = 'block';
+  list.replaceChildren(...rows.map(createLiveConversationTimelineItem));
+  empty.style.display = rows.length > 0 ? 'none' : 'block';
+  if (count) {
+    count.textContent = `${rows.length} turn${rows.length === 1 ? '' : 's'}`;
+  }
+}
+
+function createLiveConversationTimelineItem(row: ConversationTimelineRow): HTMLElement {
+  const item = document.createElement('div');
+  item.style.cssText = 'border: 1px solid var(--color-border); border-radius: 6px; padding: 8px; background: var(--color-surface);';
+
+  const meta = document.createElement('div');
+  meta.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px;';
+
+  const speaker = document.createElement('span');
+  speaker.className = 'text-detail';
+  speaker.style.cssText = 'color: var(--phase2); font-weight: 600;';
+  speaker.textContent = row.speakerLabel;
+
+  const timing = document.createElement('span');
+  timing.className = 'text-detail';
+  timing.style.cssText = 'color: var(--color-text-muted); font-family: var(--font-mono);';
+  timing.textContent = `${row.timeLabel} | ${row.sourceLabel}`;
+
+  meta.append(speaker, timing);
+
+  const transcript = document.createElement('div');
+  transcript.className = 'text-normal-body';
+  transcript.style.cssText = 'color: var(--color-text); line-height: 1.35;';
+  transcript.textContent = row.transcript;
+
+  item.append(meta, transcript);
+
+  const translation = row.translationKo ?? row.translationStatusLabel;
+  if (translation) {
+    const translationEl = document.createElement('div');
+    translationEl.className = 'text-detail';
+    translationEl.style.cssText = 'color: var(--color-text-dim); margin-top: 5px;';
+    translationEl.textContent = translation;
+    item.append(translationEl);
+  }
+
+  return item;
 }
 
 function handleAudioSource(source: string): void {
@@ -680,6 +752,7 @@ function toggleSessionUI(active: boolean): void {
   }
   if (statsCard) statsCard.style.display = active ? 'block' : 'none';
   if (historyCard) historyCard.style.display = active ? 'block' : 'none';
+  resetLiveConversationTimeline(active);
   updateAssistModeUI();
 }
 

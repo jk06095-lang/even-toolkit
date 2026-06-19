@@ -121,6 +121,8 @@ export interface SessionCallbacks {
   onSessionAnalysis?: (analysis: SessionAnalysis) => void;
   /** Fired when assist mode metrics change */
   onAssistMetrics?: (metrics: AssistMetrics) => void;
+  /** Fired when finalized turns change so the phone UI can show a live conversation timeline. */
+  onConversationTimeline?: (session: SessionTranscript) => void;
 }
 
 export interface GlassDisplay {
@@ -398,9 +400,18 @@ export class SessionEngine {
     const turn = this.transcriptStore?.addSpeech(text, source, isFinal);
     if (turn) {
       this.lastTurnId = turn.id;
+      this.emitConversationTimeline();
       return;
     }
     this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
+    this.emitConversationTimeline();
+  }
+
+  private emitConversationTimeline(): void {
+    const snapshot = this.transcriptStore?.getSnapshot();
+    if (snapshot) {
+      this.callbacks.onConversationTimeline?.(snapshot);
+    }
   }
 
   private isCurrentSpeechRecognizer(recognizer: SpeechRecognizerDriver | null): boolean {
@@ -709,6 +720,7 @@ export class SessionEngine {
 
     // Initialize transcript analyzer for hint tracking
     this.analyzer = this.transcriptAnalyzerFactory(this.weekConfig.week);
+    this.emitConversationTimeline();
 
     this.vad = this.audioDetectorFactory({
       silenceThresholdMs: this.weekConfig.silenceThresholdMs,

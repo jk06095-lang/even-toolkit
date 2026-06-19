@@ -15,7 +15,7 @@ import type { VADConfig } from '../src/combat/vad-manager';
 import type { ChunkRequest, ChunkResult } from '../src/combat/chunk-generator';
 import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } from '../src/combat/hybrid-recognizer';
 import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
-import type { TranscriptStoreOptions } from '../src/combat/transcript-store';
+import type { SessionTranscript, TranscriptStoreOptions } from '../src/combat/transcript-store';
 import {
   isAssistEpisode,
   isCue,
@@ -725,6 +725,22 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.startsWith('showGrammarFeedback:'))).toBe(false);
   });
 
+  it('emits live phone conversation timeline snapshots without writing transcript history to the HUD', async () => {
+    const harness = createHarness({ audioSource: 'browser' });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?');
+
+    const latest = harness.conversationSnapshots.at(-1);
+    expect(latest?.conversationTurns?.at(-1)).toMatchObject({
+      speaker: 'learner',
+      source: 'phone',
+      transcript: 'Could you clarify the customer segment?',
+      isFinal: true,
+    });
+    expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
+  });
+
   it('stops audio detector and recognizer during cleanup', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
@@ -819,6 +835,7 @@ function createHarness(options: {
     simplifiedTo?: string;
   }> = [];
   const liveTranscripts: { text: string; isFinal: boolean }[] = [];
+  const conversationSnapshots: SessionTranscript[] = [];
   const hud = new FakeHud();
   let vad!: FakeAudioDetector;
 
@@ -856,6 +873,9 @@ function createHarness(options: {
     },
     onHintUsageResult: (result) => {
       hintResults.push(result);
+    },
+    onConversationTimeline: (snapshot) => {
+      conversationSnapshots.push(snapshot);
     },
   };
 
@@ -895,6 +915,7 @@ function createHarness(options: {
     analyses,
     hintResults,
     liveTranscripts,
+    conversationSnapshots,
     recognizers,
     recognizerOptions,
   };

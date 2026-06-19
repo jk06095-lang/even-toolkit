@@ -1,8 +1,9 @@
 # Project ECHO Conversation Timeline
 
-The conversation timeline is the phone-side review surface for saved
+The conversation timeline is the phone-side review surface for live and saved
 `ConversationTurn` records. The glasses stay a minimal cue surface; the phone
-stores and reviews the heavier turn history.
+shows the heavier turn history during practice and stores it for review when
+raw transcript retention is enabled.
 
 ## Translation Queue
 
@@ -36,8 +37,13 @@ The current implementation does not invent Korean translations locally. It uses
 the deployed proxy boundary when cloud processing is allowed and otherwise keeps
 pending jobs local.
 
+Live Practice emits in-memory `SessionTranscript` snapshots whenever finalized
+turns are recorded. The phone UI renders the latest recognized final turns from
+that snapshot without adding conversation history to the glasses HUD. Placeholder
+speech-detection events remain analytics/cache events and are not displayed as
+phone timeline turns.
+
 Remaining work for issue #28:
 
-- live phone timeline wiring during a session
 - real G2/phone/import speaker segmentation evidence
 - simulator or hardware proof that the glasses HUD remains cue-only
