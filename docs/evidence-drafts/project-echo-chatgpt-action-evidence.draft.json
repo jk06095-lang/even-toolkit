@@ -107,6 +107,23 @@
     "twoSeparateRecallDaysProven": null,
     "transferScenarioEvidenceCaptured": null,
     "sameDayRepeatNotCountedAsTransfer": null,
+    "recallTransferProof": {
+      "recallDates": [],
+      "independentRecallAttemptRefs": [],
+      "transferScenarioIds": [],
+      "transferEvidenceRef": "TBD",
+      "sameDayRepeatEvidenceRef": "TBD"
+    },
+    "g2AudioLevelEvidence": {
+      "captureSource": "TBD",
+      "speechThreshold": null,
+      "speechFrameRatio": null,
+      "totalFrames": null,
+      "speechFrames": null,
+      "clippedFrameCount": null,
+      "rawAudioRetained": null,
+      "evidenceRef": "TBD"
+    },
     "pronunciationScoringPolicy": {
       "scoringSource": "TBD",
       "webSpeechConfidenceUsedForG2": null,

@@ -183,6 +183,12 @@ The same final manifest must include a `pronunciationScoringPolicy` for the G2
 recall evidence. That policy has to name a reviewed G2/audio-level scoring
 source, prove Web Speech confidence was not reused as G2 evidence, and confirm
 that raw audio was not retained for the evidence package.
+It must also include structured `recallTransferProof` and `g2AudioLevelEvidence`
+blocks. The former records at least two distinct recall dates, per-attempt
+evidence refs, bounded transfer scenario IDs, and same-day repeat evidence. The
+latter records the G2 bridge capture source, calibrated speech threshold,
+speech-frame ratio, frame counts, clipped-frame count, and `rawAudioRetained:
+false` without storing raw audio.
 Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
 `docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
 current Action API base URL and contract version prefilled. The generated file

@@ -14,6 +14,10 @@ before(() => {
   writeFileSync(path.join(tmpRoot, 'action-oauth-smoke.json'), '{"ok":true}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'action-gpt-config.png'), 'png evidence placeholder\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'g2-recall-evidence.json'), '{"ok":true}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'recall-day-1.json'), '{"ok":true,"day":"2026-06-18"}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'recall-day-2.json'), '{"ok":true,"day":"2026-06-19"}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'transfer-evidence.json'), '{"ok":true,"scenarioId":"transfer:travel:repeat:1"}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'same-day-repeat.json'), '{"ok":true,"countedAsTransfer":false}\n', 'utf8');
 });
 
 after(() => {
@@ -61,12 +65,16 @@ test('rejects completed Action evidence without spaced-recall transfer proof', a
   });
   manifest.activeRecallDeviceEvidence.twoSeparateRecallDaysProven = false;
   manifest.activeRecallDeviceEvidence.transferScenarioEvidenceCaptured = false;
+  manifest.activeRecallDeviceEvidence.recallTransferProof.recallDates = ['2026-06-19'];
+  manifest.activeRecallDeviceEvidence.recallTransferProof.transferScenarioIds = [];
   const manifestPath = writeManifest('missing-transfer-proof', manifest);
   const result = await runValidator(manifestPath);
 
   assert.notEqual(result.code, 0);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.twoSeparateRecallDaysProven/);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.transferScenarioEvidenceCaptured/);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.recallDates/);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.transferScenarioIds/);
 });
 
 test('rejects completed Action evidence without calibrated G2 threshold proof', async () => {
@@ -74,11 +82,28 @@ test('rejects completed Action evidence without calibrated G2 threshold proof', 
     tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
   });
   manifest.activeRecallDeviceEvidence.calibratedG2ThresholdUsed = false;
+  manifest.activeRecallDeviceEvidence.g2AudioLevelEvidence.speechThreshold = 0;
   const manifestPath = writeManifest('missing-calibrated-g2-threshold', manifest);
   const result = await runValidator(manifestPath);
 
   assert.notEqual(result.code, 0);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.calibratedG2ThresholdUsed/);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.g2AudioLevelEvidence\.speechThreshold/);
+});
+
+test('rejects completed Action evidence with inconsistent G2 audio-level counts', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.activeRecallDeviceEvidence.g2AudioLevelEvidence.totalFrames = 20;
+  manifest.activeRecallDeviceEvidence.g2AudioLevelEvidence.speechFrames = 21;
+  manifest.activeRecallDeviceEvidence.g2AudioLevelEvidence.clippedFrameCount = 25;
+  const manifestPath = writeManifest('invalid-g2-audio-counts', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.g2AudioLevelEvidence\.speechFrames/);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.g2AudioLevelEvidence\.clippedFrameCount/);
 });
 
 test('rejects completed Action evidence that uses Web Speech confidence as G2 scoring', async () => {
@@ -121,6 +146,10 @@ function completeManifest({ tokenStorageBoundary }) {
   const gptEvidenceRef = repoRelative(path.join(tmpRoot, 'action-gpt-config.png'));
   const deviceEvidenceRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
   const pronunciationPolicyRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
+  const recallDay1Ref = repoRelative(path.join(tmpRoot, 'recall-day-1.json'));
+  const recallDay2Ref = repoRelative(path.join(tmpRoot, 'recall-day-2.json'));
+  const transferEvidenceRef = repoRelative(path.join(tmpRoot, 'transfer-evidence.json'));
+  const sameDayRepeatEvidenceRef = repoRelative(path.join(tmpRoot, 'same-day-repeat.json'));
   const endpoints = {
     learnerProfile: endpoint('/v1/learner/profile', 'GET', actionEvidenceRef),
     reviewsNext: endpoint('/v1/reviews/next', 'GET', actionEvidenceRef),
@@ -175,6 +204,23 @@ function completeManifest({ tokenStorageBoundary }) {
       twoSeparateRecallDaysProven: true,
       transferScenarioEvidenceCaptured: true,
       sameDayRepeatNotCountedAsTransfer: true,
+      recallTransferProof: {
+        recallDates: ['2026-06-18', '2026-06-19'],
+        independentRecallAttemptRefs: [recallDay1Ref, recallDay2Ref],
+        transferScenarioIds: ['transfer:travel:repeat:1'],
+        transferEvidenceRef,
+        sameDayRepeatEvidenceRef,
+      },
+      g2AudioLevelEvidence: {
+        captureSource: 'g2_bridge',
+        speechThreshold: 0.035,
+        speechFrameRatio: 0.42,
+        totalFrames: 160,
+        speechFrames: 67,
+        clippedFrameCount: 0,
+        rawAudioRetained: false,
+        evidenceRef: deviceEvidenceRef,
+      },
       pronunciationScoringPolicy: {
         scoringSource: 'g2_audio_level_policy',
         webSpeechConfidenceUsedForG2: false,

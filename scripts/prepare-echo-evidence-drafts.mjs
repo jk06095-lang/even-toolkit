@@ -498,8 +498,12 @@ availability:
 
 - \`twoSeparateRecallDaysProven=true\`: a hidden meaning-to-expression item is
   recalled successfully on at least two different calendar days.
+- \`recallTransferProof.recallDates\`: at least two distinct YYYY-MM-DD dates
+  from independent recall attempts, with evidence refs for each attempt.
 - \`transferScenarioEvidenceCaptured=true\`: a transfer review or roleplay
   write-back records a bounded transfer scenario ID for that item.
+- \`recallTransferProof.transferScenarioIds\`: bounded scenario IDs that match
+  the transfer review or roleplay write-back evidence.
 - \`sameDayRepeatNotCountedAsTransfer=true\`: repeated same-day reveal/grade
   loops do not unlock transfer or count as independent transfer evidence.
 - \`webSpeechOnlyMarkedInsufficient=true\`: phone Web Speech evidence is clearly
@@ -508,6 +512,9 @@ availability:
   calibration-derived speech threshold used by the active recall audio-level
   capture path, or the documented fallback threshold when calibration evidence
   is legitimately unavailable.
+- \`g2AudioLevelEvidence.speechThreshold\`, \`speechFrameRatio\`, \`totalFrames\`,
+  and \`speechFrames\`: numeric audio-level evidence from G2 bridge PCM frames,
+  without storing raw audio.
 - \`pronunciationScoringPolicy.webSpeechConfidenceUsedForG2=false\`: Web Speech
   confidence is not reused as G2 pronunciation evidence.
 - \`pronunciationScoringPolicy.rawAudioRetained=false\`: scoring evidence uses

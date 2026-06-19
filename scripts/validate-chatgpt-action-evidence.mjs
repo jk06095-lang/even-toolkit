@@ -192,6 +192,24 @@ function validateNumberRange(object, key, pointer, min, max) {
   }
 }
 
+function validateIntegerRange(object, key, pointer, min, max) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required integer field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, `draft integer must become ${min}..${max}`);
+    return;
+  }
+
+  if (!Number.isInteger(value) || value < min || value > max) {
+    addError(fieldPointer, `must be an integer from ${min} to ${max}`);
+  }
+}
+
 function validateEnum(object, key, allowedValues, pointer) {
   const fieldPointer = `${pointer}.${key}`;
   if (!hasOwn(object, key)) {
@@ -246,9 +264,13 @@ function validateEvidenceLink(object, key, pointer) {
   if (allowDraft && (value === null || isPlaceholder(value))) return;
   if (typeof value !== 'string') return;
 
+  validateEvidenceLinkValue(value, fieldPointer);
+}
+
+function validateEvidenceLinkValue(value, pointer) {
   if (/^https:\/\/\S+$/i.test(value.trim())) return;
   if (/^http:\/\//i.test(value.trim())) {
-    addError(fieldPointer, 'must use https or a repo path');
+    addError(pointer, 'must use https or a repo path');
     return;
   }
 
@@ -258,19 +280,45 @@ function validateEvidenceLink(object, key, pointer) {
     'i',
   );
   if (!relativePathPattern.test(value.trim())) {
-    addError(fieldPointer, `must be an https URL or repo path ending in one of: ${EVIDENCE_EXTENSIONS.join(', ')}`);
+    addError(pointer, `must be an https URL or repo path ending in one of: ${EVIDENCE_EXTENSIONS.join(', ')}`);
     return;
   }
 
   const resolvedPath = path.resolve(process.cwd(), value.trim());
   const repoRoot = `${process.cwd()}${path.sep}`;
   if (resolvedPath !== process.cwd() && !resolvedPath.startsWith(repoRoot)) {
-    addError(fieldPointer, 'repo path must stay inside the repository');
+    addError(pointer, 'repo path must stay inside the repository');
     return;
   }
 
   if (!existsSync(resolvedPath)) {
-    addError(fieldPointer, 'repo path evidence must point to an existing file');
+    addError(pointer, 'repo path evidence must point to an existing file');
+  }
+}
+
+function validateEvidenceLinkArray(object, key, pointer, minItems) {
+  const fieldPointer = `${pointer}.${key}`;
+  const value = object?.[key];
+  if (!Array.isArray(value)) {
+    addError(fieldPointer, 'must be an array of evidence links');
+    return;
+  }
+
+  if (allowDraft && value.length === 0) {
+    addWarning(fieldPointer, `draft array must include at least ${minItems} evidence link(s)`);
+    return;
+  }
+
+  if (value.length < minItems) {
+    addError(fieldPointer, `must include at least ${minItems} evidence link(s)`);
+  }
+
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== 'string' || isPlaceholder(item)) {
+      addError(`${fieldPointer}[${index}]`, 'must be a non-placeholder evidence link');
+      continue;
+    }
+    validateEvidenceLinkValue(item, `${fieldPointer}[${index}]`);
   }
 }
 
@@ -397,11 +445,105 @@ function validateDeviceEvidence() {
   validateExpected(manifest.activeRecallDeviceEvidence, 'twoSeparateRecallDaysProven', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'transferScenarioEvidenceCaptured', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'sameDayRepeatNotCountedAsTransfer', true, 'activeRecallDeviceEvidence');
+  validateRecallTransferProof(
+    manifest.activeRecallDeviceEvidence.recallTransferProof,
+    'activeRecallDeviceEvidence.recallTransferProof',
+  );
+  validateG2AudioLevelEvidence(
+    manifest.activeRecallDeviceEvidence.g2AudioLevelEvidence,
+    'activeRecallDeviceEvidence.g2AudioLevelEvidence',
+  );
   validatePronunciationScoringPolicy(
     manifest.activeRecallDeviceEvidence.pronunciationScoringPolicy,
     'activeRecallDeviceEvidence.pronunciationScoringPolicy',
   );
   validateEvidenceLink(manifest.activeRecallDeviceEvidence, 'evidenceRef', 'activeRecallDeviceEvidence');
+}
+
+function validateRecallTransferProof(proof, pointer) {
+  if (!validateObject(proof, pointer)) return;
+  validateRecallDates(proof, pointer);
+  validateEvidenceLinkArray(proof, 'independentRecallAttemptRefs', pointer, 2);
+  validateTransferScenarioIds(proof, pointer);
+  validateEvidenceLink(proof, 'transferEvidenceRef', pointer);
+  validateEvidenceLink(proof, 'sameDayRepeatEvidenceRef', pointer);
+}
+
+function validateRecallDates(proof, pointer) {
+  const fieldPointer = `${pointer}.recallDates`;
+  const dates = proof.recallDates;
+  if (!Array.isArray(dates)) {
+    addError(fieldPointer, 'must be an array of ISO dates');
+    return;
+  }
+
+  if (allowDraft && dates.length === 0) {
+    addWarning(fieldPointer, 'draft array must prove at least two separate recall dates');
+    return;
+  }
+
+  const uniqueDates = new Set();
+  for (const [index, date] of dates.entries()) {
+    if (typeof date !== 'string' || !ISO_DATE_PATTERN.test(date.trim())) {
+      addError(`${fieldPointer}[${index}]`, 'must be an ISO date in YYYY-MM-DD format');
+      continue;
+    }
+    uniqueDates.add(date.trim());
+  }
+
+  if (uniqueDates.size < 2) {
+    addError(fieldPointer, 'must include at least two distinct recall dates');
+  }
+}
+
+function validateTransferScenarioIds(proof, pointer) {
+  const fieldPointer = `${pointer}.transferScenarioIds`;
+  const ids = proof.transferScenarioIds;
+  if (!Array.isArray(ids)) {
+    addError(fieldPointer, 'must be an array of bounded transfer scenario IDs');
+    return;
+  }
+
+  if (allowDraft && ids.length === 0) {
+    addWarning(fieldPointer, 'draft array must include at least one transfer scenario ID');
+    return;
+  }
+
+  if (ids.length < 1) {
+    addError(fieldPointer, 'must include at least one transfer scenario ID');
+  }
+
+  const uniqueIds = new Set();
+  for (const [index, id] of ids.entries()) {
+    if (typeof id !== 'string' || isPlaceholder(id) || !/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(id.trim())) {
+      addError(`${fieldPointer}[${index}]`, 'must be a stable bounded ASCII scenario ID');
+      continue;
+    }
+    uniqueIds.add(id.trim());
+  }
+
+  if (uniqueIds.size !== ids.length) {
+    addError(fieldPointer, 'must not contain duplicate transfer scenario IDs');
+  }
+}
+
+function validateG2AudioLevelEvidence(evidence, pointer) {
+  if (!validateObject(evidence, pointer)) return;
+  validateExpected(evidence, 'captureSource', 'g2_bridge', pointer);
+  validateNumberRange(evidence, 'speechThreshold', pointer, 0.0001, 0.35);
+  validateNumberRange(evidence, 'speechFrameRatio', pointer, 0.0001, 1);
+  validateIntegerRange(evidence, 'totalFrames', pointer, 1, 1_000_000);
+  validateIntegerRange(evidence, 'speechFrames', pointer, 1, 1_000_000);
+  validateIntegerRange(evidence, 'clippedFrameCount', pointer, 0, 1_000_000);
+  validateExpected(evidence, 'rawAudioRetained', false, pointer);
+  validateEvidenceLink(evidence, 'evidenceRef', pointer);
+
+  if (Number.isInteger(evidence.totalFrames) && Number.isInteger(evidence.speechFrames) && evidence.speechFrames > evidence.totalFrames) {
+    addError(`${pointer}.speechFrames`, 'must not exceed totalFrames');
+  }
+  if (Number.isInteger(evidence.totalFrames) && Number.isInteger(evidence.clippedFrameCount) && evidence.clippedFrameCount > evidence.totalFrames) {
+    addError(`${pointer}.clippedFrameCount`, 'must not exceed totalFrames');
+  }
 }
 
 function validatePronunciationScoringPolicy(policy, pointer) {
@@ -433,7 +575,7 @@ function validateOpenApiContract() {
 }
 
 function isLocalHost(hostname) {
-  const host = hostname.toLowerCase();
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (
     host === 'localhost'
     || host.endsWith('.localhost')
