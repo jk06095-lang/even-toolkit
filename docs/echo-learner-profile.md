@@ -90,6 +90,10 @@ The next server-synced integration boundary now lives under
   `/v1/learner/profile`, `/v1/reviews/next`, `/v1/reviews/attempt`,
   `/v1/roleplays/start`, `/v1/roleplays/result`, and
   `/v1/sessions/import-summary`.
+- `mock-server.mjs` is a local reference server for the same bounded endpoints.
+  `npm run test:chatgpt-action-mock` starts it on an ephemeral loopback port
+  and proves bearer auth, no-store JSON responses, redacted read/write shapes,
+  and rejection of raw transcript/audio/contact payloads.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.
@@ -98,7 +102,10 @@ This contract is intentionally server-synced and OAuth-scoped. It is separate
 from the local manual Knowledge export. The Action schema does not accept full
 raw transcripts, raw audio, direct contact identifiers, provider keys, or
 session tokens. Run `npm run validate:chatgpt-action` after edits; the same
-check is included in `npm run verify:all`.
+check and the local mock smoke test are included in `npm run verify:all`.
+The mock server is pre-deployment contract proof only. It does not replace a
+real OAuth-backed Action API, Custom GPT Action configuration, production CORS
+checks, or G2/audio-level active-recall evidence.
 
 The deployment evidence shape is captured in
 `docs/project-echo-chatgpt-action-evidence.template.json`. Final release

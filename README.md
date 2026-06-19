@@ -25,8 +25,9 @@ filled in.
 
 Run `npm run verify:all` before release or hardware QA. It verifies exact Even
 SDK/tooling dependency pins, the root TypeScript build, the Project ECHO
-pilot/VAD and hardware QA evidence templates, ECHO API proxy smoke tests, and
-ECHO app test/build/bundle/package gate. Final pilot
+ChatGPT Action contract plus local mock smoke tests, pilot/VAD and hardware QA
+evidence templates, ECHO API proxy smoke tests, and ECHO app
+test/build/bundle/package gate. Final pilot
 manifests should pass
 `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json`
 and final hardware QA manifests should pass
@@ -72,6 +73,18 @@ available, local client artifact scan counts, and draft case-study/video
 package outlines. They stay in `draft` status and do not replace the required
 `*.completed.json` evidence files, the final `docs/key-rotation-evidence.md`,
 or the final README portfolio links.
+
+For the future Custom GPT Action API, run the local reference smoke with:
+
+```bash
+npm run test:chatgpt-action-mock
+```
+
+This starts a loopback-only mock implementation of the OpenAPI endpoints and
+checks bounded OAuth-style reads/writes plus privacy rejections. It is useful
+before deployment, but it is not final #29 evidence until a real OAuth-backed
+Action API is deployed and connected to a Custom GPT with G2/audio-level recall
+proof.
 
 After the completed pilot manifest and final portfolio assets exist, promote the
 README portfolio links with:
