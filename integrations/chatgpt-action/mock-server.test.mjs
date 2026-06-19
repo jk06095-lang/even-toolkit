@@ -83,6 +83,19 @@ test('accepts review, roleplay, and redacted session writes', async () => {
     attemptedAt: '2026-06-19T09:05:00.000Z',
     semanticScore: 0.82,
     pronunciationScore: 0.7,
+  });
+  assert.equal(attempt.status, 200);
+  assert.deepEqual(Object.keys(await attempt.json()).sort(), ['accepted', 'itemId', 'nextDueAt']);
+
+  const g2Attempt = await jsonPost('/v1/reviews/attempt', {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    itemId: item.id,
+    mode: 'meaning_to_expression',
+    grade: 'good',
+    captureSource: 'g2_bridge',
+    userAttempt: 'Could you say that again, please?',
+    attemptedAt: '2026-06-19T09:06:00.000Z',
+    semanticScore: 0.84,
     audioLevelEvidence: {
       source: 'g2_bridge_pcm',
       sampleRateHz: 16000,
@@ -97,8 +110,8 @@ test('accepts review, roleplay, and redacted session writes', async () => {
       clippedFrameCount: 0,
     },
   });
-  assert.equal(attempt.status, 200);
-  assert.deepEqual(Object.keys(await attempt.json()).sort(), ['accepted', 'itemId', 'nextDueAt']);
+  assert.equal(g2Attempt.status, 200);
+  assert.deepEqual(Object.keys(await g2Attempt.json()).sort(), ['accepted', 'itemId', 'nextDueAt']);
 
   const roleplay = await jsonPost('/v1/roleplays/start', {
     schemaVersion: ACTION_SCHEMA_VERSION,
@@ -172,6 +185,47 @@ test('rejects raw transcripts, audio fields, and direct identifiers', async () =
   });
   assert.equal(identifierResponse.status, 400);
   assertNoForbiddenPayload(await identifierResponse.json());
+});
+
+test('rejects mismatched review evidence sources', async () => {
+  const item = learnerProfile().learningItems[0];
+  const typedWithG2Evidence = await jsonPost('/v1/reviews/attempt', {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    itemId: item.id,
+    mode: 'meaning_to_expression',
+    grade: 'good',
+    captureSource: 'typed',
+    userAttempt: 'Could you say that again, please?',
+    attemptedAt: '2026-06-19T09:14:00.000Z',
+    audioLevelEvidence: {
+      source: 'g2_bridge_pcm',
+      sampleRateHz: 16000,
+      durationMs: 40,
+      frameCount: 4,
+      speechFrameCount: 2,
+      silenceFrameCount: 2,
+      speechThreshold: 0.015,
+      averageRms: 0.108,
+      peakRms: 0.153,
+      voiceActivityRatio: 0.5,
+      clippedFrameCount: 0,
+    },
+  });
+  assert.equal(typedWithG2Evidence.status, 400);
+  assertNoForbiddenPayload(await typedWithG2Evidence.json());
+
+  const g2WithWebSpeechScore = await jsonPost('/v1/reviews/attempt', {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    itemId: item.id,
+    mode: 'meaning_to_expression',
+    grade: 'good',
+    captureSource: 'g2_bridge',
+    userAttempt: 'Could you say that again, please?',
+    attemptedAt: '2026-06-19T09:15:00.000Z',
+    pronunciationScore: 0.72,
+  });
+  assert.equal(g2WithWebSpeechScore.status, 400);
+  assertNoForbiddenPayload(await g2WithWebSpeechScore.json());
 });
 
 function request(pathname, options = {}) {

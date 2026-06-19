@@ -456,7 +456,12 @@ function handleActionEndpoint(endpoint, body, url, auth) {
   if (endpoint === 'action-review-attempt') {
     const item = findActionLearningItem(store, body.itemId);
     const nextDueAt = applyActionReviewGrade(item, body.grade, body.mode);
-    const audioLevelEvidence = normalizeActionAudioLevelEvidence(body.audioLevelEvidence);
+    const pronunciationScore = body.captureSource === 'phone_web_speech'
+      ? boundedOptionalNumber(body.pronunciationScore, 0, 1)
+      : undefined;
+    const audioLevelEvidence = body.captureSource === 'g2_bridge'
+      ? normalizeActionAudioLevelEvidence(body.audioLevelEvidence)
+      : undefined;
     store.attempts.push({
       itemId: body.itemId,
       mode: body.mode,
@@ -464,7 +469,7 @@ function handleActionEndpoint(endpoint, body, url, auth) {
       captureSource: body.captureSource,
       attemptedAt: body.attemptedAt,
       semanticScore: boundedOptionalNumber(body.semanticScore, 0, 1),
-      pronunciationScore: boundedOptionalNumber(body.pronunciationScore, 0, 1),
+      ...(pronunciationScore !== undefined ? { pronunciationScore } : {}),
       ...(audioLevelEvidence ? { audioLevelEvidence } : {}),
     });
     touchActionStore(store);
@@ -846,6 +851,7 @@ function validateActionRequestBody(endpoint, body, url) {
     assertOptionalNumber(body, 'semanticScore', 0, 1);
     assertOptionalActionAudioLevelEvidence(body, 'audioLevelEvidence');
     assertOptionalNumber(body, 'pronunciationScore', 0, 1);
+    assertActionReviewAttemptSourcePairing(body);
     return;
   }
 
@@ -1087,15 +1093,21 @@ function normalizePersistedActionAttempts(value) {
     if (!['meaning_to_expression', 'transfer'].includes(attempt.mode)) return [];
     if (!['again', 'hard', 'good', 'easy'].includes(attempt.grade)) return [];
     if (typeof attempt.attemptedAt !== 'string' || Number.isNaN(Date.parse(attempt.attemptedAt))) return [];
-    const audioLevelEvidence = normalizeActionAudioLevelEvidence(attempt.audioLevelEvidence);
+    const captureSource = normalizeActionAttemptCaptureSource(attempt);
+    const pronunciationScore = captureSource === 'phone_web_speech'
+      ? boundedOptionalNumber(attempt.pronunciationScore, 0, 1)
+      : undefined;
+    const audioLevelEvidence = captureSource === 'g2_bridge'
+      ? normalizeActionAudioLevelEvidence(attempt.audioLevelEvidence)
+      : undefined;
     return [{
       itemId: attempt.itemId,
       mode: attempt.mode,
       grade: attempt.grade,
-      captureSource: normalizeActionAttemptCaptureSource(attempt),
+      captureSource,
       attemptedAt: attempt.attemptedAt,
       semanticScore: boundedOptionalNumber(attempt.semanticScore, 0, 1),
-      pronunciationScore: boundedOptionalNumber(attempt.pronunciationScore, 0, 1),
+      ...(pronunciationScore !== undefined ? { pronunciationScore } : {}),
       ...(audioLevelEvidence ? { audioLevelEvidence } : {}),
     }];
   });
@@ -1104,6 +1116,9 @@ function normalizePersistedActionAttempts(value) {
 function normalizeActionAttemptCaptureSource(attempt) {
   if (ACTION_REVIEW_CAPTURE_SOURCES.includes(attempt.captureSource)) {
     return attempt.captureSource;
+  }
+  if (normalizeActionAudioLevelEvidence(attempt.audioLevelEvidence)) {
+    return 'g2_bridge';
   }
   return typeof attempt.pronunciationScore === 'number'
     ? 'phone_web_speech'
@@ -1929,6 +1944,23 @@ function assertOptionalActionAudioLevelEvidence(record, field) {
   assertIntegerField(value, 'clippedFrameCount', 0, 120_000);
   if (value.speechFrameCount + value.silenceFrameCount > value.frameCount) {
     throw new HttpError(400, 'invalid_request_schema', `${field} frame counts are inconsistent.`);
+  }
+}
+
+function assertActionReviewAttemptSourcePairing(body) {
+  if (
+    body.pronunciationScore !== undefined &&
+    body.pronunciationScore !== null &&
+    body.captureSource !== 'phone_web_speech'
+  ) {
+    throw new HttpError(400, 'invalid_request_schema', 'pronunciationScore requires captureSource phone_web_speech.');
+  }
+  if (
+    body.audioLevelEvidence !== undefined &&
+    body.audioLevelEvidence !== null &&
+    body.captureSource !== 'g2_bridge'
+  ) {
+    throw new HttpError(400, 'invalid_request_schema', 'audioLevelEvidence requires captureSource g2_bridge.');
   }
 }
 

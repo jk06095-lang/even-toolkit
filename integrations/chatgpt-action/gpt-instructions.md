@@ -26,7 +26,9 @@ other direct personal identifier.
 - Write `/v1/reviews/attempt` only after the learner chooses or confirms a
   grade, and include whether the attempt was `typed`, `phone_web_speech`, or
   verified `g2_bridge` capture. Include bounded G2 audio-level evidence only
-  when it comes from the Project ECHO app; never request or send raw audio.
+  when it comes from the Project ECHO app and `captureSource` is `g2_bridge`.
+  Send Web Speech `pronunciationScore` only with `phone_web_speech`; never
+  request or send raw audio.
 - Write `/v1/roleplays/result` only after the roleplay ends.
 - Write `/v1/sessions/import-summary` only with a redacted summary and up to
   three learning items.

@@ -100,7 +100,9 @@ export function createChatGptActionMockServer() {
         assertOneOf(body.grade, ['again', 'hard', 'good', 'easy'], 'grade');
         assertOneOf(body.mode, ['meaning_to_expression', 'transfer'], 'mode');
         assertOneOf(body.captureSource, REVIEW_CAPTURE_SOURCES, 'captureSource');
+        assertOptionalNumberRange(body.pronunciationScore, 0, 1, 'pronunciationScore');
         assertOptionalAudioLevelEvidence(body.audioLevelEvidence);
+        assertReviewAttemptSourcePairing(body);
         sendJson(response, 200, {
           accepted: true,
           itemId: body.itemId,
@@ -337,10 +339,32 @@ function assertOptionalAudioLevelEvidence(value) {
   }
 }
 
+function assertReviewAttemptSourcePairing(body) {
+  if (
+    body.pronunciationScore !== undefined &&
+    body.pronunciationScore !== null &&
+    body.captureSource !== 'phone_web_speech'
+  ) {
+    throw httpError(400, 'pronunciationScore requires captureSource phone_web_speech');
+  }
+  if (
+    body.audioLevelEvidence !== undefined &&
+    body.audioLevelEvidence !== null &&
+    body.captureSource !== 'g2_bridge'
+  ) {
+    throw httpError(400, 'audioLevelEvidence requires captureSource g2_bridge');
+  }
+}
+
 function assertIntegerRange(value, min, max, field) {
   if (!Number.isInteger(value) || value < min || value > max) {
     throw httpError(400, `${field} must be an integer from ${min} to ${max}`);
   }
+}
+
+function assertOptionalNumberRange(value, min, max, field) {
+  if (value === undefined || value === null) return;
+  assertNumberRange(value, min, max, field);
 }
 
 function assertNumberRange(value, min, max, field) {

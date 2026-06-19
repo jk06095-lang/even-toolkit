@@ -46,10 +46,12 @@ roleplay, and redacted session-summary data. They reject raw transcript/audio
 fields, direct contact identifiers, provider secrets, and HTML-like content.
 Review attempts also require a bounded `captureSource` value (`typed`,
 `phone_web_speech`, or `g2_bridge`) so Web Speech confidence cannot be mistaken
-for G2/audio-level recall evidence. G2 bridge attempts may include bounded
-`audioLevelEvidence` derived from 16 kHz PCM frame metadata, but the Action
-schema still rejects raw transcript/audio payloads, contact identifiers,
-provider keys, and session tokens.
+for G2/audio-level recall evidence. The route rejects mixed-source review
+metadata: `pronunciationScore` is accepted only for `phone_web_speech`, and
+bounded `audioLevelEvidence` is accepted only for `g2_bridge` attempts. G2
+bridge attempts may include `audioLevelEvidence` derived from 16 kHz PCM frame
+metadata, but the Action schema still rejects raw transcript/audio payloads,
+contact identifiers, provider keys, and session tokens.
 Set `ECHO_ACTION_STORE_PATH` to enable the reference file-backed Action store;
 when unset, Action learner/review state remains process-local. The file-backed
 store persists only bounded learner profile, learning-item, review-attempt, and

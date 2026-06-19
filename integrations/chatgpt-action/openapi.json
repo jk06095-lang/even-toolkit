@@ -376,6 +376,48 @@
           "captureSource",
           "attemptedAt"
         ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "captureSource": {
+                  "const": "phone_web_speech"
+                }
+              },
+              "required": [
+                "captureSource"
+              ]
+            },
+            "then": {},
+            "else": {
+              "not": {
+                "required": [
+                  "pronunciationScore"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "captureSource": {
+                  "const": "g2_bridge"
+                }
+              },
+              "required": [
+                "captureSource"
+              ]
+            },
+            "then": {},
+            "else": {
+              "not": {
+                "required": [
+                  "audioLevelEvidence"
+                ]
+              }
+            }
+          }
+        ],
         "properties": {
           "schemaVersion": {
             "const": "2.0.0"

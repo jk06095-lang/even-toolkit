@@ -76,7 +76,10 @@ providers that omit confidence, and the score is presented as browser speech
 confidence rather than a full phoneme-level pronunciation assessment.
 G2 bridge attempts therefore keep audio-level evidence separate from
 `pronunciationScore` until a real pronunciation evaluator is connected and
-hardware evidence is collected.
+hardware evidence is collected. The Action/proxy contract enforces the same
+source pairing: `pronunciationScore` is accepted only with
+`captureSource: "phone_web_speech"`, while `audioLevelEvidence` is accepted
+only with `captureSource: "g2_bridge"`.
 
 After two successful recall reps, the prompt moves into transfer mode. Transfer
 prompts are generated from the item's `speechAct`, scenario tags, and optional
@@ -132,10 +135,12 @@ The next server-synced integration boundary now lives under
   evidence manifest.
 - `/v1/reviews/attempt` now requires `captureSource` (`typed`,
   `phone_web_speech`, or `g2_bridge`) so Action write-back preserves the same
-  production-attempt boundary as the local phone review store. It may also
-  accept bounded `audioLevelEvidence` for G2 bridge PCM attempts. Deployed smoke
-  evidence may prove phone/Web Speech or typed attempts, but it still does not
-  satisfy the separate real-device G2/audio-level evidence requirement.
+  production-attempt boundary as the local phone review store. The route rejects
+  mixed-source evidence: Web Speech `pronunciationScore` belongs only to
+  `phone_web_speech`, and bounded `audioLevelEvidence` belongs only to
+  `g2_bridge` PCM attempts. Deployed smoke evidence may prove phone/Web Speech
+  or typed attempts, but it still does not satisfy the separate real-device
+  G2/audio-level evidence requirement.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.

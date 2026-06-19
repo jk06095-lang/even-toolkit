@@ -566,6 +566,62 @@ test('ChatGPT Action write routes reject raw transcript and direct contact paylo
     assert.equal(response.status, 400);
     assert.equal(body.error.code, 'invalid_request_schema');
     assert.equal(text.includes(sensitiveText), false);
+
+    const typedWithG2Evidence = await fetch(`${proxy.baseUrl}/v1/reviews/attempt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        itemId: 'li_source_pairing_001',
+        mode: 'meaning_to_expression',
+        grade: 'good',
+        captureSource: 'typed',
+        userAttempt: 'Could you repeat that?',
+        attemptedAt: new Date().toISOString(),
+        audioLevelEvidence: {
+          source: 'g2_bridge_pcm',
+          sampleRateHz: 16000,
+          durationMs: 40,
+          frameCount: 4,
+          speechFrameCount: 2,
+          silenceFrameCount: 2,
+          speechThreshold: 0.015,
+          averageRms: 0.108,
+          peakRms: 0.153,
+          voiceActivityRatio: 0.5,
+          clippedFrameCount: 0,
+        },
+      }),
+    });
+    const typedWithG2EvidenceBody = await typedWithG2Evidence.json();
+    assert.equal(typedWithG2Evidence.status, 400);
+    assert.equal(typedWithG2EvidenceBody.error.code, 'invalid_request_schema');
+
+    const g2WithWebSpeechScore = await fetch(`${proxy.baseUrl}/v1/reviews/attempt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        itemId: 'li_source_pairing_002',
+        mode: 'meaning_to_expression',
+        grade: 'good',
+        captureSource: 'g2_bridge',
+        userAttempt: 'Could you repeat that?',
+        attemptedAt: new Date().toISOString(),
+        pronunciationScore: 0.78,
+      }),
+    });
+    const g2WithWebSpeechScoreBody = await g2WithWebSpeechScore.json();
+    assert.equal(g2WithWebSpeechScore.status, 400);
+    assert.equal(g2WithWebSpeechScoreBody.error.code, 'invalid_request_schema');
   } finally {
     await proxy.stop();
   }
