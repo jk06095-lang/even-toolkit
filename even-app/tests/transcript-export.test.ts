@@ -149,6 +149,54 @@ describe('transcript export session-analysis guards', () => {
     });
   });
 
+  it('counts self-response rate only for cue-free recovery after silence', async () => {
+    echoApiMock.configured = false;
+    const session = makeSession();
+    session.entries = [
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 4),
+        type: 'user_speech',
+        text: 'Opening speech should not count as silence recovery.',
+        source: 'live_final',
+      },
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 10),
+        type: 'silence_event',
+        text: '2200ms',
+      },
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 13),
+        type: 'user_speech',
+        text: 'I can answer after thinking.',
+        source: 'live_final',
+      },
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 20),
+        type: 'silence_event',
+        text: '2500ms',
+      },
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 21),
+        type: 'hint_given',
+        text: 'Could you say that again?',
+        source: 'fallback',
+      },
+      {
+        t: Date.UTC(2026, 5, 19, 10, 0, 24),
+        type: 'user_speech',
+        text: 'Sorry, can you repeat that?',
+        source: 'live_final',
+      },
+    ];
+
+    const exportJson = await generateExportJSON(session, {
+      allowCloudProcessing: false,
+    });
+
+    expect(exportJson.stage_2_analysis.speech_count).toBe(3);
+    expect(exportJson.stage_2_analysis.self_response_rate).toBe(33);
+  });
+
   it('preserves two-speaker turn corrections and Korean translations in stage 1 export', async () => {
     echoApiMock.configured = false;
     const session = makeSession();

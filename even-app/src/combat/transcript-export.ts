@@ -128,18 +128,7 @@ function buildStage2(session: SessionTranscript): ExportStage2 {
     ? Math.max(...silenceDurations)
     : 0;
 
-  // Self-response rate: speeches that occurred without a preceding hint
-  let selfResponses = 0;
-  for (let i = 0; i < session.entries.length; i++) {
-    const entry = session.entries[i]!;
-    if (entry.type === 'user_speech') {
-      // Check if the previous entry was NOT a hint
-      const prev = i > 0 ? session.entries[i - 1] : null;
-      if (!prev || prev.type !== 'hint_given') {
-        selfResponses++;
-      }
-    }
-  }
+  const selfResponses = countIndependentSilenceRecoveries(session.entries);
 
   const selfRate = speeches.length > 0
     ? Math.round((selfResponses / speeches.length) * 100)
@@ -252,6 +241,44 @@ export async function generateExportJSON(
     stage_3_handoff: stage3,
     learner_profile: learnerProfile,
   };
+}
+
+function countIndependentSilenceRecoveries(sessionEntries: SessionTranscript['entries']): number {
+  let waitingForRecovery = false;
+  let hintShownAfterSilence = false;
+  let selfResponses = 0;
+
+  for (const entry of sessionEntries) {
+    if (entry.type === 'silence_event') {
+      waitingForRecovery = true;
+      hintShownAfterSilence = false;
+      continue;
+    }
+
+    if (!waitingForRecovery) continue;
+
+    if (isHintInterventionEvent(entry.type)) {
+      hintShownAfterSilence = true;
+      continue;
+    }
+
+    if (entry.type === 'user_speech') {
+      if (!hintShownAfterSilence) {
+        selfResponses++;
+      }
+      waitingForRecovery = false;
+      hintShownAfterSilence = false;
+    }
+  }
+
+  return selfResponses;
+}
+
+function isHintInterventionEvent(type: SessionTranscript['entries'][number]['type']): boolean {
+  return type === 'hint_given'
+    || type === 'hint_used'
+    || type === 'hint_missed'
+    || type === 'hint_simplified';
 }
 
 export function generateCustomGptHandoffFiles(
