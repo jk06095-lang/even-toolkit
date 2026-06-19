@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION, type AssistOutcome, type CueLevel } from '@toolkit/echo-domain-v2';
 import type { SessionTranscript } from '../src/combat/transcript-store';
 import {
+  clearImportedLearningItemsForRecall,
+  saveImportedLearningItemsForRecall,
+} from '../src/debrief/json-parser';
+import {
   buildTransferScenarios,
   buildActiveRecallQueue,
   clearActiveRecallSnapshot,
@@ -37,6 +41,7 @@ describe('active recall learning loop', () => {
       configurable: true,
     });
     clearActiveRecallSnapshot();
+    clearImportedLearningItemsForRecall();
   });
 
   it('builds due recall prompts without revealing the saved expression', () => {
@@ -185,6 +190,54 @@ describe('active recall learning loop', () => {
       partnerTurn: 'The platform changed at the last minute.',
     });
     expect(scenarios[0]?.instruction).not.toContain(learningItem.canonicalExpression);
+  });
+
+  it('adds imported ECHO review learning items to the active recall queue', () => {
+    saveImportedLearningItemsForRecall([
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: 'imported-repeat-01',
+        canonicalExpression: 'Could you repeat that?',
+        meaningKo: '다시 말해 달라고 요청하기',
+        speechAct: 'ask_repeat',
+        scenarioTags: ['travel'],
+        breakdownType: 'listening_gap',
+        sourceTurnIds: ['imported-repeat-01:import'],
+        naturalRecast: 'Could you repeat that?',
+        cueLevelUsed: 0,
+        lastOutcome: 'failed',
+        examples: [
+          {
+            id: 'imported-repeat-01:example:1',
+            scenarioTag: 'travel',
+            learnerTurn: 'Imported review item.',
+            meaningKo: '다시 말해 달라고 요청하기',
+            targetExpression: 'Could you repeat that?',
+            sourceTurnIds: ['imported-repeat-01:import'],
+          },
+        ],
+        scheduling: {
+          reps: 0,
+          lapses: 0,
+          difficulty: 0.6,
+          stability: 0.2,
+          dueAt: dueNow.toISOString(),
+        },
+      },
+    ]);
+
+    const queue = buildActiveRecallQueue([], {
+      now: () => dueNow,
+    });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.learningItem).toMatchObject({
+      id: 'imported-repeat-01',
+      canonicalExpression: 'Could you repeat that?',
+      speechAct: 'ask_repeat',
+    });
+    expect(queue[0]?.prompt.prompt).toContain('다시 말해 달라고 요청하기');
+    expect(queue[0]?.prompt.prompt).not.toContain('Could you repeat that?');
   });
 });
 

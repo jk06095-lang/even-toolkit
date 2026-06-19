@@ -23,6 +23,57 @@ describe('debrief import safety', () => {
         interval: [10, 60, 240],
       },
     ]);
+    expect(report).toMatchObject({
+      schemaVersion: '2.0.0',
+      importKind: 'legacy_debrief',
+    });
+    expect(report.learningItems[0]).toMatchObject({
+      canonicalExpression: 'Could you repeat that?',
+      speechAct: 'answer',
+      breakdownType: 'recall_gap',
+    });
+    expect(report.learningItems[0]?.meaningKo).not.toContain('Could you repeat that?');
+  });
+
+  it('accepts schema-versioned ECHO review imports as active-recall learning items', () => {
+    const report = parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      sessionDate: '2026-06-19',
+      items: [
+        {
+          id: 'travel-repeat-01',
+          canonicalExpression: 'Could you repeat that?',
+          meaningKo: '다시 말해 달라고 요청하기',
+          speechAct: 'ask_repeat',
+          scenarioTags: ['travel'],
+          breakdownType: 'listening_gap',
+          dueAt: '2026-06-20T00:00:00.000Z',
+        },
+      ],
+    }));
+
+    expect(report).toMatchObject({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      session_date: '2026-06-19',
+      bottleneck_chunks: [
+        {
+          target: 'Could you repeat that?',
+          interval: [],
+        },
+      ],
+    });
+    expect(report.learningItems[0]).toMatchObject({
+      id: 'travel-repeat-01',
+      canonicalExpression: 'Could you repeat that?',
+      meaningKo: '다시 말해 달라고 요청하기',
+      speechAct: 'ask_repeat',
+      breakdownType: 'listening_gap',
+      scheduling: {
+        dueAt: '2026-06-20T00:00:00.000Z',
+      },
+    });
   });
 
   it('rejects hostile HTML-like learner-facing chunk targets', () => {
@@ -54,6 +105,20 @@ describe('debrief import safety', () => {
         ],
       }))).toThrow(/direct contact identifiers/);
     }
+  });
+
+  it('rejects direct contact identifiers in schema-versioned review imports', () => {
+    expect(() => parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      items: [
+        {
+          id: 'bad-contact-01',
+          canonicalExpression: 'Email me at learner@example.com',
+          meaningKo: '연락처 공유',
+        },
+      ],
+    }))).toThrow(/direct contact identifiers/);
   });
 
   it('rejects executable URL schemes and control characters in imported phrases', () => {

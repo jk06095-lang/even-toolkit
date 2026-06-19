@@ -64,7 +64,9 @@ function showDebriefResult(stored: StoredDebrief): void {
   result.style.display = 'block';
 
   setElText('debrief-date', stored.report.session_date);
-  setElText('debrief-stress', stored.report.fsi_stress_level);
+  setElText('debrief-stress', stored.report.importKind === 'echo_review_items'
+    ? 'ECHO'
+    : stored.report.fsi_stress_level ?? 'Legacy');
   setElText('debrief-chunks', String(stored.report.bottleneck_chunks.length));
   setElText('debrief-pushes', String(stored.scheduledPushes.length));
 
@@ -74,7 +76,9 @@ function showDebriefResult(stored: StoredDebrief): void {
       const item = document.createElement('li');
       const meta = document.createElement('span');
       meta.style.color = 'var(--color-text-muted)';
-      meta.textContent = `| intervals: ${chunk.interval.join(', ')}min`;
+      meta.textContent = chunk.interval.length > 0
+        ? `| intervals: ${chunk.interval.join(', ')}min`
+        : '| active recall';
       item.append(document.createTextNode(`${chunk.target} `), meta);
       return item;
     }));

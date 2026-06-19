@@ -15,21 +15,29 @@ export function renderDebriefView(): string {
         </div>
 
         <p class="text-normal-body" style="color: var(--color-text-dim); margin-bottom: var(--spacing-cross); line-height: 1.5;">
-          Paste the JSON report from your PC coaching session.
+          Paste an ECHO review JSON export or a legacy coaching report.
         </p>
 
         <textarea class="textarea" id="debrief-input" placeholder='{
-  "session_date": "2026-04-28",
-  "fsi_stress_level": "High",
-  "bottleneck_chunks": [
-    {"target": "depends on the situation", "interval": [10, 60, 240]}
+  "schemaVersion": "2.0.0",
+  "importKind": "echo_review_items",
+  "sessionDate": "2026-06-19",
+  "items": [
+    {
+      "id": "travel-repeat-01",
+      "canonicalExpression": "Could you repeat that?",
+      "meaningKo": "다시 말해 달라고 요청하기",
+      "speechAct": "ask_repeat",
+      "scenarioTags": ["travel"],
+      "breakdownType": "listening_gap"
+    }
   ]
 }'></textarea>
 
         <div id="debrief-error" style="display: none; color: var(--color-negative); font-size: 13px; margin-top: var(--spacing-same);"></div>
 
         <button class="btn btn-highlight btn-full" id="btn-import-debrief" style="margin-top: var(--spacing-cross);">
-          Import & Generate Schedule
+          Import Review Items
         </button>
       </div>
 

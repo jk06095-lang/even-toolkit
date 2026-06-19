@@ -31,6 +31,15 @@ transcripts if local review state is missing. Grades adjust `reps`, `lapses`,
 `difficulty`, `stability`, `dueAt`, and transfer-check progress without marking
 an immediate cue repeat as mastery.
 
+Imported Review JSON now has a schema-versioned ECHO path. The preferred import
+shape uses `schemaVersion: "2.0.0"`, `importKind: "echo_review_items"`, and
+stable item IDs. Imported records are normalized into the same `LearningItem`
+contract used by session-mined evidence, then mirrored into the active-recall
+queue. The older `session_date` / `fsi_stress_level` /
+`bottleneck_chunks.interval` report is still accepted, but it is treated as a
+legacy migration path and converted into conservative `LearningItem` records
+without revealing the saved English phrase in the recall prompt.
+
 Each saved attempt also carries a local text evaluation: keyword coverage,
 precision, a semantic score, and a suggested grade. The suggestion is a
 privacy-safe client-side aid, not an automatic mastery decision; the learner's

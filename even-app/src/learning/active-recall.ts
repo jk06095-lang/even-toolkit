@@ -1,6 +1,7 @@
 import type { LearningItem, SpeechAct } from '@toolkit/echo-domain-v2';
 import { buildLearningItems } from '../combat/learner-profile';
 import type { SessionTranscript } from '../combat/transcript-store';
+import { loadImportedLearningItemsForRecall } from '../debrief/json-parser';
 
 export type ActiveRecallGrade = 'again' | 'hard' | 'good' | 'easy';
 export type ActiveRecallPromptMode = 'meaning_to_expression' | 'transfer';
@@ -103,6 +104,9 @@ export function buildActiveRecallQueue(
     for (const item of buildLearningItems(session, { now: () => now })) {
       itemsById.set(item.id, item);
     }
+  }
+  for (const item of loadImportedLearningItemsForRecall()) {
+    itemsById.set(item.id, item);
   }
 
   return Array.from(itemsById.values())
