@@ -18,6 +18,19 @@ Learning items are not marked mastered just because a cue was shown or repeated.
 All mined items start with `reps: 0`; active recall must collect a later
 production attempt before increasing mastery.
 
+## Active Recall Review
+
+`even-app/src/learning/active-recall.ts` turns mined `LearningItem` records into
+a local due queue. The phone review flow keeps the saved expression hidden until
+the learner has produced an answer, then stores an `Again` / `Hard` / `Good` /
+`Easy` grade in `localStorage` under `echo_active_recall_reviews`.
+
+The review state is stored separately from the original session evidence so it
+can survive Android WebView relaunches and still be rebuilt from saved
+transcripts if local review state is missing. Grades adjust `reps`, `lapses`,
+`difficulty`, `stability`, `dueAt`, and transfer-check progress without marking
+an immediate cue repeat as mastery.
+
 ## Custom GPT Handoff
 
 `generateCustomGptHandoffFiles()` returns the manual Custom GPT v1 bundle:
@@ -31,6 +44,7 @@ and phone-like values are replaced before profile generation.
 
 ## Remaining Work
 
-This is the data foundation for the active-recall loop. The remaining product
-work is to add the phone review UI, speech production attempts, Again / Hard /
-Good / Easy grading, and transfer checks in new scenarios.
+This is the data foundation and first phone review surface for the
+active-recall loop. Remaining work is to add real speech-attempt capture,
+semantic/pronunciation scoring, richer transfer scenarios, and later write-back
+from roleplay or Custom GPT Action flows.

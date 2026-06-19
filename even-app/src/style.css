@@ -591,6 +591,51 @@ body {
   margin-top: 4px;
 }
 
+/* Active Recall */
+.active-recall-panel {
+  display: grid;
+  gap: 10px;
+}
+.active-recall-meta,
+.active-recall-status {
+  color: var(--color-text-muted);
+}
+.active-recall-prompt,
+.active-recall-answer {
+  background: var(--color-surface-light);
+  border-radius: var(--radius);
+  padding: 12px;
+  line-height: 1.5;
+}
+.active-recall-prompt {
+  color: var(--color-text);
+  font-size: 15px;
+}
+.active-recall-attempt {
+  min-height: 80px;
+}
+.active-recall-actions,
+.active-recall-grade-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-same);
+}
+.active-recall-grade-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.active-recall-answer span {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.active-recall-answer strong {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+}
+
 /* ── Textarea ── */
 .textarea {
   width: 100%;

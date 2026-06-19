@@ -1,0 +1,174 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { ECHO_DOMAIN_V2_SCHEMA_VERSION, type AssistOutcome, type CueLevel } from '@toolkit/echo-domain-v2';
+import type { SessionTranscript } from '../src/combat/transcript-store';
+import {
+  buildActiveRecallQueue,
+  clearActiveRecallSnapshot,
+  createActiveRecallPrompt,
+  loadActiveRecallSnapshot,
+  recordActiveRecallAttempt,
+} from '../src/learning/active-recall';
+
+const sessionEnd = Date.UTC(2026, 5, 19, 10, 1, 0);
+const dueNow = new Date(Date.UTC(2026, 5, 21, 10, 1, 0));
+
+class MemoryStorage {
+  private data = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this.data.has(key) ? this.data.get(key)! : null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.data.set(key, String(value));
+  }
+
+  removeItem(key: string): void {
+    this.data.delete(key);
+  }
+}
+
+describe('active recall learning loop', () => {
+  beforeEach(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: new MemoryStorage(),
+      configurable: true,
+    });
+    clearActiveRecallSnapshot();
+  });
+
+  it('builds due recall prompts without revealing the saved expression', () => {
+    const queue = buildActiveRecallQueue([makeSession([['assisted_adapted', 2, 'Sorry, can you repeat it?']])], {
+      now: () => dueNow,
+    });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0]?.prompt.mode).toBe('meaning_to_expression');
+    expect(queue[0]?.prompt.prompt).toContain('다시 말해 달라고 요청하기');
+    expect(queue[0]?.prompt.prompt).not.toContain('Could you say that again?');
+    expect(queue[0]?.prompt.answer).toBe('Could you say that again?');
+  });
+
+  it('records attempts after reveal and reschedules Again quickly', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['failed', 3, 'I do not know']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    const attempt = recordActiveRecallAttempt(
+      item!.learningItem,
+      'again',
+      '<b>I maybe tomorrow</b> test@example.com',
+      { now: () => dueNow },
+    );
+
+    expect(attempt).toMatchObject({
+      grade: 'again',
+      userAttempt: 'I maybe tomorrow [redacted-email]',
+      dueAtBefore: item!.dueAt,
+    });
+    expect(Date.parse(attempt.dueAtAfter) - dueNow.getTime()).toBe(10 * 60 * 1000);
+
+    const snapshot = loadActiveRecallSnapshot();
+    expect(snapshot.states[item!.learningItem.id]).toMatchObject({
+      reps: 0,
+      lapses: 2,
+      lastGrade: 'again',
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('<b>');
+    expect(JSON.stringify(snapshot)).not.toContain('test@example.com');
+  });
+
+  it('moves successful mature items into transfer checks', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    recordActiveRecallAttempt(item!.learningItem, 'good', 'Could you say that again?', {
+      now: () => dueNow,
+    });
+    const secondDue = new Date(Date.parse(loadActiveRecallSnapshot().states[item!.learningItem.id]!.dueAt));
+    recordActiveRecallAttempt(item!.learningItem, 'good', 'Could you say that again?', {
+      now: () => secondDue,
+    });
+
+    const matureState = loadActiveRecallSnapshot().states[item!.learningItem.id]!;
+    const prompt = createActiveRecallPrompt(item!.learningItem, matureState);
+    expect(prompt.mode).toBe('transfer');
+    expect(prompt.prompt).toContain('New situation');
+    expect(prompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
+
+    recordActiveRecallAttempt(item!.learningItem, 'easy', 'Sorry, can you repeat that?', {
+      now: () => new Date(Date.parse(matureState.dueAt)),
+      mode: 'transfer',
+    });
+
+    expect(loadActiveRecallSnapshot().states[item!.learningItem.id]).toMatchObject({
+      reps: 3,
+      transferSuccessCount: 1,
+      lastGrade: 'easy',
+    });
+  });
+});
+
+function makeSession(
+  outcomes: Array<[AssistOutcome, CueLevel, string]>,
+): SessionTranscript {
+  return {
+    sessionId: 'session-active-recall',
+    startTime: sessionEnd - 60_000,
+    endTime: sessionEnd,
+    week: 2,
+    topic: 'Train station',
+    category: 'travel',
+    entries: [],
+    conversationTurns: [
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: 'turn-1',
+        sessionId: 'session-active-recall',
+        speaker: 'learner',
+        startedAt: sessionEnd - 30_000,
+        endedAt: sessionEnd - 29_000,
+        source: 'g2',
+        language: 'en-US',
+        transcript: 'Sorry, can you repeat it?',
+        isFinal: true,
+        piiFlags: [],
+      },
+    ],
+    cues: outcomes.map(([, level], index) => ({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      cueId: `cue-${index + 1}`,
+      speechAct: 'ask_repeat',
+      level,
+      phrase: 'Could you say that again?',
+      meaningKo: '다시 말해 달라고 요청하기',
+      alternatives: ['Can you repeat it?'],
+      expiresAfterMs: 2000,
+      targetTurnId: 'turn-1',
+    })),
+    assistEpisodes: outcomes.map(([outcome, level, userAttempt], index) => ({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: `episode-${index + 1}`,
+      sessionId: 'session-active-recall',
+      targetTurnId: 'turn-1',
+      trigger: 'manual',
+      decision: {
+        action: 'show',
+        confidence: 1,
+        trigger: 'manual',
+        maxCueLevel: level,
+      },
+      cueId: `cue-${index + 1}`,
+      cueLevelUsed: level,
+      speechAct: 'ask_repeat',
+      requestedAt: sessionEnd - 20_000 + index * 1000,
+      shownAt: sessionEnd - 19_900 + index * 1000,
+      resolvedAt: sessionEnd - 10_000 + index * 1000,
+      outcome,
+      userAttempt,
+    })),
+  };
+}
