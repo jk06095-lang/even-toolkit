@@ -9,7 +9,8 @@ result such as `0 matches`, `no matches`, `none found`, `clean`, or `passed`.
 The production smoke command result must include the production proxy URL and
 must not use local-only override flags. Final evidence must use an ISO
 `YYYY-MM-DD` rotation date and list the current `even-app/package.json` version
-under `Client build or package version`.
+under `Client build or package version`. Final evidence must also point to the
+JSON file written by `smoke:deploy -- --evidence-out ...`.
 
 ## Rotation Date
 
@@ -36,6 +37,7 @@ under `Client build or package version`.
 ## Deployment Smoke Evidence
 
 - Deployment smoke command result:
+- Deployment smoke evidence JSON:
 - /healthz configured true:
 - Allowed origin passed:
 - Untrusted origin blocked:

@@ -43,8 +43,9 @@ final README case-study/video links are all present. Use
 [docs/key-rotation-evidence.template.md](./docs/key-rotation-evidence.template.md)
 as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`, including the ISO
-rotation date and current ECHO app package version. Final portfolio links must
-be markdown links carrying the markers `project-echo-case-study-ko`,
+rotation date, current ECHO app package version, and checked-in deploy-smoke JSON
+evidence. Final portfolio links must be markdown links carrying the markers
+`project-echo-case-study-ko`,
 `project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
 match the completed pilot manifest targets. Repo-path targets on those README
 links must point to files that already exist in the repository.

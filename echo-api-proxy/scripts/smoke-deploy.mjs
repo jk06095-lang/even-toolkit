@@ -1,10 +1,13 @@
 #!/usr/bin/env node
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 
 const args = process.argv.slice(2);
 const wantsHelp = args.includes('--help') || args.includes('-h');
 
 const baseUrl = readOption('--base-url') || process.env.ECHO_PROXY_BASE_URL || '';
 const allowedOrigin = readOption('--allowed-origin') || process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
+const evidenceOut = readOption('--evidence-out') || process.env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '';
 const disallowedOrigin =
   readOption('--disallowed-origin') ||
   process.env.ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN ||
@@ -14,12 +17,13 @@ const allowUnconfigured = args.includes('--allow-unconfigured');
 const allowQaDelay = args.includes('--allow-qa-delay');
 
 if (wantsHelp || !baseUrl || !allowedOrigin) {
-  console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin
+  console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin [--evidence-out ../docs/proxy-smoke-evidence.json]
 
 Environment alternatives:
   ECHO_PROXY_BASE_URL
   ECHO_PROXY_SMOKE_ORIGIN
   ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN
+  ECHO_PROXY_SMOKE_EVIDENCE_OUT
 
 Default release behavior requires HTTPS, /healthz configured=true, and qaDelayMs=0.
 Use --allow-http, --allow-unconfigured, and --allow-qa-delay only for local smoke testing.`);
@@ -28,6 +32,18 @@ Use --allow-http, --allow-unconfigured, and --allow-qa-delay only for local smok
 
 const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
 const failures = [];
+const evidence = {
+  schema: 'project-echo-proxy-smoke-v1',
+  generatedAt: new Date().toISOString(),
+  baseUrl: normalizedBaseUrl,
+  allowedOrigin,
+  disallowedOrigin,
+  allowHttp,
+  allowUnconfigured,
+  allowQaDelay,
+  ok: false,
+  checks: {},
+};
 
 function fail(message) {
   failures.push(message);
@@ -99,6 +115,14 @@ async function checkHealthz() {
   const { response, body } = await fetchText('/healthz', {
     headers: { Origin: allowedOrigin },
   });
+  evidence.checks.healthz = {
+    status: response.status,
+    ok: body?.ok === true,
+    configured: body?.configured === true,
+    qaDelayMs: body?.qaDelayMs ?? 0,
+    corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
+    cacheControlNoStore: String(header(response, 'cache-control') || '').includes('no-store'),
+  };
 
   assertEqual(response.status, 200, 'GET /healthz status');
   assertEqual(body?.ok, true, 'GET /healthz ok');
@@ -122,6 +146,11 @@ async function checkOptions() {
       'Access-Control-Request-Method': 'POST',
     },
   });
+  evidence.checks.options = {
+    status: response.status,
+    corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
+    allowsPost: String(header(response, 'access-control-allow-methods') || '').includes('POST'),
+  };
 
   assertEqual(response.status, 204, 'OPTIONS /v1/cue status');
   assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'OPTIONS /v1/cue CORS origin');
@@ -138,6 +167,11 @@ async function checkDisallowedOrigin() {
     },
     body: JSON.stringify({ topic: 'blocked origin smoke' }),
   });
+  evidence.checks.disallowedOrigin = {
+    status: response.status,
+    errorCode: body?.error?.code ?? null,
+    corsOriginAbsent: header(response, 'access-control-allow-origin') === null,
+  };
 
   assertEqual(response.status, 403, 'blocked origin status');
   assertEqual(body?.error?.code, 'origin_not_allowed', 'blocked origin error code');
@@ -162,6 +196,13 @@ async function checkSafeErrorNoEcho() {
       },
     }),
   });
+  evidence.checks.safeError = {
+    status: response.status,
+    errorCode: body?.error?.code ?? null,
+    errorCodePresent: Boolean(body?.error?.code),
+    responseEchoedSensitive: text.includes(sensitive),
+    corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
+  };
 
   if (![400, 503].includes(response.status)) {
     fail(`safe error status: expected 400 or 503, got ${response.status}`);
@@ -181,6 +222,9 @@ try {
   fail(error instanceof Error ? error.message : String(error));
 }
 
+evidence.ok = failures.length === 0;
+writeEvidence();
+
 if (failures.length > 0) {
   for (const failure of failures) {
     console.error(`[proxy-smoke] error ${failure}`);
@@ -189,3 +233,11 @@ if (failures.length > 0) {
 }
 
 console.info(`[proxy-smoke] deployment smoke passed for ${normalizedBaseUrl}`);
+
+function writeEvidence() {
+  if (!evidenceOut) return;
+  const outputPath = path.resolve(process.cwd(), evidenceOut);
+  mkdirSync(path.dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  console.info(`[proxy-smoke] evidence written to ${outputPath}`);
+}

@@ -185,7 +185,7 @@ async function checkKeyRotationEvidence() {
     addCheck(
       'provider key rotation evidence',
       'blocked',
-      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, production smoke, artifact scan, and log review notes.',
+      'Missing docs/key-rotation-evidence.md with rotation date, affected keys, deployment smoke JSON, artifact scan, and log review notes.',
       '#1',
     );
     return false;

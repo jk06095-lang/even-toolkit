@@ -63,13 +63,14 @@ Manifest:
 
    ```bash
    cd echo-api-proxy
-   npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin
+   npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin --evidence-out ../docs/proxy-smoke-evidence.json
    ```
 
    The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
    CORS, blocked untrusted origins, `qaDelayMs: 0`, and safe non-echoing error
-   responses. Use `--allow-http --allow-unconfigured --allow-qa-delay` only for
-   local dry-runs.
+   responses. The `--evidence-out` JSON is required by the final key-rotation
+   evidence validator. Use `--allow-http --allow-unconfigured --allow-qa-delay`
+   only for local dry-runs.
 7. Build and package the app with `cd even-app && npm run verify`.
 8. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
    provider hostnames, SDK imports, and development IPs.
@@ -78,8 +79,9 @@ Manifest:
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
    The evidence must use a production HTTPS proxy URL, include the same URL in
-   the `smoke:deploy` result, mark smoke/log confirmations as passed or
-   verified, and record clean artifact scans such as `0 matches` or `no matches`.
+   the `smoke:deploy` result, reference the checked-in deployment smoke JSON,
+   mark smoke/log confirmations as passed or verified, and record clean artifact
+   scans such as `0 matches` or `no matches`.
 10. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 

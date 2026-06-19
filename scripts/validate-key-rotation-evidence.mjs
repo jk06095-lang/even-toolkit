@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const PLACEHOLDER_PATTERNS = [
@@ -37,6 +37,7 @@ const REQUIRED_FIELDS = [
   'Log allowlist confirmation',
   'Raw transcript/audio log exclusion',
   'Deployment smoke command result',
+  'Deployment smoke evidence JSON',
   '/healthz configured true',
   'Allowed origin passed',
   'Untrusted origin blocked',
@@ -92,6 +93,7 @@ const SECRET_PATTERNS = [
 ];
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const RELATIVE_JSON_PATH_PATTERN = /^(?:\.{1,2}\/)?[A-Za-z0-9_.\-/]+\.json$/i;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -106,7 +108,8 @@ Validates the Project ECHO production proxy/key-rotation evidence file.
 
 Without --allow-draft, all required sections and fields must be filled with
 non-placeholder values, production smoke evidence must avoid local-only smoke
-flags, and the evidence must not contain raw provider keys or tokens.`);
+flags, deployment smoke JSON must prove the remote checks, and the evidence must
+not contain raw provider keys or tokens.`);
   process.exit(wantsHelp ? 0 : 1);
 }
 
@@ -221,6 +224,7 @@ if (
 ) {
   addError('field.Deployment smoke command result', 'must reference the Production proxy URL');
 }
+validateDeploymentSmokeEvidence(proxyUrl);
 
 const forbiddenSmokeFlags = ['--allow-http', '--allow-unconfigured', '--allow-qa-delay'];
 for (const flag of forbiddenSmokeFlags) {
@@ -307,6 +311,131 @@ function validateCurrentClientBuildVersion() {
   if (!value.includes(expected)) {
     addError(pointer, `must include current even-app/package.json version ${expected}`);
   }
+}
+
+function validateDeploymentSmokeEvidence(proxyUrl) {
+  const pointer = 'field.Deployment smoke evidence JSON';
+  const value = fields.get('Deployment smoke evidence JSON') ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+
+  if (!RELATIVE_JSON_PATH_PATTERN.test(value.trim())) {
+    addError(pointer, 'must be a repo path to a JSON smoke evidence file');
+    return;
+  }
+
+  const evidencePath = resolveRepoPath(value.trim(), pointer);
+  if (!evidencePath) return;
+  if (!existsSync(evidencePath)) {
+    addError(pointer, 'repo path must point to an existing JSON file');
+    return;
+  }
+
+  let evidence;
+  try {
+    evidence = JSON.parse(readFileSync(evidencePath, 'utf8'));
+  } catch (error) {
+    addError(pointer, `must be valid JSON: ${error.message}`);
+    return;
+  }
+
+  validateSmokeEvidenceObject(evidence, proxyUrl);
+}
+
+function resolveRepoPath(value, pointer) {
+  const repoRoot = path.resolve(process.cwd());
+  const resolvedPath = path.resolve(repoRoot, value);
+  const repoPrefix = `${repoRoot}${path.sep}`;
+  if (resolvedPath !== repoRoot && !resolvedPath.startsWith(repoPrefix)) {
+    addError(pointer, 'must stay inside the repository');
+    return null;
+  }
+  return resolvedPath;
+}
+
+function validateSmokeEvidenceObject(evidence, proxyUrl) {
+  const pointer = 'deploymentSmokeEvidence';
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    addError(pointer, 'must be a JSON object');
+    return;
+  }
+
+  if (evidence.schema !== 'project-echo-proxy-smoke-v1') {
+    addError(`${pointer}.schema`, 'must be project-echo-proxy-smoke-v1');
+  }
+  if (!isIsoDateTime(evidence.generatedAt)) {
+    addError(`${pointer}.generatedAt`, 'must be an ISO timestamp');
+  }
+  if (evidence.ok !== true) {
+    addError(`${pointer}.ok`, 'must be true');
+  }
+  if (evidence.baseUrl !== normalizeEvidenceBaseUrl(proxyUrl)) {
+    addError(`${pointer}.baseUrl`, 'must match Production proxy URL');
+  }
+  if (evidence.allowHttp !== false || evidence.allowUnconfigured !== false || evidence.allowQaDelay !== false) {
+    addError(`${pointer}.releaseFlags`, 'must not use local-only smoke override flags');
+  }
+
+  const checks = evidence.checks && typeof evidence.checks === 'object' ? evidence.checks : {};
+  validateSmokeCheck(checks.healthz, 'healthz', {
+    status: 200,
+    ok: true,
+    configured: true,
+    qaDelayMs: 0,
+    corsOriginMatches: true,
+    cacheControlNoStore: true,
+  });
+  validateSmokeCheck(checks.options, 'options', {
+    status: 204,
+    corsOriginMatches: true,
+    allowsPost: true,
+  });
+  validateSmokeCheck(checks.disallowedOrigin, 'disallowedOrigin', {
+    status: 403,
+    errorCode: 'origin_not_allowed',
+    corsOriginAbsent: true,
+  });
+  validateSmokeCheck(checks.safeError, 'safeError', {
+    errorCodePresent: true,
+    responseEchoedSensitive: false,
+    corsOriginMatches: true,
+  });
+
+  const safeStatus = checks.safeError?.status;
+  if (safeStatus !== 400 && safeStatus !== 503) {
+    addError(`${pointer}.checks.safeError.status`, 'must be 400 or 503');
+  }
+}
+
+function validateSmokeCheck(check, key, expectedFields) {
+  const pointer = `deploymentSmokeEvidence.checks.${key}`;
+  if (!check || typeof check !== 'object' || Array.isArray(check)) {
+    addError(pointer, 'missing required smoke check object');
+    return;
+  }
+
+  for (const [field, expected] of Object.entries(expectedFields)) {
+    if (check[field] !== expected) {
+      addError(`${pointer}.${field}`, `must be ${JSON.stringify(expected)}`);
+    }
+  }
+}
+
+function normalizeEvidenceBaseUrl(value) {
+  try {
+    const parsed = new URL(value);
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function isIsoDateTime(value) {
+  if (typeof value !== 'string') return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && value.includes('T');
 }
 
 function getCurrentEchoAppVersion() {
