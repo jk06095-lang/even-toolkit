@@ -120,6 +120,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.doesNotMatch(keyRotation, /--allow-http|--allow-unconfigured|--allow-unauthenticated|--allow-qa-delay/);
   assert.match(keyRotation, /Browser artifact key scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
   assert.match(keyRotation, /Session token client artifact scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
+  assert.match(keyRotation, /Development IP scan result: 0 matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
+  assert.doesNotMatch(keyRotation, /Development IP scan result: .*(?:localhost|loopback IP)/);
   assert.match(keyRotation, /Follow-up issue or ticket: #1\/#27/);
   assert.doesNotMatch(keyRotation, /Date: \d{4}-\d{2}-\d{2}/);
 

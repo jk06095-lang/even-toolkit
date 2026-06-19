@@ -16,6 +16,10 @@ JSON file written by `smoke:deploy -- --evidence-out ...`. Session token
 evidence must prove short-lived server-side issuance, signed-token or server
 secret-manager storage, client artifact scans, and old-token revocation after
 rotation.
+The `Development IP scan result` field is for private LAN development origins
+such as `192.168.*`; localhost strings used only for secure-origin checks are
+not release network origins and should not be treated as provider deployment
+evidence.
 After production smoke runs, `npm run prepare:echo-evidence-drafts --
 --proxy-smoke-evidence docs/proxy-smoke-evidence.json` can prefill deployment
 smoke fields in the draft, but the final file still needs the rotation date,
@@ -66,7 +70,7 @@ owner, key, revocation, and log-review evidence filled by the operator.
 - even-app/dist scan result: 0 matches across 52 file(s): even-app/dist
 - even-app/echo.ehpk scan result: 0 matches across 1 file(s): even-app/echo.ehpk
 - Direct provider hostname scan result: 0 matches across 53 file(s): even-app/dist, even-app/echo.ehpk
-- Development IP scan result: TBD - local scan found 10 potential match(es) across 53 file(s): even-app/dist, even-app/echo.ehpk (localhost, loopback IP)
+- Development IP scan result: 0 matches across 53 file(s): even-app/dist, even-app/echo.ehpk
 
 ## Follow-up Owner
 

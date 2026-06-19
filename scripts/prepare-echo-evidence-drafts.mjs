@@ -57,8 +57,6 @@ const PROVIDER_HOST_PATTERNS = [
   { label: 'direct Google GenAI package reference', pattern: /@google\/genai/gi },
 ];
 const DEVELOPMENT_HOST_PATTERNS = [
-  { label: 'localhost', pattern: /\blocalhost\b/gi },
-  { label: 'loopback IP', pattern: /\b127\.0\.0\.1\b/g },
   { label: 'private 10.x IP', pattern: /\b10\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g },
   { label: 'private 172.16-31.x IP', pattern: /\b172\.(?:1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}\b/g },
   { label: 'private 192.168.x IP', pattern: /\b192\.168\.\d{1,3}\.\d{1,3}\b/g },
