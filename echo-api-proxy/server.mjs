@@ -1699,9 +1699,7 @@ async function handleSessionAnalysis(input) {
 
 async function callGeminiJson(parts, maxOutputTokens) {
   const text = await callGemini(parts, maxOutputTokens);
-  const parsed = parseJsonish(text);
-  if (parsed && typeof parsed === 'object') return parsed;
-  return { text };
+  return parseStrictProviderJson(text);
 }
 
 async function callGemini(parts, maxOutputTokens) {
@@ -1915,26 +1913,24 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function parseJsonish(value) {
-  if (typeof value !== 'string') return value;
-  const trimmed = value
-    .trim()
-    .replace(/^```json\s*/i, '')
-    .replace(/^```\s*/i, '')
-    .replace(/```$/i, '')
-    .trim();
+function parseStrictProviderJson(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value !== 'string') {
+    throw new HttpError(502, 'provider_schema_error', 'Provider response must be strict JSON.');
+  }
+
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const jsonText = (fenced ? fenced[1] : trimmed).trim();
 
   try {
-    return JSON.parse(trimmed);
+    const parsed = JSON.parse(jsonText);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
   } catch {
-    const match = trimmed.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
+    // Fall through to the generic schema error below.
   }
+
+  throw new HttpError(502, 'provider_schema_error', 'Provider response must be strict JSON.');
 }
 
 function firstText(input, keys) {

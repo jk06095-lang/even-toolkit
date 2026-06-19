@@ -963,6 +963,94 @@ test('idempotency key replays a successful provider response without a duplicate
   }
 });
 
+test('rejects provider responses that wrap JSON in prose', async () => {
+  const wrappedProviderText = 'Sure, here is the JSON: {"cue":"Could you repeat?"}';
+  const provider = await startProviderStub((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: wrappedProviderText }],
+          },
+        },
+      ],
+    }));
+  });
+  const proxy = await startProxy({
+    GEMINI_API_KEY: 'stub-provider-key',
+    GEMINI_API_BASE_URL: provider.baseUrl,
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const response = await fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        topic: 'strict provider JSON',
+        clientSessionId: 'strict-json-session',
+      }),
+    });
+    const text = await response.text();
+    const body = JSON.parse(text);
+
+    assert.equal(response.status, 502);
+    assert.equal(body.error.code, 'provider_schema_error');
+    assert.equal(text.includes(wrappedProviderText), false);
+    assert.equal(text.includes('Could you repeat?'), false);
+  } finally {
+    await proxy.stop();
+    await provider.stop();
+  }
+});
+
+test('accepts provider responses that are entirely fenced JSON', async () => {
+  const provider = await startProviderStub((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: '```json\n{"cue":"Could you repeat?"}\n```' }],
+          },
+        },
+      ],
+    }));
+  });
+  const proxy = await startProxy({
+    GEMINI_API_KEY: 'stub-provider-key',
+    GEMINI_API_BASE_URL: provider.baseUrl,
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const response = await fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        topic: 'fenced provider JSON',
+        clientSessionId: 'fenced-json-session',
+      }),
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.cue, 'Could you repeat?');
+  } finally {
+    await proxy.stop();
+    await provider.stop();
+  }
+});
+
 test('separates untrusted learner text from provider instructions', async () => {
   const providerPayloads = [];
   const provider = await startProviderStub((req, res) => {

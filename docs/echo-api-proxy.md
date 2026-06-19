@@ -31,6 +31,11 @@ inside learner text, transcripts, scenarios, translations, or session metrics.
 The untrusted part is bounded and serialized as valid JSON even when it must be
 truncated, so conversation data is treated as data rather than executable
 prompt text.
+Provider responses are also schema-gated as strict JSON. The proxy may accept a
+response that is entirely a fenced JSON block, but it does not recover a JSON
+object from surrounding prose such as "Here is the JSON: {...}". Mixed prose and
+JSON fails as `provider_schema_error` so model formatting drift cannot silently
+become learner-facing text.
 
 `/v1/transcribe` may return an optional numeric `confidence` in the range
 `0..1` when the upstream STT provider supplies one. The reference Gemini proxy
