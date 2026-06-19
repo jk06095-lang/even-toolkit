@@ -24,6 +24,14 @@ It uses Node 20 built-in `http` and `fetch`, returns safe JSON errors, and logs
 only request id, method, path, status, and latency. It does not log request
 bodies, raw transcripts, or audio payloads.
 
+Provider-bound ECHO routes keep model instructions and learner/session content
+in separate Gemini parts. The trusted instruction part tells the model to use a
+specific `untrusted_data:*` JSON part as context and never follow instructions
+inside learner text, transcripts, scenarios, translations, or session metrics.
+The untrusted part is bounded and serialized as valid JSON even when it must be
+truncated, so conversation data is treated as data rather than executable
+prompt text.
+
 `/v1/transcribe` may return an optional numeric `confidence` in the range
 `0..1` when the upstream STT provider supplies one. The reference Gemini proxy
 does not fabricate confidence; clients treat a missing value as unknown.
@@ -249,7 +257,8 @@ session-token rejection, allowed CORS behavior, disallowed-origin rejection,
 bounded schema validation, rate limiting, oversized payload rejection, and safe
 `proxy_not_configured` errors that do not echo learner text in the response body
 or proxy stdout/stderr logs. It also checks successful response idempotency,
-provider circuit opening against a local stub provider, and the proxy-backed
+provider circuit opening against a local stub provider, trusted-instruction vs.
+`untrusted_data:*` provider payload separation, and the proxy-backed
 Custom GPT Action read/write routes for bounded profile, session import, review
 attempt, roleplay start/result, reference OAuth authorization-code scope
 enforcement, deploy-smoke evidence generation, privacy rejection behavior, and
