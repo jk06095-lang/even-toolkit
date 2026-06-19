@@ -39,6 +39,10 @@ const steps = [
     args: ['run', 'test:key-rotation-evidence'],
   },
   {
+    label: 'Project ECHO evidence draft prep tests',
+    args: ['run', 'test:echo-evidence-drafts'],
+  },
+  {
     label: 'ECHO API proxy verify',
     args: ['--prefix', 'echo-api-proxy', 'run', 'verify'],
   },

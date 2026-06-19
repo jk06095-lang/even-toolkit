@@ -73,6 +73,17 @@ references, and case-study links, then run:
 npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json
 ```
 
+Use the local draft generator before the pilot to prefill values that can be
+proven without participants:
+
+```bash
+npm run prepare:echo-evidence-drafts
+```
+
+The generated `docs/evidence-drafts/project-echo-pilot-evidence.draft.json`
+records the current ECHO app version but leaves participant, VAD, video, and
+case-study evidence unfilled until the real G2 run is complete.
+
 The final command intentionally fails if the manifest still has `TBD`, an
 invalid `pilotDate` ISO date, missing numeric metrics, fewer than 5 participants,
 missing A/B/C runs, duplicate or extra A/B/C runs for a participant, duplicate

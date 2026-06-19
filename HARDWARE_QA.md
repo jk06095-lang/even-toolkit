@@ -26,6 +26,17 @@ plain boolean pass is not enough for the completed hardware evidence.
 The final `device.appVersion` must match the current `even-app/package.json`
 version so hardware evidence cannot be reused from an older app build.
 
+Before the field run, prepare draft manifests and local artifact evidence:
+
+```bash
+npm run prepare:echo-evidence-drafts
+```
+
+This writes draft files under `docs/evidence-drafts/`, including the current app
+version, `even-app/echo.ehpk` SHA-256 when present, and bundle metrics when
+`even-app/dist` exists. The generated files remain `draft`; they are a starting
+point for the physical run, not completed hardware QA.
+
 Official Even Realities
 [simulator docs](https://hub.evenrealities.com/docs/test/simulator) treat the
 simulator as a layout and logic preview, not a hardware emulator. Use simulator

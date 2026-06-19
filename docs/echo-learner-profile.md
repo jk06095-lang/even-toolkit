@@ -105,6 +105,11 @@ The deployment evidence shape is captured in
 evidence must be copied to
 `docs/project-echo-chatgpt-action-evidence.completed.json` and pass
 `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`.
+Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
+`docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
+current Action API base URL and contract version prefilled. The generated file
+remains draft evidence and does not replace OAuth, endpoint, privacy, or
+G2/audio-level recall proof.
 The final manifest must prove the Custom GPT has the Action schema and privacy
 policy configured, OAuth authorization-code flow is server-side, every Action
 endpoint returns bounded learner/review/roleplay data, raw transcripts/audio and

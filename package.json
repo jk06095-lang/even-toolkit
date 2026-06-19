@@ -402,6 +402,8 @@
     "validate:chatgpt-action-template": "node scripts/validate-chatgpt-action-evidence.mjs docs/project-echo-chatgpt-action-evidence.template.json --allow-draft",
     "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
+    "prepare:echo-evidence-drafts": "node scripts/prepare-echo-evidence-drafts.mjs",
+    "test:echo-evidence-drafts": "node --test scripts/prepare-echo-evidence-drafts.test.mjs",
     "validate:release-deps": "node scripts/validate-release-deps.mjs",
     "readiness:echo": "node scripts/echo-release-readiness.mjs",
     "verify:all": "node scripts/verify-all.mjs",

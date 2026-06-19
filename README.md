@@ -59,6 +59,17 @@ evidence. Final portfolio links must be markdown links carrying the markers
 match the completed pilot manifest targets. Repo-path targets on those README
 links must point to files that already exist in the repository.
 
+Before a field run, generate draft evidence manifests with:
+
+```bash
+npm run prepare:echo-evidence-drafts
+```
+
+The drafts are written under `docs/evidence-drafts/` and fill only local facts
+such as the current ECHO app version, `.ehpk` SHA-256, and bundle metrics when
+available. They stay in `draft` status and do not replace the required
+`*.completed.json` evidence files.
+
 The readiness gate is aligned with the
 [official Even Realities developer docs](https://hub.evenrealities.com/docs/get-started/overview):
 Even Hub apps run as phone-hosted WebView plugins, G2 hardware is the display
