@@ -86,6 +86,10 @@ describe('Project ECHO UI copy', () => {
       path.join(appRoot, 'src', 'live-practice', 'live-practice-controller.ts'),
       'utf8',
     );
+    const debriefSource = readFileSync(
+      path.join(appRoot, 'src', 'debrief', 'debrief-controller.ts'),
+      'utf8',
+    );
     const topicSelectorSource = readFileSync(
       path.join(appRoot, 'src', 'ui', 'topic-selector-view.ts'),
       'utf8',
@@ -112,6 +116,11 @@ describe('Project ECHO UI copy', () => {
     expect(livePracticeSource).not.toContain('Easier:');
     expect(livePracticeSource).not.toContain('innerHTML = renderTopicSelector');
     expect(livePracticeSource).not.toContain('innerHTML = renderScenarioGrid');
+
+    expect(debriefSource).toContain('getDebriefImportSourceLabel');
+    expect(debriefSource).toContain('legacy intervals');
+    expect(debriefSource).not.toContain('fsi_stress_level ??');
+    expect(debriefSource).not.toContain('`| intervals:');
 
     expect(topicSelectorSource).toContain('createTopicSelectorElement');
     expect(topicSelectorSource).toContain('fillScenarioGrid');

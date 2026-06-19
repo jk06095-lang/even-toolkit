@@ -1,8 +1,9 @@
 /**
- * JSON Parser — Phase 3 Debrief data ingestion.
+ * Review JSON parser for Project ECHO debrief imports.
  *
- * Parses the FSI-standard JSON report from PC Gemini
- * and stores it in IndexedDB for ambient scheduling.
+ * The primary path is schema-versioned ECHO review items. Older FSI-style
+ * reports are accepted only as a compatibility migration path into LearningItem
+ * records.
  */
 
 import { set, get } from 'idb-keyval';
@@ -12,11 +13,11 @@ import {
   type LearningItem,
 } from '@toolkit/echo-domain-v2';
 
-// ── Types ──
+// Types
 
 export interface BottleneckChunk {
-  target: string;          // e.g. "depends on the situation"
-  interval: number[];      // [10, 60, 240] minutes
+  target: string;          // review phrase; legacy reports use this as bottleneck target
+  interval: number[];      // legacy fixed interval minutes; v2 imports leave this empty
 }
 
 export type DebriefImportKind = 'legacy_debrief' | 'echo_review_items';
@@ -41,6 +42,10 @@ export interface ScheduledPush {
   scheduledTime: number; // epoch ms
   pushed: boolean;
   learningItemId?: string;
+}
+
+export function getDebriefImportSourceLabel(report: Pick<DebriefReport, 'importKind'>): string {
+  return report.importKind === 'echo_review_items' ? 'ECHO Review Items' : 'Legacy FSI Import';
 }
 
 const DEBRIEF_STORE_KEY = 'echo_debriefs';
@@ -69,7 +74,7 @@ const BREAKDOWN_TYPES = [
   'turn_taking',
 ] as const;
 
-// ── Parsing ──
+// Parsing
 
 /**
  * Parse a raw JSON string into a validated DebriefReport.
@@ -472,11 +477,12 @@ function cleanImportId(value: string): string {
   return ID_PATTERN.test(cleaned) ? cleaned : `imported:${Date.now()}`;
 }
 
-// ── Storage ──
+// Storage
 
 /**
  * Generate scheduled push times from a debrief report.
- * Intervals are in minutes from now.
+ * ECHO v2 imports use item dueAt; legacy imports retain fixed interval pushes
+ * only for compatibility with older reports.
  */
 function generateSchedule(report: DebriefReport): ScheduledPush[] {
   const now = Date.now();

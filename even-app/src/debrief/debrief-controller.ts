@@ -6,7 +6,7 @@ import {
   queuePendingConversationTranslations,
 } from '../combat/translation-queue';
 import { loadPrivacySettings } from '../privacy/settings';
-import { importDebrief, type StoredDebrief } from './json-parser';
+import { getDebriefImportSourceLabel, importDebrief, type StoredDebrief } from './json-parser';
 import type { HUDController } from '../hud/hud-controller';
 import type { SpeakerRole } from '@toolkit/echo-domain-v2';
 
@@ -64,9 +64,7 @@ function showDebriefResult(stored: StoredDebrief): void {
   result.style.display = 'block';
 
   setElText('debrief-date', stored.report.session_date);
-  setElText('debrief-stress', stored.report.importKind === 'echo_review_items'
-    ? 'ECHO'
-    : stored.report.fsi_stress_level ?? 'Legacy');
+  setElText('debrief-stress', getDebriefImportSourceLabel(stored.report));
   setElText('debrief-chunks', String(stored.report.bottleneck_chunks.length));
   setElText('debrief-pushes', String(stored.scheduledPushes.length));
 
@@ -77,7 +75,7 @@ function showDebriefResult(stored: StoredDebrief): void {
       const meta = document.createElement('span');
       meta.style.color = 'var(--color-text-muted)';
       meta.textContent = chunk.interval.length > 0
-        ? `| intervals: ${chunk.interval.join(', ')}min`
+        ? `| legacy intervals: ${chunk.interval.join(', ')}min`
         : '| active recall';
       item.append(document.createTextNode(`${chunk.target} `), meta);
       return item;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseDebriefJSON } from '../src/debrief/json-parser';
+import { getDebriefImportSourceLabel, parseDebriefJSON } from '../src/debrief/json-parser';
 
 describe('debrief import safety', () => {
   it('accepts markdown-wrapped JSON after validating safe text fields', () => {
@@ -27,6 +27,7 @@ describe('debrief import safety', () => {
       schemaVersion: '2.0.0',
       importKind: 'legacy_debrief',
     });
+    expect(getDebriefImportSourceLabel(report)).toBe('Legacy FSI Import');
     expect(report.learningItems[0]).toMatchObject({
       canonicalExpression: 'Could you repeat that?',
       speechAct: 'answer',
@@ -64,6 +65,7 @@ describe('debrief import safety', () => {
         },
       ],
     });
+    expect(getDebriefImportSourceLabel(report)).toBe('ECHO Review Items');
     expect(report.learningItems[0]).toMatchObject({
       id: 'travel-repeat-01',
       canonicalExpression: 'Could you repeat that?',

@@ -44,7 +44,9 @@ transcript/debug excerpts are rejected instead of being preserved silently. The
 older `session_date` / `fsi_stress_level` /
 `bottleneck_chunks.interval` report is still accepted, but it is treated as a
 legacy migration path and converted into conservative `LearningItem` records
-without revealing the saved English phrase in the recall prompt.
+without revealing the saved English phrase in the recall prompt. The Review
+screen labels those imports as `Legacy FSI Import`, not as a current stress or
+mastery signal, and any fixed interval reminders are shown as legacy intervals.
 The Echo Reminders screen also shows an Imported Review Items list with due
 time, meaning, speech act, and scenario tag so learners can confirm imported
 items are present without exposing the answer before recall.
