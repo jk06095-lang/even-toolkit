@@ -173,6 +173,34 @@ Still requires real G2 validation:
 - Confirm physical double-click, swipe, and select gestures produce the same actions on device.
 - Confirm the phone UI displays Manual/Auto status and Auto-paused state during the same hardware run.
 
+## Audio source separation QA
+
+- Start a session with `G2 Mic` selected and confirm VAD reports `bridge`.
+- Confirm the speech recognizer mode is `bridge`, not `hybrid`.
+- Confirm Web Speech / Phone Mic permission does not start during a G2 Mic session.
+- Stop the session, explicitly select `Phone Mic`, and confirm VAD reports `browser`.
+- Confirm Phone Mic recognition starts only after that explicit user selection.
+- Simulate or trigger a G2 Mic start failure and confirm Phone Mic remains closed
+  until the user accepts a fallback prompt.
+- Cancel the fallback prompt and confirm no phone microphone capture starts.
+- Record this under `audioSources` in
+  [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json):
+  G2 selected source, VAD source, recognizer mode, Web Speech state, phone mic
+  state, fallback prompt behavior, and evidence refs.
+
+Automated coverage added on 2026-06-19:
+
+- `session-engine-core` verifies G2 Mic starts `bridge` recognition and never
+  calls the hybrid/Web Speech recognizer path.
+- `session-engine-core` verifies Phone Mic starts browser recognition only when
+  that source is explicitly selected.
+- `session-engine-core` verifies pause/resume keeps G2 recognition in bridge mode.
+
+Still requires real G2 validation:
+
+- Confirm the physical G2/phone permission prompts match the automated source
+  policy on device.
+
 ## Simplified HUD QA
 
 - Standby screen shows `READY` only.

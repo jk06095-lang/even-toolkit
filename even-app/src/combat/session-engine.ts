@@ -134,6 +134,7 @@ export type AudioDetectorFactory = (config: VADConfig) => AudioDetector;
 export interface SpeechRecognizerDriver {
   mode: HybridMode;
   start: () => boolean;
+  startBridge: () => boolean;
   startHybrid: () => boolean;
   stop: () => void;
   feedPCM: (samples: Float32Array) => void;
@@ -743,13 +744,13 @@ export class SessionEngine {
     this.resetTranscriptActivity();
     this.startSilenceCountdown();
 
-    // Start real-time speech recognition (Web Speech API) if available
+    // Start speech recognition for the selected audio source.
     this.startSpeechRecognizer();
   }
 
   /**
-   * Start hybrid speech recognizer for real-time text.
-   * - Bridge mode: Uses Hybrid (Web Speech API + PCM buffer)
+   * Start source-specific speech recognition.
+   * - Bridge mode: Uses G2 PCM through the ECHO API proxy only.
    * - Browser mode: Uses Web Speech API on phone/computer mic
    * Includes retry logic (max 3 attempts, 2s apart).
    */
@@ -855,10 +856,10 @@ export class SessionEngine {
     this.speechRecognizer = recognizer;
 
     if (isBridge) {
-      // Hybrid mode: Web Speech API for fast text + PCM buffer for evaluateSpeech
-      const started = recognizer.startHybrid();
+      // G2 Mic mode must not start Web Speech or phone microphone capture.
+      const started = recognizer.startBridge();
       if (started) {
-        console.log(`[Session] ✓ Hybrid speech recognition active (mode: ${recognizer.mode})`);
+        console.log(`[Session] Bridge speech recognition active (mode: ${recognizer.mode})`);
       }
     } else {
       // Browser mode: Web Speech API only
@@ -1087,7 +1088,7 @@ export class SessionEngine {
     
     if (this.speechRecognizer) {
       if (this.vad?.audioSource === 'bridge') {
-        this.speechRecognizer.startHybrid();
+        this.speechRecognizer.startBridge();
       } else {
         this.speechRecognizer.start();
       }

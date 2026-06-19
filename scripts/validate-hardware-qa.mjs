@@ -418,6 +418,37 @@ function validateAssist(manifestObject) {
   validateEvidenceLink(manifestObject.assist, 'evidenceRef', 'assist');
 }
 
+function validateAudioSources(manifestObject) {
+  if (!validateObject(manifestObject.audioSources, 'audioSources')) return;
+
+  if (validateObject(manifestObject.audioSources.g2MicSession, 'audioSources.g2MicSession')) {
+    const g2 = manifestObject.audioSources.g2MicSession;
+    validateText(g2, 'selectedSource', 'audioSources.g2MicSession', { includes: 'G2' });
+    validateExpected(g2, 'vadAudioSource', 'bridge', 'audioSources.g2MicSession');
+    validateExpected(g2, 'recognizerMode', 'bridge', 'audioSources.g2MicSession');
+    validateExpected(g2, 'webSpeechStarted', false, 'audioSources.g2MicSession');
+    validateExpected(g2, 'phoneMicOpened', false, 'audioSources.g2MicSession');
+    validateEvidenceLink(g2, 'evidenceRef', 'audioSources.g2MicSession');
+  }
+
+  if (validateObject(manifestObject.audioSources.phoneMicSession, 'audioSources.phoneMicSession')) {
+    const phone = manifestObject.audioSources.phoneMicSession;
+    validateExpected(phone, 'explicitlySelected', true, 'audioSources.phoneMicSession');
+    validateExpected(phone, 'vadAudioSource', 'browser', 'audioSources.phoneMicSession');
+    validateExpected(phone, 'recognizerMode', 'browser', 'audioSources.phoneMicSession');
+    validateExpected(phone, 'phoneMicOpened', true, 'audioSources.phoneMicSession');
+    validateEvidenceLink(phone, 'evidenceRef', 'audioSources.phoneMicSession');
+  }
+
+  if (validateObject(manifestObject.audioSources.g2Failure, 'audioSources.g2Failure')) {
+    const failure = manifestObject.audioSources.g2Failure;
+    validateExpected(failure, 'phoneMicOpenedBeforeConsent', false, 'audioSources.g2Failure');
+    validateExpected(failure, 'fallbackPromptShown', true, 'audioSources.g2Failure');
+    validateExpected(failure, 'cancelKeepsAudioOff', true, 'audioSources.g2Failure');
+    validateEvidenceLink(failure, 'evidenceRef', 'audioSources.g2Failure');
+  }
+}
+
 function validateDelayedProxy(manifestObject) {
   if (!validateObject(manifestObject.delayedProxy, 'delayedProxy')) return;
   if (!validateObject(manifestObject.delayedProxy.scenarios, 'delayedProxy.scenarios')) return;
@@ -538,6 +569,7 @@ validateManifestRoot(manifest);
 validateLifecycle(manifest);
 validateHud(manifest);
 validateAssist(manifest);
+validateAudioSources(manifest);
 validateDelayedProxy(manifest);
 validateVoiceRuntime(manifest);
 

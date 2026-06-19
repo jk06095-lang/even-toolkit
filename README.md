@@ -323,10 +323,12 @@ useSTT({
 
 ### Audio Sources
 
-Automatically detects the best audio source:
-- **Glasses mic** — via G2 bridge (`audioControl`)
-- **Browser mic** — via `getUserMedia` (desktop)
-- Custom `AudioSource` — pass your own
+Project ECHO keeps audio source selection explicit:
+- **G2 Mic** via the G2 bridge (`audioControl`) and bridge-only transcription
+- **Phone Mic** only after explicit user selection
+- Custom `AudioSource` for your own integration
+
+The G2 path does not silently open Web Speech or the phone microphone.
 
 ---
 

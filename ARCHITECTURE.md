@@ -42,8 +42,13 @@ delete/export, and a full local `Export my data` download.
 ## Audio modes
 
 - `G2 Mic`: G2 PCM -> VAD -> ECHO API proxy STT
-- `Phone Mic`: browser microphone -> Web Speech or ECHO API proxy STT
+- `Phone Mic`: explicit user selection -> browser microphone -> Web Speech or ECHO API proxy STT
 - `Hybrid Experiment`: reserved for explicit future opt-in, not automatic fallback
+
+`SessionEngine` starts the recognizer in bridge-only mode for `G2 Mic`. It does
+not start Web Speech or phone microphone capture while the selected source is
+G2. A failed G2 microphone start surfaces an error and keeps Phone Mic closed
+until the user explicitly selects or accepts a phone fallback path.
 
 ## Calibration-to-VAD path
 

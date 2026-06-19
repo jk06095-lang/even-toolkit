@@ -148,6 +148,7 @@ class FakeAudioDetector implements AudioDetector {
 class FakeSpeechRecognizer implements SpeechRecognizerDriver {
   mode: HybridMode = 'hybrid';
   startCount = 0;
+  startBridgeCount = 0;
   startHybridCount = 0;
   stopCount = 0;
   feedCount = 0;
@@ -159,6 +160,12 @@ class FakeSpeechRecognizer implements SpeechRecognizerDriver {
   start(): boolean {
     this.startCount++;
     this.mode = 'browser';
+    return true;
+  }
+
+  startBridge(): boolean {
+    this.startBridgeCount++;
+    this.mode = 'bridge';
     return true;
   }
 
@@ -369,18 +376,25 @@ describe('SessionEngine core behavior with injected dependencies', () => {
   it('does not duplicate silence countdown timers across pause and resume', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
+    const recognizer = harness.recognizers[0]!;
 
     expect(harness.clock.activeIntervalCount()).toBe(1);
+    expect(recognizer.startBridgeCount).toBe(1);
+    expect(recognizer.startHybridCount).toBe(0);
 
     await harness.engine.pause();
     expect(harness.clock.activeIntervalCount()).toBe(0);
 
     await harness.engine.resume();
     expect(harness.clock.activeIntervalCount()).toBe(1);
+    expect(recognizer.startBridgeCount).toBe(2);
+    expect(recognizer.startHybridCount).toBe(0);
 
     await harness.engine.pause();
     await harness.engine.resume();
     expect(harness.clock.activeIntervalCount()).toBe(1);
+    expect(recognizer.startBridgeCount).toBe(3);
+    expect(recognizer.startHybridCount).toBe(0);
   });
 
   it('surfaces G2 mic start failure without starting recognition', async () => {
@@ -391,6 +405,30 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.vad.startCount).toBe(1);
     expect(harness.recognizers).toHaveLength(0);
     expect(harness.states).toEqual(['loading_vad']);
+  });
+
+  it('starts bridge-only recognition for G2 Mic sessions', async () => {
+    const harness = createHarness({ audioSource: 'bridge' });
+
+    await harness.engine.start(harness.hud);
+
+    const recognizer = harness.recognizers[0]!;
+    expect(recognizer.startBridgeCount).toBe(1);
+    expect(recognizer.startHybridCount).toBe(0);
+    expect(recognizer.startCount).toBe(0);
+    expect(recognizer.mode).toBe('bridge');
+  });
+
+  it('starts browser recognition only for explicit Phone Mic sessions', async () => {
+    const harness = createHarness({ audioSource: 'browser' });
+
+    await harness.engine.start(harness.hud);
+
+    const recognizer = harness.recognizers[0]!;
+    expect(recognizer.startCount).toBe(1);
+    expect(recognizer.startBridgeCount).toBe(0);
+    expect(recognizer.startHybridCount).toBe(0);
+    expect(recognizer.mode).toBe('browser');
   });
 
   it('passes session-scoped transcription metadata to the live recognizer', async () => {
@@ -468,7 +506,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(detectors).toHaveLength(10);
     expect(recognizers).toHaveLength(10);
     expect(detectors.every((detector) => detector.startCount === 1 && detector.stopCount === 1 && !detector.active)).toBe(true);
-    expect(recognizers.every((recognizer) => recognizer.startHybridCount === 1 && recognizer.stopCount === 1)).toBe(true);
+    expect(recognizers.every((recognizer) => recognizer.startBridgeCount === 1 && recognizer.startHybridCount === 0 && recognizer.stopCount === 1)).toBe(true);
   });
 });
 

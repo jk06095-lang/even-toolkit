@@ -220,6 +220,29 @@
     },
     "evidenceRef": "TBD"
   },
+  "audioSources": {
+    "g2MicSession": {
+      "selectedSource": "TBD",
+      "vadAudioSource": "TBD",
+      "recognizerMode": "TBD",
+      "webSpeechStarted": null,
+      "phoneMicOpened": null,
+      "evidenceRef": "TBD"
+    },
+    "phoneMicSession": {
+      "explicitlySelected": null,
+      "vadAudioSource": "TBD",
+      "recognizerMode": "TBD",
+      "phoneMicOpened": null,
+      "evidenceRef": "TBD"
+    },
+    "g2Failure": {
+      "phoneMicOpenedBeforeConsent": null,
+      "fallbackPromptShown": null,
+      "cancelKeepsAudioOff": null,
+      "evidenceRef": "TBD"
+    }
+  },
   "delayedProxy": {
     "scenarios": {
       "endPractice": {
