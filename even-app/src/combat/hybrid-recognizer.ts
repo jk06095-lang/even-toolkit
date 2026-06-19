@@ -481,7 +481,7 @@ export class HybridRecognizer {
 
         if (clean.length > 1) {
           this.callbacks.onFinalResult(clean);
-          console.log(`[HybridRecognizer] Bridge transcript: "${clean}"`);
+          console.log(`[HybridRecognizer] Bridge transcript received (${clean.length} chars)`);
         }
       }
     } catch (err) {
@@ -526,7 +526,7 @@ export class HybridRecognizer {
 
         if (clean.length > 1 && this.isSpeaking) {
           this.callbacks.onInterimResult(clean + '...');
-          console.log(`[HybridRecognizer] Bridge interim transcript: "${clean}"`);
+          console.log(`[HybridRecognizer] Bridge interim transcript received (${clean.length} chars)`);
         }
       }
     } catch (err) {

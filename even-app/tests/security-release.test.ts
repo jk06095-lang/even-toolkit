@@ -29,6 +29,19 @@ describe('release safety checks', () => {
     expect(sourceText).not.toContain('VITE_GEMINI_API_KEY');
   });
 
+  it('does not log raw bridge transcription text from recognizers', () => {
+    const recognizerSource = [
+      path.join(appRoot, 'src', 'combat', 'speech-recognizer.ts'),
+      path.join(appRoot, 'src', 'combat', 'hybrid-recognizer.ts'),
+    ]
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+
+    expect(recognizerSource).not.toContain('Bridge transcript: "');
+    expect(recognizerSource).not.toContain('Bridge interim transcript: "');
+    expect(recognizerSource).not.toMatch(/console\.(?:log|info|warn|error|debug)\([^)]*\$\{clean\}/);
+  });
+
   it('loads the heavy voice runtime only from the explicit Phone Mic path', () => {
     const vadManagerSource = readFileSync(path.join(appRoot, 'src', 'combat', 'vad-manager.ts'), 'utf8');
 

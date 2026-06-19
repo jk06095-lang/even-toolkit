@@ -54,3 +54,7 @@ bodies.
 The ECHO API proxy should log only operational metadata: request id, method,
 path, status, and latency. It must not log raw transcripts, audio base64
 payloads, or full request bodies by default.
+
+Client-side recognizer logs follow the same rule. Bridge transcription logs may
+record operational metadata such as whether a final or interim transcript was
+received and its character count, but they must not print the transcript text.

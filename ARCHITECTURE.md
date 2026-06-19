@@ -22,6 +22,8 @@ The deploy-ready Node reference proxy lives in `echo-api-proxy/server.mjs`.
 Deployment and key-rotation steps are documented in `docs/echo-api-proxy.md`.
 Proxy logs must not include request bodies, raw transcript text, or audio
 payloads.
+Client recognizer logs use the same privacy boundary: they may report
+transcription events and text length, but not learner utterance text.
 
 ## Privacy and retention
 

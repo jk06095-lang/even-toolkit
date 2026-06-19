@@ -242,7 +242,7 @@ export class SpeechRecognizer {
 
         if (clean.length > 1) {
           this.callbacks.onFinalResult(clean);
-          console.log(`[SpeechRecognizer] Bridge transcript: "${clean}"`);
+          console.log(`[SpeechRecognizer] Bridge transcript received (${clean.length} chars)`);
         }
       }
     } catch (err) {
@@ -291,7 +291,7 @@ export class SpeechRecognizer {
         if (clean.length > 1 && this.isSpeaking) {
           // Fire onInterimResult with trailing dots to indicate it is in progress
           this.callbacks.onInterimResult(clean + '...');
-          console.log(`[SpeechRecognizer] Bridge interim transcript: "${clean}"`);
+          console.log(`[SpeechRecognizer] Bridge interim transcript received (${clean.length} chars)`);
         }
       }
     } catch (err) {

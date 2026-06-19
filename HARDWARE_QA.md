@@ -128,6 +128,7 @@ Automated coverage added on 2026-06-19:
 - `session-engine-core` verifies Pause during cue generation aborts the cue request, keeps the engine paused, leaves no pending timers, and does not update HUD/cue callbacks.
 - `session-engine-core` verifies live recognizer transcription receives the current session request scope and per-request ID generator.
 - `transcript-export` verifies session-analysis requests carry scoped request metadata, skip already-aborted requests, and ignore delayed aborted responses by returning fallback handoff data.
+- `security-release` verifies bridge recognizers do not log raw final or interim transcript text.
 
 Still requires real G2 validation:
 
