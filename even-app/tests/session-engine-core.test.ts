@@ -241,6 +241,28 @@ class FakeHud implements GlassDisplay {
 }
 
 describe('SessionEngine core behavior with injected dependencies', () => {
+  it('defaults to Manual Assist and records silence without auto-generating a cue', async () => {
+    const harness = createHarness();
+    await harness.engine.start(harness.hud);
+
+    expect(harness.engine.currentAssistMode).toBe('manual');
+
+    harness.clock.advance(5_200);
+    await harness.vad.triggerSilence();
+
+    expect(harness.cueProvider.generateCalls).toBe(0);
+    expect(harness.chunks).toEqual([]);
+    expect(harness.states).toContain('silence_detected');
+    expect(harness.engine.currentAssistMetrics).toMatchObject({
+      manual_request_count: 0,
+      auto_trigger_count: 0,
+      cue_dismissed_count: 0,
+      false_trigger_count: 0,
+      cue_used_count: 0,
+      auto_assist_paused: false,
+    });
+  });
+
   it('skips auto cue generation during Week 4 blackout', async () => {
     const harness = createHarness({
       week: 4,
@@ -255,6 +277,73 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.generateCalls).toBe(0);
     expect(harness.chunks).toEqual([]);
     expect(harness.states).toContain('silence_detected');
+  });
+
+  it('pauses Auto Assist after two dismissed auto cues', async () => {
+    const harness = createHarness({
+      chunkResults: [
+        { chunk: 'First auto cue', source: 'gemini', latencyMs: 5 },
+        { chunk: 'Second auto cue', source: 'gemini', latencyMs: 5 },
+        { chunk: 'Should not appear', source: 'gemini', latencyMs: 5 },
+      ],
+    });
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    for (let i = 0; i < 2; i++) {
+      harness.clock.advance(5_200);
+      await harness.vad.triggerSilence();
+      await Promise.resolve();
+      expect(harness.engine.dismissActiveCue()).toBe(true);
+    }
+
+    expect(harness.engine.currentAssistMetrics).toMatchObject({
+      auto_trigger_count: 2,
+      cue_dismissed_count: 2,
+      false_trigger_count: 2,
+      auto_assist_paused: true,
+    });
+
+    harness.clock.advance(5_200);
+    await harness.vad.triggerSilence();
+
+    expect(harness.cueProvider.generateCalls).toBe(2);
+    expect(harness.chunks.map((chunk) => chunk.chunk)).toEqual([
+      'First auto cue',
+      'Second auto cue',
+    ]);
+  });
+
+  it('caps Auto Assist at three automatic cue generations per session', async () => {
+    const harness = createHarness({
+      chunkResults: [
+        { chunk: 'Auto cue one', source: 'gemini', latencyMs: 5 },
+        { chunk: 'Auto cue two', source: 'gemini', latencyMs: 5 },
+        { chunk: 'Auto cue three', source: 'gemini', latencyMs: 5 },
+        { chunk: 'Should not generate', source: 'gemini', latencyMs: 5 },
+      ],
+    });
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    for (let i = 0; i < 3; i++) {
+      harness.clock.advance(5_200);
+      await harness.vad.triggerSilence();
+      await Promise.resolve();
+      harness.clock.advance(2_100);
+    }
+
+    harness.clock.advance(5_200);
+    await harness.vad.triggerSilence();
+    await Promise.resolve();
+
+    expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(3);
+    expect(harness.cueProvider.generateCalls).toBe(3);
+    expect(harness.chunks.map((chunk) => chunk.chunk)).toEqual([
+      'Auto cue one',
+      'Auto cue two',
+      'Auto cue three',
+    ]);
   });
 
   it('shows a fallback manual cue without real hardware', async () => {

@@ -173,6 +173,8 @@ Still requires real G2 validation:
 Automated coverage added on 2026-06-19:
 
 - `session-engine-core` verifies Manual Assist does not auto-generate cues during silence.
+- `session-engine-core` verifies Auto Assist pauses after two dismissed auto cues.
+- `session-engine-core` verifies Auto Assist is capped at three automatic cue generations per session.
 - `hud-controller` verifies active-session G2 cue/dismiss gestures map to `request-cue` and `dismiss-cue`.
 - `hud-controller` verifies the pause menu keeps `END PRACTICE` and `EXIT ECHO` as distinct actions.
 
