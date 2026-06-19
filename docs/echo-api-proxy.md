@@ -77,6 +77,9 @@ Manifest:
    artifact. Copy `docs/key-rotation-evidence.template.md` to
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
+   The evidence must use a production HTTPS proxy URL, include the same URL in
+   the `smoke:deploy` result, mark smoke/log confirmations as passed or
+   verified, and record clean artifact scans such as `0 matches` or `no matches`.
 10. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 

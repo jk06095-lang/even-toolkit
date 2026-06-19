@@ -3,6 +3,11 @@
 Copy this file to `docs/key-rotation-evidence.md` after production proxy
 deployment and provider key rotation are complete. Do not paste raw provider
 keys, tokens, secrets, request bodies, learner transcripts, or audio payloads.
+Final confirmation fields should use clear positive results such as `true`,
+`passed`, `confirmed`, or `verified`. Artifact scan fields should state a clean
+result such as `0 matches`, `no matches`, `none found`, `clean`, or `passed`.
+The production smoke command result must include the production proxy URL and
+must not use local-only override flags.
 
 ## Rotation Date
 

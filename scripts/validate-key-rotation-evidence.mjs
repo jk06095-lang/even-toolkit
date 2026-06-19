@@ -50,6 +50,40 @@ const REQUIRED_FIELDS = [
   'Notes',
 ];
 
+const TRUE_CONFIRMATION_FIELDS = [
+  'Log allowlist confirmation',
+  'Raw transcript/audio log exclusion',
+  '/healthz configured true',
+  'Allowed origin passed',
+  'Untrusted origin blocked',
+  'Safe non-echoing error response verified',
+];
+
+const CLEAN_SCAN_FIELDS = [
+  'Browser artifact key scan result',
+  'even-app/dist scan result',
+  'even-app/echo.ehpk scan result',
+  'Direct provider hostname scan result',
+  'Development IP scan result',
+];
+
+const POSITIVE_EVIDENCE_PATTERNS = [
+  /\btrue\b/i,
+  /\bpass(?:ed)?\b/i,
+  /\bconfirmed\b/i,
+  /\bverified\b/i,
+  /\byes\b/i,
+];
+
+const CLEAN_SCAN_PATTERNS = [
+  /\b0\s+matches?\b/i,
+  /\bno\s+matches?\b/i,
+  /\bnone\s+found\b/i,
+  /\bnot\s+found\b/i,
+  /\bclean\b/i,
+  /\bpass(?:ed)?\b/i,
+];
+
 const SECRET_PATTERNS = [
   { name: 'Gemini API key', pattern: /AIza[0-9A-Za-z_-]{20,}/ },
   { name: 'GitHub token', pattern: /gh[pousr]_[0-9A-Za-z_]{20,}/ },
@@ -167,13 +201,20 @@ for (const field of REQUIRED_FIELDS) {
 }
 
 const proxyUrl = fields.get('Production proxy URL') ?? '';
-if (!allowDraft && !/^https:\/\/[^/\s]+/i.test(proxyUrl)) {
-  addError('field.Production proxy URL', 'must be a production HTTPS URL');
-}
+validateProductionProxyUrl(proxyUrl);
 
 const smokeValue = fields.get('Deployment smoke command result') ?? '';
 if (!allowDraft && !/smoke:deploy/.test(smokeValue)) {
   addError('field.Deployment smoke command result', 'must include the smoke:deploy command/result');
+}
+
+if (
+  !allowDraft
+  && !isPlaceholder(proxyUrl)
+  && !isPlaceholder(smokeValue)
+  && !smokeValue.includes(proxyUrl)
+) {
+  addError('field.Deployment smoke command result', 'must reference the Production proxy URL');
 }
 
 const forbiddenSmokeFlags = ['--allow-http', '--allow-unconfigured', '--allow-qa-delay'];
@@ -183,9 +224,78 @@ for (const flag of forbiddenSmokeFlags) {
   }
 }
 
+for (const field of TRUE_CONFIRMATION_FIELDS) {
+  validatePositiveEvidenceField(field);
+}
+
+for (const field of CLEAN_SCAN_FIELDS) {
+  validateCleanScanField(field);
+}
+
 for (const { name, pattern } of SECRET_PATTERNS) {
   if (pattern.test(text)) {
     addError('secrets', `must not contain raw ${name}`);
+  }
+}
+
+function validateProductionProxyUrl(value) {
+  const pointer = 'field.Production proxy URL';
+  if (allowDraft && isPlaceholder(value)) return;
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    addError(pointer, 'must be a valid production HTTPS URL');
+    return;
+  }
+
+  if (url.protocol !== 'https:') {
+    addError(pointer, 'must use https');
+    return;
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host.endsWith('.local')
+    || host === '127.0.0.1'
+    || host === '::1'
+    || isPrivateIpv4(host)
+  ) {
+    addError(pointer, 'must not point to localhost or a private network host');
+  }
+}
+
+function isPrivateIpv4(host) {
+  const parts = host.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  return (
+    a === 10
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 169 && b === 254)
+  );
+}
+
+function validatePositiveEvidenceField(field) {
+  const value = fields.get(field) ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+  if (!POSITIVE_EVIDENCE_PATTERNS.some((pattern) => pattern.test(value))) {
+    addError(`field.${field}`, 'must include a positive confirmation such as true, passed, confirmed, or verified');
+  }
+}
+
+function validateCleanScanField(field) {
+  const value = fields.get(field) ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+  if (!CLEAN_SCAN_PATTERNS.some((pattern) => pattern.test(value))) {
+    addError(`field.${field}`, 'must include clean scan evidence such as 0 matches, no matches, none found, clean, or passed');
   }
 }
 
