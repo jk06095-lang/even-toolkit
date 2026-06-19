@@ -227,6 +227,21 @@
         "lateResponseIgnored": null,
         "hudUnchanged": null,
         "phoneCueUnchanged": null,
+        "latencyMetadata": {
+          "session_request_scope_id": "TBD",
+          "request_id": "TBD",
+          "request_kind": "TBD",
+          "silence_detected_at": null,
+          "cue_request_started_at": null,
+          "cue_response_received_at": null,
+          "cue_displayed_at": null,
+          "network_latency_ms": null,
+          "generation_latency_ms": null,
+          "hud_render_latency_ms": null,
+          "end_to_end_latency_ms": null,
+          "late_response_latency_ms": null,
+          "rawTranscriptInMetadata": null
+        },
         "evidenceRef": "TBD"
       },
       "pause": {
@@ -234,6 +249,21 @@
         "lateResponseIgnored": null,
         "hudUnchanged": null,
         "phoneCueUnchanged": null,
+        "latencyMetadata": {
+          "session_request_scope_id": "TBD",
+          "request_id": "TBD",
+          "request_kind": "TBD",
+          "silence_detected_at": null,
+          "cue_request_started_at": null,
+          "cue_response_received_at": null,
+          "cue_displayed_at": null,
+          "network_latency_ms": null,
+          "generation_latency_ms": null,
+          "hud_render_latency_ms": null,
+          "end_to_end_latency_ms": null,
+          "late_response_latency_ms": null,
+          "rawTranscriptInMetadata": null
+        },
         "evidenceRef": "TBD"
       },
       "exitEcho": {
@@ -241,6 +271,21 @@
         "lateResponseIgnored": null,
         "hudUnchanged": null,
         "phoneCueUnchanged": null,
+        "latencyMetadata": {
+          "session_request_scope_id": "TBD",
+          "request_id": "TBD",
+          "request_kind": "TBD",
+          "silence_detected_at": null,
+          "cue_request_started_at": null,
+          "cue_response_received_at": null,
+          "cue_displayed_at": null,
+          "network_latency_ms": null,
+          "generation_latency_ms": null,
+          "hud_render_latency_ms": null,
+          "end_to_end_latency_ms": null,
+          "late_response_latency_ms": null,
+          "rawTranscriptInMetadata": null
+        },
         "evidenceRef": "TBD"
       }
     },

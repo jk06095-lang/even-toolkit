@@ -24,6 +24,19 @@ const ASSIST_METRICS = [
   { key: 'false_trigger_count', min: 0 },
   { key: 'cue_used_count', min: 0 },
 ];
+const DELAYED_PROXY_NUMERIC_METADATA = [
+  'silence_detected_at',
+  'cue_request_started_at',
+  'cue_response_received_at',
+  'network_latency_ms',
+  'generation_latency_ms',
+  'late_response_latency_ms',
+];
+const DELAYED_PROXY_NULLABLE_METADATA = [
+  'cue_displayed_at',
+  'hud_render_latency_ms',
+  'end_to_end_latency_ms',
+];
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
@@ -228,6 +241,56 @@ function validateCountMetric(object, metric, pointer) {
   }
 }
 
+function validateNonNegativeNumber(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required numeric field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, 'draft numeric field remains');
+    return;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    addError(fieldPointer, 'must be a finite number');
+    return;
+  }
+
+  if (value < 0) {
+    addError(fieldPointer, 'must be >= 0');
+  }
+}
+
+function validateNullableNonNegativeNumber(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required nullable numeric field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, 'draft nullable numeric field remains');
+    return;
+  }
+
+  if (value === null) {
+    return;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    addError(fieldPointer, 'must be null or a finite number');
+    return;
+  }
+
+  if (value < 0) {
+    addError(fieldPointer, 'must be >= 0 when present');
+  }
+}
+
 function validateAllowedKeys(object, allowedKeys, pointer) {
   const allowed = new Set(allowedKeys);
   for (const key of Object.keys(object)) {
@@ -347,12 +410,14 @@ function validateDelayedProxy(manifestObject) {
 
   for (const scenario of REQUIRED_DELAYED_PROXY_SCENARIOS) {
     const pointer = `delayedProxy.scenarios.${scenario}`;
-    if (!validateObject(manifestObject.delayedProxy.scenarios[scenario], pointer)) continue;
-    validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'abortObserved', true, pointer);
-    validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'lateResponseIgnored', true, pointer);
-    validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'hudUnchanged', true, pointer);
-    validateExpected(manifestObject.delayedProxy.scenarios[scenario], 'phoneCueUnchanged', true, pointer);
-    validateEvidenceLink(manifestObject.delayedProxy.scenarios[scenario], 'evidenceRef', pointer);
+    const scenarioEvidence = manifestObject.delayedProxy.scenarios[scenario];
+    if (!validateObject(scenarioEvidence, pointer)) continue;
+    validateExpected(scenarioEvidence, 'abortObserved', true, pointer);
+    validateExpected(scenarioEvidence, 'lateResponseIgnored', true, pointer);
+    validateExpected(scenarioEvidence, 'hudUnchanged', true, pointer);
+    validateExpected(scenarioEvidence, 'phoneCueUnchanged', true, pointer);
+    validateDelayedProxyMetadata(scenarioEvidence.latencyMetadata, `${pointer}.latencyMetadata`);
+    validateEvidenceLink(scenarioEvidence, 'evidenceRef', pointer);
   }
 
   validateExpected(manifestObject.delayedProxy, 'latencyMetadataVisible', true, 'delayedProxy');
@@ -360,6 +425,35 @@ function validateDelayedProxy(manifestObject) {
   validateEvidenceLink(manifestObject.delayedProxy, 'debugLogRef', 'delayedProxy', {
     extensions: LOG_EXTENSIONS,
   });
+}
+
+function validateDelayedProxyMetadata(metadata, pointer) {
+  if (!validateObject(metadata, pointer)) return;
+
+  validateText(metadata, 'session_request_scope_id', pointer);
+  validateText(metadata, 'request_id', pointer);
+  validateExpected(metadata, 'request_kind', 'cue', pointer);
+  validateExpected(metadata, 'rawTranscriptInMetadata', false, pointer);
+
+  for (const key of DELAYED_PROXY_NUMERIC_METADATA) {
+    validateNonNegativeNumber(metadata, key, pointer);
+  }
+
+  for (const key of DELAYED_PROXY_NULLABLE_METADATA) {
+    validateNullableNonNegativeNumber(metadata, key, pointer);
+  }
+
+  const startedAt = metadata.cue_request_started_at;
+  const responseAt = metadata.cue_response_received_at;
+  if (
+    typeof startedAt === 'number'
+    && Number.isFinite(startedAt)
+    && typeof responseAt === 'number'
+    && Number.isFinite(responseAt)
+    && responseAt < startedAt
+  ) {
+    addError(`${pointer}.cue_response_received_at`, 'must be >= cue_request_started_at');
+  }
 }
 
 function validateVoiceRuntime(manifestObject) {

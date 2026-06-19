@@ -110,6 +110,15 @@ Still requires real G2 validation:
 - Confirm the delayed response does not update the G2 HUD or phone cue card after the session ends.
 - Repeat the same delayed response test with Pause and Exit ECHO.
 - Confirm console/session metadata shows request ID, request scope, network latency, generation latency, HUD rendering latency, and end-to-end latency.
+- For each delayed scenario, record `latencyMetadata` with
+  `session_request_scope_id`, `request_id`, `request_kind`,
+  `silence_detected_at`, `cue_request_started_at`,
+  `cue_response_received_at`, `cue_displayed_at`, `network_latency_ms`,
+  `generation_latency_ms`, `hud_render_latency_ms`, `end_to_end_latency_ms`,
+  `late_response_latency_ms`, and `rawTranscriptInMetadata`.
+- When a delayed response is ignored after cleanup, `cue_displayed_at`,
+  `hud_render_latency_ms`, and `end_to_end_latency_ms` may be `null`, but the
+  request/response timing and latency fields must still be numeric.
 - Confirm debug logs do not print raw transcript text as part of latency metadata.
 
 Automated coverage added on 2026-06-19:
