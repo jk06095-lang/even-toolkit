@@ -369,12 +369,47 @@ Provider-agnostic speech-to-text module for voice input in G2 glasses apps.
 |----------|------|-----------|----------|
 | `soniox` | Cloud (Soniox) | Yes (real-time) | API key |
 
-### Quick Start
+### Production Even Hub Pattern
 
-> Security note: passing `apiKey` in a browser app is for local development
-> experiments only. Production Even Hub builds must call a server-side STT/AI
-> proxy and keep provider tokens out of the WebView, bundled `dist`, and
-> packaged `.ehpk` artifacts.
+Production Even Hub apps should send audio to a server-side STT/AI proxy that
+you control. The phone WebView should hold only a short-lived session token, not
+the upstream provider key. Add the proxy origin to `app.json` `network.whitelist`
+and configure real CORS on the proxy; the whitelist is not a CORS bypass. The
+official packaging and submission docs also state that API keys must never be
+bundled into a released `.ehpk`.
+
+```ts
+const STT_PROXY_URL = import.meta.env.VITE_STT_PROXY_URL;
+
+export async function transcribeViaProxy(
+  audioBase64: string,
+  sessionToken: string,
+): Promise<string> {
+  const response = await fetch(`${STT_PROXY_URL}/v1/transcribe`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({
+      schemaVersion: '1.0.0',
+      audioBase64,
+      mimeType: 'audio/pcm;rate=16000',
+      task: 'transcribe',
+    }),
+  });
+
+  if (!response.ok) throw new Error('STT proxy request failed');
+  const payload = await response.json() as { text?: string };
+  return payload.text ?? '';
+}
+```
+
+### Local Development Direct Provider
+
+Direct provider keys are supported for local toolkit experiments only. Never ship
+this pattern in an Even Hub build, never store provider tokens in `VITE_*`
+variables, and never package them into `dist` or `.ehpk` artifacts.
 
 ```tsx
 import { useSTT } from 'even-toolkit/stt/react';
@@ -383,7 +418,7 @@ function VoiceInput() {
   const { transcript, isListening, start, stop } = useSTT({
     provider: 'soniox',
     language: 'en-US',
-    apiKey: 'your-soniox-key',
+    apiKey: 'your-soniox-key', // Local development only.
   });
 
   return (
@@ -397,13 +432,13 @@ function VoiceInput() {
 }
 ```
 
-### Configuration
+### Direct Provider Configuration
 
 ```tsx
 useSTT({
   provider: 'soniox',
   language: 'en-US',        // BCP-47 language tag
-  apiKey: 'your-key',       // Local development only; use a proxy in production
+  apiKey: 'your-key',       // Local development only; never ship in Even Hub
   vad: { silenceMs: 2500 }, // Auto-stop after silence
   chunkIntervalMs: 4000,    // Progressive transcription interval
   continuous: false,         // Don't auto-stop on silence

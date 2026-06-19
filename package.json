@@ -411,6 +411,7 @@
     "test:echo-readiness": "node --test scripts/echo-release-readiness.test.mjs",
     "promote:echo-portfolio-links": "node scripts/promote-echo-portfolio-links.mjs",
     "test:echo-portfolio-links": "node --test scripts/promote-echo-portfolio-links.test.mjs",
+    "validate:readme-security": "node scripts/validate-readme-security.mjs",
     "validate:release-deps": "node scripts/validate-release-deps.mjs",
     "readiness:echo": "node scripts/echo-release-readiness.mjs",
     "verify:all": "node scripts/verify-all.mjs",

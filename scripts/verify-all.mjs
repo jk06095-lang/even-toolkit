@@ -7,6 +7,10 @@ const steps = [
     args: ['run', 'validate:release-deps'],
   },
   {
+    label: 'README production key guidance',
+    args: ['run', 'validate:readme-security'],
+  },
+  {
     label: 'root TypeScript build',
     args: ['run', 'build'],
   },
