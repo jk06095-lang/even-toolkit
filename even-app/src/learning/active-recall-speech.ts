@@ -7,7 +7,7 @@ export type ActiveRecallSpeechStatus =
 
 export interface ActiveRecallSpeechCallbacks {
   onInterim?: (text: string) => void;
-  onFinal?: (text: string) => void;
+  onFinal?: (text: string, confidence?: number) => void;
   onStatus?: (status: ActiveRecallSpeechStatus) => void;
   onError?: (message: string) => void;
 }
@@ -49,6 +49,7 @@ interface SpeechRecognitionResultEventLike {
     isFinal: boolean;
     0: {
       transcript: string;
+      confidence?: number;
     };
   }>;
 }
@@ -108,18 +109,22 @@ export class ActiveRecallSpeechCapture {
     recognition.onresult = (event) => {
       let interim = '';
       let final = '';
+      const finalConfidences: number[] = [];
       for (let index = event.resultIndex; index < event.results.length; index++) {
         const result = event.results[index];
-        const transcript = result?.[0]?.transcript?.trim() ?? '';
+        const alternative = result?.[0];
+        const transcript = alternative?.transcript?.trim() ?? '';
         if (!transcript) continue;
         if (result?.isFinal) {
           final = `${final} ${transcript}`.trim();
+          const confidence = normalizeConfidence(alternative?.confidence);
+          if (confidence !== undefined) finalConfidences.push(confidence);
         } else {
           interim = `${interim} ${transcript}`.trim();
         }
       }
       if (interim) this.callbacks.onInterim?.(interim);
-      if (final) this.callbacks.onFinal?.(final);
+      if (final) this.callbacks.onFinal?.(final, averageConfidence(finalConfidences));
     };
 
     recognition.onerror = (event) => {
@@ -190,4 +195,15 @@ function defaultIsSecureContext(): boolean {
 
 function defaultHostname(): string {
   return typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+}
+
+function normalizeConfidence(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
+}
+
+function averageConfidence(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 1000) / 1000;
 }

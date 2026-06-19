@@ -41,6 +41,12 @@ gated behind the existing microphone and cloud-processing privacy settings and
 falls back to typed attempts when Web Speech is unavailable or the page is not
 running on HTTPS / localhost.
 
+When Web Speech supplies a final-result confidence value, active recall stores
+it as an optional `pronunciationScore` with source `web_speech_confidence`.
+The app does not invent pronunciation scores for typed attempts or speech
+providers that omit confidence, and the score is presented as browser speech
+confidence rather than a full phoneme-level pronunciation assessment.
+
 After two successful recall reps, the prompt moves into transfer mode. Transfer
 prompts are generated from the item's `speechAct`, scenario tags, and optional
 partner-turn context so the learner must use the communication goal in a new
@@ -66,6 +72,8 @@ and phone-like values are replaced before profile generation.
 ## Remaining Work
 
 This is the data foundation and first phone review surface for the
-active-recall loop. Remaining work is to add pronunciation scoring,
-G2/bridge-based recall capture evidence, and later write-back from roleplay or
-Custom GPT Action flows.
+active-recall loop. Remaining work is to add G2/audio-level pronunciation
+scoring, G2/bridge-based recall capture evidence, and later write-back from
+roleplay or Custom GPT Action flows. The current pronunciation layer is limited
+to optional browser speech confidence; G2/audio-level pronunciation evidence
+still needs real-device capture.

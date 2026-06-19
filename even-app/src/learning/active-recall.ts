@@ -65,6 +65,9 @@ export interface ActiveRecallAttemptEvaluation {
   matchedKeywords: string[];
   missingKeywords: string[];
   note: string;
+  pronunciationScore?: number;
+  pronunciationSource?: 'web_speech_confidence';
+  pronunciationNote?: string;
 }
 
 export interface ActiveRecallStoreSnapshot {
@@ -81,6 +84,7 @@ export interface ActiveRecallQueueOptions {
 export interface RecordActiveRecallAttemptOptions {
   now?: () => Date;
   mode?: ActiveRecallPromptMode;
+  pronunciationConfidence?: number;
 }
 
 const STORAGE_KEY = 'echo_active_recall_reviews';
@@ -188,7 +192,9 @@ export function recordActiveRecallAttempt(
   const prompt = createActiveRecallPrompt(item, current);
   const mode = options.mode ?? prompt.mode;
   const nextState = advanceActiveRecallState(current, grade, now, mode);
-  const evaluation = evaluateActiveRecallAttempt(item, userAttempt);
+  const evaluation = evaluateActiveRecallAttempt(item, userAttempt, {
+    pronunciationConfidence: options.pronunciationConfidence,
+  });
   const attempt: ActiveRecallAttempt = {
     id: `${item.id}:attempt:${now.getTime()}`,
     itemId: item.id,
@@ -215,6 +221,7 @@ export function recordActiveRecallAttempt(
 export function evaluateActiveRecallAttempt(
   item: LearningItem,
   userAttempt: string,
+  options: { pronunciationConfidence?: number } = {},
 ): ActiveRecallAttemptEvaluation {
   const expectedKeywords = keywordSet([
     item.canonicalExpression,
@@ -224,7 +231,7 @@ export function evaluateActiveRecallAttempt(
   const attemptKeywords = keywordSet(sanitizePlainText(userAttempt, 1000));
 
   if (attemptKeywords.length === 0) {
-    return {
+    return withPronunciationEvaluation({
       semanticScore: 0,
       coverage: 0,
       precision: 0,
@@ -232,7 +239,7 @@ export function evaluateActiveRecallAttempt(
       matchedKeywords: [],
       missingKeywords: expectedKeywords,
       note: 'No attempt captured.',
-    };
+    }, options.pronunciationConfidence);
   }
 
   const matchedKeywords = expectedKeywords.filter((expected) => (
@@ -247,7 +254,7 @@ export function evaluateActiveRecallAttempt(
   const semanticScore = round(coverage * 0.7 + precision * 0.3);
   const recommendedGrade = recommendGrade(semanticScore, missingKeywords.length, userAttempt, item.canonicalExpression);
 
-  return {
+  return withPronunciationEvaluation({
     semanticScore,
     coverage,
     precision,
@@ -255,7 +262,7 @@ export function evaluateActiveRecallAttempt(
     matchedKeywords,
     missingKeywords,
     note: evaluationNote(recommendedGrade, semanticScore),
-  };
+  }, options.pronunciationConfidence);
 }
 
 export function advanceActiveRecallState(
@@ -460,7 +467,13 @@ function isAttemptEvaluation(value: unknown): value is ActiveRecallAttemptEvalua
     isGrade(value.recommendedGrade) &&
     Array.isArray(value.matchedKeywords) &&
     Array.isArray(value.missingKeywords) &&
-    typeof value.note === 'string';
+    typeof value.note === 'string' &&
+    (value.pronunciationScore === undefined || typeof value.pronunciationScore === 'number') &&
+    (
+      value.pronunciationSource === undefined ||
+      value.pronunciationSource === 'web_speech_confidence'
+    ) &&
+    (value.pronunciationNote === undefined || typeof value.pronunciationNote === 'string');
 }
 
 function isPromptMode(value: unknown): value is ActiveRecallPromptMode {
@@ -532,6 +545,27 @@ function evaluationNote(grade: ActiveRecallGrade, semanticScore: number): string
   if (grade === 'good') return 'Meaning is covered in a natural variant.';
   if (grade === 'hard') return `Partial match (${Math.round(semanticScore * 100)}%).`;
   return 'Try again before counting this review.';
+}
+
+function withPronunciationEvaluation(
+  evaluation: ActiveRecallAttemptEvaluation,
+  confidence: number | undefined,
+): ActiveRecallAttemptEvaluation {
+  const pronunciationScore = normalizeConfidence(confidence);
+  if (pronunciationScore === undefined) return evaluation;
+
+  return {
+    ...evaluation,
+    pronunciationScore,
+    pronunciationSource: 'web_speech_confidence',
+    pronunciationNote: 'Browser speech confidence only; not a full pronunciation assessment.',
+  };
+}
+
+function normalizeConfidence(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? round(clamp(value, 0, 1))
+    : undefined;
 }
 
 function normalizedPhrase(value: string): string {

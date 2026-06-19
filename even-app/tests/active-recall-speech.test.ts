@@ -30,11 +30,12 @@ class FakeRecognition {
     this.onend?.();
   }
 
-  emitResult(parts: Array<{ text: string; isFinal: boolean }>): void {
+  emitResult(parts: Array<{ text: string; isFinal: boolean; confidence?: number }>): void {
     const results = parts.map((part) => ({
       isFinal: part.isFinal,
       0: {
         transcript: part.text,
+        confidence: part.confidence,
       },
     }));
     this.onresult?.({
@@ -69,11 +70,15 @@ describe('active recall speech capture', () => {
     FakeRecognition.instances = [];
     const interim: string[] = [];
     const final: string[] = [];
+    const confidences: Array<number | undefined> = [];
     const statuses: ActiveRecallSpeechStatus[] = [];
     const capture = new ActiveRecallSpeechCapture(
       {
         onInterim: (text) => interim.push(text),
-        onFinal: (text) => final.push(text),
+        onFinal: (text, confidence) => {
+          final.push(text);
+          confidences.push(confidence);
+        },
         onStatus: (status) => statuses.push(status),
       },
       {
@@ -92,11 +97,12 @@ describe('active recall speech capture', () => {
 
     recognition.emitResult([
       { text: 'sorry can you', isFinal: false },
-      { text: 'repeat that', isFinal: true },
+      { text: 'repeat that', isFinal: true, confidence: 0.82 },
     ]);
 
     expect(interim).toEqual(['sorry can you']);
     expect(final).toEqual(['repeat that']);
+    expect(confidences).toEqual([0.82]);
 
     capture.stop();
     expect(recognition.stopCalled).toBe(true);

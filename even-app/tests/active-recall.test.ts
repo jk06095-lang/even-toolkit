@@ -99,6 +99,17 @@ describe('active recall learning loop', () => {
 
     const exact = evaluateActiveRecallAttempt(item!.learningItem, 'Could you say that again?');
     expect(exact.recommendedGrade).toBe('easy');
+    expect(exact.pronunciationScore).toBeUndefined();
+
+    const spoken = evaluateActiveRecallAttempt(item!.learningItem, 'Could you say that again?', {
+      pronunciationConfidence: 0.8732,
+    });
+    expect(spoken).toMatchObject({
+      recommendedGrade: 'easy',
+      pronunciationScore: 0.873,
+      pronunciationSource: 'web_speech_confidence',
+      pronunciationNote: 'Browser speech confidence only; not a full pronunciation assessment.',
+    });
 
     const empty = evaluateActiveRecallAttempt(item!.learningItem, '');
     expect(empty).toMatchObject({
@@ -132,12 +143,17 @@ describe('active recall learning loop', () => {
     recordActiveRecallAttempt(item!.learningItem, 'easy', 'Sorry, can you repeat that?', {
       now: () => new Date(Date.parse(matureState.dueAt)),
       mode: 'transfer',
+      pronunciationConfidence: 0.76,
     });
 
     expect(loadActiveRecallSnapshot().states[item!.learningItem.id]).toMatchObject({
       reps: 3,
       transferSuccessCount: 1,
       lastGrade: 'easy',
+    });
+    expect(loadActiveRecallSnapshot().attempts.at(-1)?.evaluation).toMatchObject({
+      pronunciationScore: 0.76,
+      pronunciationSource: 'web_speech_confidence',
     });
 
     const nextTransferPrompt = createActiveRecallPrompt(

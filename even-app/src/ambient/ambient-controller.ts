@@ -133,6 +133,7 @@ function updatePendingList(items: PendingItem[]): void {
 
 let currentRecallItem: ActiveRecallQueueItem | null = null;
 let recallSpeechCapture: ActiveRecallSpeechCapture | null = null;
+let currentVoiceAttemptConfidence: number | undefined;
 
 function renderActiveRecallPanel(statusMessage = ''): void {
   const promptEl = document.getElementById('active-recall-prompt');
@@ -155,6 +156,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   if (dueCount) dueCount.textContent = String(queue.length);
   if (statusEl) statusEl.textContent = statusMessage;
   if (speechStatusEl) speechStatusEl.textContent = '';
+  currentVoiceAttemptConfidence = undefined;
   answerEl.style.display = 'none';
   if (evaluationEl) evaluationEl.textContent = '';
   if (gradeRow) gradeRow.style.display = 'none';
@@ -204,11 +206,16 @@ function startActiveRecallSpeech(): void {
     onInterim: (text) => {
       setSpeechStatus(`Listening: ${text}`);
     },
-    onFinal: (text) => {
+    onFinal: (text, confidence) => {
       if (attemptEl) {
         attemptEl.value = mergeAttemptText(attemptEl.value, text);
       }
-      setSpeechStatus('Voice attempt captured.');
+      currentVoiceAttemptConfidence = combineConfidence(currentVoiceAttemptConfidence, confidence);
+      setSpeechStatus(
+        currentVoiceAttemptConfidence === undefined
+          ? 'Voice attempt captured.'
+          : `Voice attempt captured. Confidence ${Math.round(currentVoiceAttemptConfidence * 100)}%.`,
+      );
     },
     onStatus: (status) => {
       setSpeechButtons(status === 'listening', Boolean(currentRecallItem));
@@ -244,7 +251,9 @@ function revealActiveRecallAnswer(): void {
   const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
   if (answerEl) answerEl.style.display = 'block';
   if (gradeRow) gradeRow.style.display = 'grid';
-  const evaluation = evaluateActiveRecallAttempt(currentRecallItem.learningItem, attemptEl?.value ?? '');
+  const evaluation = evaluateActiveRecallAttempt(currentRecallItem.learningItem, attemptEl?.value ?? '', {
+    pronunciationConfidence: currentVoiceAttemptConfidence,
+  });
   if (evaluationEl) evaluationEl.textContent = formatEvaluation(evaluation);
   if (statusEl) statusEl.textContent = `Suggested grade: ${evaluation.recommendedGrade}. Choose the grade you want to save.`;
 }
@@ -259,6 +268,7 @@ function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
     attemptEl?.value ?? '',
     {
       mode: currentRecallItem.prompt.mode,
+      pronunciationConfidence: currentVoiceAttemptConfidence,
     },
   );
   const next = new Date(attempt.dueAtAfter);
@@ -301,6 +311,12 @@ function mergeAttemptText(existing: string, next: string): string {
   return `${trimmedExisting} ${trimmedNext}`;
 }
 
+function combineConfidence(existing: number | undefined, next: number | undefined): number | undefined {
+  if (next === undefined) return existing;
+  if (existing === undefined) return next;
+  return Math.round(((existing + next) / 2) * 1000) / 1000;
+}
+
 function statusMessageForSpeechStatus(status: ActiveRecallSpeechStatus): string {
   if (status === 'unsupported') return 'Voice recall is not supported in this browser.';
   if (status === 'secure_origin_required') return 'Voice recall needs HTTPS or localhost.';
@@ -317,8 +333,11 @@ function statusMessageForSpeechStartReason(reason: string | undefined): string {
 
 function formatEvaluation(evaluation: ActiveRecallAttemptEvaluation): string {
   const percent = Math.round(evaluation.semanticScore * 100);
+  const pronunciation = evaluation.pronunciationScore !== undefined
+    ? ` Voice confidence ${Math.round(evaluation.pronunciationScore * 100)}%.`
+    : '';
   const missing = evaluation.missingKeywords.length > 0
     ? ` Missing: ${evaluation.missingKeywords.join(', ')}.`
     : '';
-  return `${evaluation.note} Score ${percent}%. Recommended: ${evaluation.recommendedGrade}.${missing}`;
+  return `${evaluation.note} Score ${percent}%.${pronunciation} Recommended: ${evaluation.recommendedGrade}.${missing}`;
 }
