@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   SessionEngine,
   type AudioDetector,
@@ -16,6 +16,8 @@ import type { ChunkRequest, ChunkResult, SpeechEvaluationResult } from '../src/c
 import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } from '../src/combat/hybrid-recognizer';
 import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
 import type { SessionTranscript, TranscriptStoreOptions } from '../src/combat/transcript-store';
+import type { TranslationApiRequest, TranslationApiResponse } from '../src/services/echo-api';
+import { clearConversationTranslationJobs } from '../src/combat/translation-queue';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   isAssistEpisode,
@@ -252,6 +254,10 @@ class FakeHud implements GlassDisplay {
 }
 
 describe('SessionEngine core behavior with injected dependencies', () => {
+  beforeEach(() => {
+    clearConversationTranslationJobs();
+  });
+
   it('defaults to Manual Assist and records silence without auto-generating a cue', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
@@ -454,6 +460,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
   it('caps speech-evaluation cues at level 2', async () => {
     const harness = createHarness({
       week: 4,
+      cloudProcessingEnabled: true,
       speechEvaluationResult: {
         transcript: 'I think maybe',
         chunk: 'Try a short repair.',
@@ -512,7 +519,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(log.cueLatencyRecords).toHaveLength(1);
     expect(log.cueLatencyRecords[0]).toEqual({
       session_request_scope_id: 'echo-1000-test-scope',
-      request_id: 'echo-1000-test-scope:cue:1',
+      request_id: 'echo-1000-test-scope:cue:2',
       request_kind: 'cue',
       trigger: 'manual',
       silence_detected_at: null,
@@ -555,15 +562,15 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(transcript?.cues).toHaveLength(1);
     expect(transcript?.assistEpisodes).toHaveLength(1);
     expect(transcript?.cues?.[0]).toMatchObject({
-      cueId: 'echo-1000-test-scope:cue:1:cue',
+      cueId: 'echo-1000-test-scope:cue:2:cue',
       targetTurnId: 'turn-manual-cue-1',
       phrase: 'Could you say that again?',
     });
     expect(transcript?.assistEpisodes?.[0]).toMatchObject({
-      id: 'echo-1000-test-scope:cue:1:cue:episode',
+      id: 'echo-1000-test-scope:cue:2:cue:episode',
       targetTurnId: 'turn-manual-cue-1',
       trigger: 'manual',
-      cueId: 'echo-1000-test-scope:cue:1:cue',
+      cueId: 'echo-1000-test-scope:cue:2:cue',
       outcome: 'failed',
       shownAt: 1000,
       resolvedAt: 1000,
@@ -881,6 +888,53 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
 
+  it('writes Korean translations back to the active phone conversation timeline', async () => {
+    const harness = createHarness({
+      audioSource: 'browser',
+      cloudProcessingEnabled: true,
+      translationResult: {
+        translationKo: '<b>고객 세그먼트를 명확히 해 주시겠어요?</b>',
+        source: 'proxy',
+        latencyMs: 42,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?', 0.88);
+    await flushPromises();
+
+    expect(harness.translationProvider.translateCalls).toBe(1);
+    expect(harness.translationProvider.requests[0]).toMatchObject({
+      clientSessionId: 'echo-1000-test-scope',
+      requestId: 'echo-1000-test-scope:translation:1',
+      sourceLanguage: 'en-US',
+      targetLanguage: 'ko-KR',
+      text: 'Could you clarify the customer segment?',
+    });
+    expect(harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)).toMatchObject({
+      transcript: 'Could you clarify the customer segment?',
+      translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+    });
+    expect(harness.hud.events.some((event) => event.includes('고객 세그먼트'))).toBe(false);
+  });
+
+  it('does not send live conversation text for translation when cloud processing is disabled', async () => {
+    const harness = createHarness({
+      audioSource: 'browser',
+      cloudProcessingEnabled: false,
+      translationResult: {
+        translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    await harness.vad.triggerSpeechEnd();
+    await flushPromises();
+
+    expect(harness.translationProvider.translateCalls).toBe(0);
+    expect(harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)).not.toHaveProperty('translationKo');
+  });
+
   it('persists live speaker corrections on the active conversation turn', async () => {
     const harness = createHarness({ audioSource: 'browser' });
     await harness.engine.start(harness.hud);
@@ -979,11 +1033,14 @@ function createHarness(options: {
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
   speechEvaluationResult?: SpeechEvaluationResult | null;
+  translationResult?: TranslationApiResponse | string | null;
+  translationReject?: Error;
   simplifiedHint?: string | null;
   vadStartError?: Error;
   clock?: FakeClock;
   rejectChunkOnAbort?: boolean;
   transcriptOptions?: TranscriptStoreOptions;
+  cloudProcessingEnabled?: boolean;
 } = {}) {
   const clock = options.clock ?? new FakeClock();
   const states: string[] = [];
@@ -1019,6 +1076,7 @@ function createHarness(options: {
   };
 
   const cueProvider = createCueProvider(options);
+  const translationProvider = createTranslationProvider(options);
   const callbacks: SessionCallbacks = {
     onStateChange: (state) => states.push(state),
     onChunkGenerated: (chunk) => {
@@ -1055,6 +1113,8 @@ function createHarness(options: {
       audioDetectorFactory,
       speechRecognizerFactory,
       cueProvider,
+      translationProvider,
+      cloudProcessingEnabled: options.cloudProcessingEnabled ?? true,
       transcriptOptions: options.transcriptOptions ?? {
         saveRawTranscript: false,
         retentionPolicy: 'immediate',
@@ -1067,6 +1127,7 @@ function createHarness(options: {
     engine,
     clock,
     cueProvider,
+    translationProvider,
     get vad() {
       return vad;
     },
@@ -1152,6 +1213,41 @@ function createCueProvider(options: {
     evaluationRequests: ChunkRequest[];
     signals: AbortSignal[];
   };
+}
+
+function createTranslationProvider(options: {
+  translationResult?: TranslationApiResponse | string | null;
+  translationReject?: Error;
+}) {
+  const provider = {
+    translateCalls: 0,
+    requests: [] as TranslationApiRequest[],
+    signals: [] as AbortSignal[],
+    async translate(req: TranslationApiRequest, signal?: AbortSignal): Promise<TranslationApiResponse | string> {
+      this.translateCalls++;
+      this.requests.push(req);
+      if (signal) this.signals.push(signal);
+      if (options.translationReject) throw options.translationReject;
+      return options.translationResult ?? '';
+    },
+  };
+
+  const translate = provider.translate.bind(provider) as typeof provider.translate & {
+    translateCalls: number;
+    requests: TranslationApiRequest[];
+    signals: AbortSignal[];
+  };
+  Object.defineProperties(translate, {
+    translateCalls: { get: () => provider.translateCalls },
+    requests: { get: () => provider.requests },
+    signals: { get: () => provider.signals },
+  });
+  return translate;
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function deferred<T>() {

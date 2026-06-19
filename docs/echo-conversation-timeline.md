@@ -25,11 +25,11 @@ The queue uses `localStorage`, matching Even Hub's Android lifecycle guidance:
 important phone WebView state must be persisted because in-memory state can be
 lost when the app backgrounds or the screen locks.
 
-When `allowCloudProcessing` is enabled, the phone debrief surface can process
-pending jobs through `POST /v1/translate` on the ECHO API proxy. The request
-sends the saved final turn text only at processing time; if the proxy is missing,
-slow, or rejects the request, the failure is stored on the job and the original
-conversation turn remains usable.
+When `allowCloudProcessing` is enabled, Live Practice and the phone debrief
+surface can process pending jobs through `POST /v1/translate` on the ECHO API
+proxy. The request sends final turn text only at processing time; if the proxy
+is missing, slow, or rejects the request, the failure is stored on the job and
+the original conversation turn remains usable.
 
 ## Current Boundary
 
@@ -38,10 +38,13 @@ the deployed proxy boundary when cloud processing is allowed and otherwise keeps
 pending jobs local.
 
 Live Practice emits in-memory `SessionTranscript` snapshots whenever finalized
-turns are recorded. The phone UI renders the latest recognized final turns from
-that snapshot without adding conversation history to the glasses HUD. Placeholder
-speech-detection events remain analytics/cache events and are not displayed as
-phone timeline turns.
+turns are recorded. When cloud processing is enabled, each final non-Korean turn
+also schedules a Korean translation request; successful responses write
+`translationKo` back to the active `ConversationTurn` and re-emit the phone
+timeline snapshot. The phone UI renders the latest recognized final turns from
+that snapshot without adding conversation history or translations to the glasses
+HUD. Placeholder speech-detection events remain analytics/cache events and are
+not displayed as phone timeline turns.
 
 The Live Practice timeline also exposes a compact speaker selector for each
 final turn. Changing `Me`, `Partner`, or `Unknown` updates the active in-memory

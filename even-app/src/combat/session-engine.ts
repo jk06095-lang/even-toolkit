@@ -13,9 +13,18 @@ import { HybridRecognizer, type HybridMode, type HybridRecognizerCallbacks, type
 import { TranscriptStore, type SessionTranscript, type TranscriptEntry, type TranscriptStoreOptions } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
 import {
+  enqueueConversationTurnTranslation,
+  extractTranslationKo,
+  markConversationTranslationFailed,
+  markConversationTranslationJobComplete,
+  shouldQueueKoreanTranslation,
+} from './translation-queue';
+import { requestTranslation } from '../services/echo-api';
+import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   type AssistDecision,
   type AssistOutcome,
+  type ConversationTurn,
   type AssistTrigger,
   type Cue,
   type CueLevel,
@@ -40,7 +49,8 @@ export type SessionState =
 
 export type AssistMode = 'manual' | 'auto';
 type CueTrigger = 'manual' | 'auto' | 'speech-evaluation' | 'simplified';
-export type ProxyRequestKind = 'cue' | 'transcription' | 'grammar' | 'session-analysis';
+export type ProxyRequestKind = 'cue' | 'transcription' | 'translation' | 'grammar' | 'session-analysis';
+export type TranslationProvider = typeof requestTranslation;
 
 export interface AssistMetrics {
   manual_request_count: number;
@@ -198,6 +208,7 @@ export interface SessionEngineOptions {
   audioDetectorFactory?: AudioDetectorFactory;
   speechRecognizerFactory?: SpeechRecognizerFactory;
   cueProvider?: CueProvider;
+  translationProvider?: TranslationProvider;
   clock?: Clock;
   random?: Random;
   transcriptStoreFactory?: (
@@ -277,6 +288,7 @@ export class SessionEngine {
   private audioDetectorFactory: AudioDetectorFactory = (config) => new VADManager(config);
   private speechRecognizerFactory: SpeechRecognizerFactory = defaultSpeechRecognizerFactory;
   private cueProvider: CueProvider = defaultCueProvider;
+  private translationProvider: TranslationProvider = requestTranslation;
   private clock: Clock = systemClock;
   private random: Random = systemRandom;
   private transcriptStoreFactory = (
@@ -328,6 +340,7 @@ export class SessionEngine {
     this.audioDetectorFactory = options.audioDetectorFactory ?? this.audioDetectorFactory;
     this.speechRecognizerFactory = options.speechRecognizerFactory ?? this.speechRecognizerFactory;
     this.cueProvider = options.cueProvider ?? this.cueProvider;
+    this.translationProvider = options.translationProvider ?? this.translationProvider;
     this.clock = options.clock ?? this.clock;
     this.random = options.random ?? this.random;
     this.transcriptStoreFactory = options.transcriptStoreFactory ?? this.transcriptStoreFactory;
@@ -476,6 +489,7 @@ export class SessionEngine {
     if (turn) {
       this.lastTurnId = turn.id;
       this.emitConversationTimeline();
+      this.scheduleConversationTurnTranslation(turn);
       return;
     }
     this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
@@ -491,6 +505,80 @@ export class SessionEngine {
     const snapshot = this.transcriptStore?.getSnapshot();
     if (snapshot) {
       this.callbacks.onConversationTimeline?.(snapshot);
+    }
+  }
+
+  private scheduleConversationTurnTranslation(turn: ConversationTurn): void {
+    if (!this.cloudProcessingEnabled) return;
+    if (!shouldQueueKoreanTranslation(turn)) return;
+
+    const job = enqueueConversationTurnTranslation(turn, this.clock.now());
+    if (!job || job.status !== 'pending') return;
+
+    const request = this.beginRequest('translation');
+    void this.translateConversationTurn(turn, request);
+  }
+
+  private async translateConversationTurn(
+    turn: ConversationTurn,
+    request: ReturnType<SessionEngine['beginRequest']>,
+  ): Promise<void> {
+    try {
+      const response = await this.translationProvider({
+        clientSessionId: request.sessionRequestScopeId,
+        requestId: request.requestId,
+        turnId: turn.id,
+        sourceLanguage: turn.language,
+        targetLanguage: 'ko-KR',
+        text: turn.transcript,
+      }, request.controller.signal);
+
+      if (!this.isCurrentRequest(request)) return;
+
+      const translationKo = extractTranslationKo(response);
+      if (!translationKo) {
+        markConversationTranslationFailed(
+          turn.sessionId,
+          turn.id,
+          'Translation response was empty.',
+          this.clock.now(),
+        );
+        this.emitConversationTimeline();
+        return;
+      }
+
+      const updated = this.transcriptStore?.updateConversationTurn(turn.id, {
+        translationKo,
+      });
+      if (!updated) {
+        markConversationTranslationFailed(
+          turn.sessionId,
+          turn.id,
+          'Conversation turn is no longer available.',
+          this.clock.now(),
+        );
+        return;
+      }
+
+      markConversationTranslationJobComplete(
+        turn.sessionId,
+        turn.id,
+        translationKo,
+        this.clock.now(),
+      );
+      this.emitConversationTimeline();
+    } catch (err) {
+      if (!request.controller.signal.aborted && this.isCurrentRequest(request)) {
+        markConversationTranslationFailed(
+          turn.sessionId,
+          turn.id,
+          err instanceof Error ? err.message : 'Translation failed.',
+          this.clock.now(),
+        );
+        this.emitConversationTimeline();
+      }
+    } finally {
+      this.finishRequest(request.controller);
     }
   }
 

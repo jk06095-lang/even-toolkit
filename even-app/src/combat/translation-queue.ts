@@ -241,10 +241,6 @@ export function markConversationTranslationComplete(
   const cleaned = cleanPlainText(translationKo, MAX_TRANSLATION_LENGTH);
   if (!cleaned) return null;
 
-  const jobs = loadConversationTranslationJobs();
-  const index = jobs.findIndex((job) => job.id === translationJobId(sessionId, turnId));
-  if (index < 0) return null;
-
   const turn = TranscriptStore.updateConversationTurn(sessionId, turnId, {
     translationKo: cleaned,
   });
@@ -258,6 +254,23 @@ export function markConversationTranslationComplete(
     return null;
   }
 
+  const job = markConversationTranslationJobComplete(sessionId, turnId, cleaned, now);
+  return job ? { job, turn } : null;
+}
+
+export function markConversationTranslationJobComplete(
+  sessionId: string,
+  turnId: string,
+  translationKo: string,
+  now = Date.now(),
+): ConversationTranslationJob | null {
+  const cleaned = cleanPlainText(translationKo, MAX_TRANSLATION_LENGTH);
+  if (!cleaned) return null;
+
+  const jobs = loadConversationTranslationJobs();
+  const index = jobs.findIndex((job) => job.id === translationJobId(sessionId, turnId));
+  if (index < 0) return null;
+
   const job: ConversationTranslationJob = {
     ...jobs[index]!,
     status: 'translated',
@@ -268,7 +281,7 @@ export function markConversationTranslationComplete(
 
   jobs[index] = job;
   saveConversationTranslationJobs(jobs);
-  return { job, turn };
+  return job;
 }
 
 export function markConversationTranslationFailed(
@@ -383,7 +396,7 @@ function cleanPlainText(value: unknown, maxLength: number): string | undefined {
   return cleaned || undefined;
 }
 
-function extractTranslationKo(response: TranslationApiResponse | string): string | undefined {
+export function extractTranslationKo(response: TranslationApiResponse | string): string | undefined {
   if (typeof response === 'string') return cleanPlainText(response, MAX_TRANSLATION_LENGTH);
   return (
     cleanPlainText(response.translationKo, MAX_TRANSLATION_LENGTH) ||
