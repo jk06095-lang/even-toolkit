@@ -179,6 +179,10 @@ evidence must be copied to
 Final evidence must describe a non-raw OAuth token storage boundary, such as
 hashed fingerprints, encrypted storage, or secret-manager-only storage; raw or
 plaintext bearer-token storage is rejected.
+The same final manifest must include a `pronunciationScoringPolicy` for the G2
+recall evidence. That policy has to name a reviewed G2/audio-level scoring
+source, prove Web Speech confidence was not reused as G2 evidence, and confirm
+that raw audio was not retained for the evidence package.
 Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
 `docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
 current Action API base URL and contract version prefilled. The generated file
@@ -218,4 +222,5 @@ capture plus G2/audio-level pronunciation scoring. The app can now label
 G2 bridge recall attempts distinctly and store G2 PCM audio-level evidence, but
 the current scoring layer is still limited to optional browser speech
 confidence. Web Speech-only evidence remains explicitly insufficient for
-closing the G2/audio-level requirement.
+closing the G2/audio-level requirement, and completed evidence must not retain
+raw audio to compensate for that gap.

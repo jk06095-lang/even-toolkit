@@ -95,6 +95,10 @@ availability:
   calibration-derived speech threshold used by the active recall audio-level
   capture path, or the documented fallback threshold when calibration evidence
   is legitimately unavailable.
+- `pronunciationScoringPolicy.webSpeechConfidenceUsedForG2=false`: Web Speech
+  confidence is not reused as G2 pronunciation evidence.
+- `pronunciationScoringPolicy.rawAudioRetained=false`: scoring evidence uses
+  bounded G2 PCM metrics or a reviewed evaluator output, not retained raw audio.
 
 ## Conversation Timeline Evidence
 

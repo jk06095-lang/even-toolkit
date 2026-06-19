@@ -19,6 +19,12 @@ const REQUIRED_ENDPOINTS = {
   sessionImport: { path: '/v1/sessions/import-summary', method: 'POST', write: true },
 };
 
+const PRONUNCIATION_SCORING_SOURCES = [
+  'g2_audio_level_policy',
+  'device_pronunciation_evaluator',
+  'external_pronunciation_evaluator',
+];
+
 const PLACEHOLDER_PATTERNS = [
   /^$/,
   /^TBD$/i,
@@ -183,6 +189,24 @@ function validateNumberRange(object, key, pointer, min, max) {
 
   if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
     addError(fieldPointer, `must be a finite number from ${min} to ${max}`);
+  }
+}
+
+function validateEnum(object, key, allowedValues, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, `missing required value; expected one of ${allowedValues.join(', ')}`);
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, `draft value must become one of ${allowedValues.join(', ')}`);
+    return;
+  }
+
+  if (!allowedValues.includes(value)) {
+    addError(fieldPointer, `must be one of ${allowedValues.join(', ')}`);
   }
 }
 
@@ -373,7 +397,21 @@ function validateDeviceEvidence() {
   validateExpected(manifest.activeRecallDeviceEvidence, 'twoSeparateRecallDaysProven', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'transferScenarioEvidenceCaptured', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'sameDayRepeatNotCountedAsTransfer', true, 'activeRecallDeviceEvidence');
+  validatePronunciationScoringPolicy(
+    manifest.activeRecallDeviceEvidence.pronunciationScoringPolicy,
+    'activeRecallDeviceEvidence.pronunciationScoringPolicy',
+  );
   validateEvidenceLink(manifest.activeRecallDeviceEvidence, 'evidenceRef', 'activeRecallDeviceEvidence');
+}
+
+function validatePronunciationScoringPolicy(policy, pointer) {
+  if (!validateObject(policy, pointer)) return;
+  validateEnum(policy, 'scoringSource', PRONUNCIATION_SCORING_SOURCES, pointer);
+  validateExpected(policy, 'webSpeechConfidenceUsedForG2', false, pointer);
+  validateExpected(policy, 'rawAudioRetained', false, pointer);
+  validateExpected(policy, 'g2BridgePcmEvidencePresent', true, pointer);
+  validateExpected(policy, 'calibratedThresholdInEvidence', true, pointer);
+  validateEvidenceLink(policy, 'evidenceRef', pointer);
 }
 
 function validateNoSecrets() {

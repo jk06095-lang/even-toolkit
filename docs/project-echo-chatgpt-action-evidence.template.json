@@ -107,6 +107,14 @@
     "twoSeparateRecallDaysProven": null,
     "transferScenarioEvidenceCaptured": null,
     "sameDayRepeatNotCountedAsTransfer": null,
+    "pronunciationScoringPolicy": {
+      "scoringSource": "TBD",
+      "webSpeechConfidenceUsedForG2": null,
+      "rawAudioRetained": null,
+      "g2BridgePcmEvidencePresent": null,
+      "calibratedThresholdInEvidence": null,
+      "evidenceRef": "TBD"
+    },
     "evidenceRef": "TBD"
   }
 }
