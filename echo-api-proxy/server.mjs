@@ -455,7 +455,9 @@ function handleActionEndpoint(endpoint, body, url, auth) {
 
   if (endpoint === 'action-review-attempt') {
     const item = findActionLearningItem(store, body.itemId);
-    const nextDueAt = applyActionReviewGrade(item, body.grade, body.mode);
+    const nextDueAt = applyActionReviewGrade(item, body.grade, body.mode, {
+      attemptedAt: body.attemptedAt,
+    });
     const pronunciationScore = body.captureSource === 'phone_web_speech'
       ? boundedOptionalNumber(body.pronunciationScore, 0, 1)
       : undefined;
@@ -505,7 +507,10 @@ function handleActionEndpoint(endpoint, body, url, auth) {
           ? 'assisted'
           : 'failed';
       if (outcome.suggestedGrade) {
-        applyActionReviewGrade(item, outcome.suggestedGrade, 'transfer');
+        applyActionReviewGrade(item, outcome.suggestedGrade, 'transfer', {
+          attemptedAt: body.completedAt,
+          transferScenarioId: `roleplay:${body.roleplayId}:${outcome.itemId}`,
+        });
       }
     }
     touchActionStore(store);
@@ -1163,6 +1168,8 @@ function seedActionLearningItems(nowIso) {
         difficulty: 0.42,
         stability: 1,
         dueAt: nextDueAtForActionGrade('hard', now),
+        independentRecallDays: [],
+        successfulTransferScenarioIds: [],
       },
     },
     {
@@ -1181,6 +1188,11 @@ function seedActionLearningItems(nowIso) {
         difficulty: 0.35,
         stability: 2,
         dueAt: nextDueAtForActionGrade('good', now),
+        independentRecallDays: [
+          new Date(now - 2 * 24 * 60 * 60_000).toISOString().slice(0, 10),
+          new Date(now - 24 * 60 * 60_000).toISOString().slice(0, 10),
+        ],
+        successfulTransferScenarioIds: [],
       },
     },
   ];
@@ -1209,8 +1221,8 @@ function actionReviewQueue(store, limit) {
     .slice()
     .sort((a, b) => Date.parse(a.scheduling.dueAt) - Date.parse(b.scheduling.dueAt))
     .slice(0, limit)
-    .map((item, index) => {
-      const mode = index % 2 === 0 ? 'meaning_to_expression' : 'transfer';
+    .map((item) => {
+      const mode = actionReviewModeForItem(item);
       return {
         itemId: item.id,
         mode,
@@ -1225,6 +1237,14 @@ function actionReviewQueue(store, limit) {
     schemaVersion: ACTION_SCHEMA_VERSION,
     items,
   };
+}
+
+function actionReviewModeForItem(item) {
+  const recallDays = normalizeActionRecallDays(item.scheduling?.independentRecallDays);
+  const transferScenarios = normalizeActionTransferScenarioIds(item.scheduling?.successfulTransferScenarioIds);
+  return recallDays.length >= 2 && transferScenarios.length < 2
+    ? 'transfer'
+    : 'meaning_to_expression';
 }
 
 function buildReviewPrompt(item, mode) {
@@ -1242,8 +1262,12 @@ function findActionLearningItem(store, itemId) {
   return item;
 }
 
-function applyActionReviewGrade(item, grade, mode) {
+function applyActionReviewGrade(item, grade, mode, options = {}) {
   const scheduling = item.scheduling;
+  scheduling.independentRecallDays = normalizeActionRecallDays(scheduling.independentRecallDays);
+  scheduling.successfulTransferScenarioIds = normalizeActionTransferScenarioIds(
+    scheduling.successfulTransferScenarioIds,
+  );
   scheduling.reps = Math.min(10_000, Math.max(0, Number(scheduling.reps) || 0) + 1);
   if (grade === 'again') {
     scheduling.lapses = Math.min(10_000, Math.max(0, Number(scheduling.lapses) || 0) + 1);
@@ -1255,11 +1279,55 @@ function applyActionReviewGrade(item, grade, mode) {
   scheduling.stability = round3(Math.max(0.1, Math.min(3650, (Number(scheduling.stability) || 1) * stabilityFactor)));
   scheduling.dueAt = nextDueAtForActionGrade(grade);
 
-  if (mode === 'transfer' && (grade === 'good' || grade === 'easy')) {
+  const successfulProduction = grade === 'good' || grade === 'easy';
+  if (mode === 'meaning_to_expression' && successfulProduction) {
+    scheduling.independentRecallDays = appendUniqueBounded(
+      scheduling.independentRecallDays,
+      actionDayKey(options.attemptedAt),
+      8,
+    );
+  }
+
+  if (mode === 'transfer' && successfulProduction) {
+    scheduling.successfulTransferScenarioIds = appendUniqueBounded(
+      scheduling.successfulTransferScenarioIds,
+      options.transferScenarioId || currentActionTransferScenarioId(item),
+      8,
+    );
     item.lastOutcome = 'independent';
   }
 
   return scheduling.dueAt;
+}
+
+function actionDayKey(value) {
+  const parsed = Date.parse(value);
+  const timestamp = Number.isFinite(parsed) ? parsed : Date.now();
+  return new Date(timestamp).toISOString().slice(0, 10);
+}
+
+function currentActionTransferScenarioId(item) {
+  const transferCount = normalizeActionTransferScenarioIds(item.scheduling?.successfulTransferScenarioIds).length;
+  return `${item.id}:transfer:${transferCount + 1}`;
+}
+
+function appendUniqueBounded(values, value, maxItems) {
+  const next = [...values, value].filter(Boolean);
+  return Array.from(new Set(next)).slice(-maxItems);
+}
+
+function normalizeActionRecallDays(value) {
+  if (!Array.isArray(value)) return [];
+  const days = value
+    .filter((item) => typeof item === 'string' && isActionDateOnlyString(item));
+  return Array.from(new Set(days)).slice(-8);
+}
+
+function normalizeActionTransferScenarioIds(value) {
+  if (!Array.isArray(value)) return [];
+  const ids = value
+    .filter((item) => typeof item === 'string' && /^[A-Za-z0-9._:-]{1,180}$/.test(item));
+  return Array.from(new Set(ids)).slice(-8);
 }
 
 function nextDueAtForActionGrade(grade, now = Date.now()) {
@@ -1337,11 +1405,22 @@ function normalizeActionLearningItem(value, index) {
   }
   assertOptionalPlainText(value, 'naturalRecast', 240);
   assertPlainObject(value.scheduling, 'scheduling');
+  assertAllowedFields(value.scheduling, [
+    'reps',
+    'lapses',
+    'difficulty',
+    'stability',
+    'dueAt',
+    'independentRecallDays',
+    'successfulTransferScenarioIds',
+  ], 'scheduling');
   assertIntegerField(value.scheduling, 'reps', 0, 10_000);
   assertIntegerField(value.scheduling, 'lapses', 0, 10_000);
   assertNumberField(value.scheduling, 'difficulty', 0, 1);
   assertNumberField(value.scheduling, 'stability', 0, 3650);
   assertIsoDateField(value.scheduling, 'dueAt');
+  assertOptionalActionDateArray(value.scheduling, 'independentRecallDays', 8);
+  assertOptionalSafeIdArray(value.scheduling, 'successfulTransferScenarioIds', 8);
 
   return {
     schemaVersion: ACTION_SCHEMA_VERSION,
@@ -1361,6 +1440,8 @@ function normalizeActionLearningItem(value, index) {
       difficulty: round3(value.scheduling.difficulty),
       stability: round3(value.scheduling.stability),
       dueAt: value.scheduling.dueAt,
+      independentRecallDays: normalizeActionRecallDays(value.scheduling.independentRecallDays),
+      successfulTransferScenarioIds: normalizeActionTransferScenarioIds(value.scheduling.successfulTransferScenarioIds),
     },
   };
 }
@@ -1985,6 +2066,25 @@ function assertOptionalStringArray(record, field, maxItems, maxChars) {
   }
 }
 
+function assertOptionalActionDateArray(record, field, maxItems) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  if (!Array.isArray(value) || value.length > maxItems) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a bounded date array.`);
+  }
+  value.forEach((item, index) => {
+    if (typeof item !== 'string' || !isActionDateOnlyString(item)) {
+      throw new HttpError(400, 'invalid_request_schema', `${field}[${index}] must be an ISO date string.`);
+    }
+  });
+}
+
+function assertOptionalSafeIdArray(record, field, maxItems) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  assertSafeIdArray(value, 0, maxItems, field);
+}
+
 function assertActionPrivacySafe(value) {
   if (Array.isArray(value)) {
     value.forEach((item) => assertActionPrivacySafe(item));
@@ -2002,6 +2102,7 @@ function assertActionPrivacySafe(value) {
   }
 
   if (typeof value !== 'string') return;
+  if (isActionDateLikeString(value)) return;
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)) {
     throw new HttpError(400, 'invalid_request_schema', 'Direct contact identifier rejected.');
   }
@@ -2011,6 +2112,22 @@ function assertActionPrivacySafe(value) {
   if (/<[A-Za-z][\s\S]*>/.test(value)) {
     throw new HttpError(400, 'invalid_request_schema', 'HTML-like content rejected.');
   }
+}
+
+function isActionDateLikeString(value) {
+  return /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value);
+}
+
+function isActionDateOnlyString(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day;
 }
 
 function assertAllowedFields(record, allowed, field) {

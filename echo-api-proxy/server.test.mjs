@@ -307,6 +307,10 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
     assert.equal(profile.privacyMode, 'server_synced');
     assert.ok(Array.isArray(profile.learningItems));
     assert.equal(JSON.stringify(profile).includes('rawTranscript'), false);
+    for (const item of profile.learningItems) {
+      assert.ok(Array.isArray(item.scheduling.independentRecallDays));
+      assert.ok(Array.isArray(item.scheduling.successfulTransferScenarioIds));
+    }
 
     const importedItem = {
       schemaVersion: '2.0.0',
@@ -324,6 +328,8 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
         difficulty: 0.5,
         stability: 1,
         dueAt: new Date(Date.now() - 60_000).toISOString(),
+        independentRecallDays: ['2026-06-18'],
+        successfulTransferScenarioIds: [],
       },
     };
 
@@ -356,6 +362,9 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
     assert.equal(updatedProfileResponse.status, 200);
     assert.equal(updatedProfile.learningItems.some((item) => item.id === importedItem.id), true);
     assert.equal(updatedProfile.metrics.totalSessions, 1);
+    const importedProfileItem = updatedProfile.learningItems.find((item) => item.id === importedItem.id);
+    assert.deepEqual(importedProfileItem.scheduling.independentRecallDays, ['2026-06-18']);
+    assert.deepEqual(importedProfileItem.scheduling.successfulTransferScenarioIds, []);
 
     const reviewResponse = await fetch(`${proxy.baseUrl}/v1/reviews/attempt`, {
       method: 'POST',
@@ -372,7 +381,7 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
         grade: 'good',
         captureSource: 'typed',
         userAttempt: 'Could you clarify that?',
-        attemptedAt: new Date().toISOString(),
+        attemptedAt: '2026-06-19T09:00:00.000Z',
         semanticScore: 0.91,
       }),
     });
@@ -381,6 +390,26 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
     assert.equal(reviewBody.accepted, true);
     assert.equal(reviewBody.itemId, importedItem.id);
     assert.match(reviewBody.nextDueAt, /^\d{4}-\d{2}-\d{2}T/);
+
+    const recalledProfileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
+      headers: {
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+    });
+    const recalledProfile = await recalledProfileResponse.json();
+    const recalledItem = recalledProfile.learningItems.find((item) => item.id === importedItem.id);
+    assert.deepEqual(recalledItem.scheduling.independentRecallDays, ['2026-06-18', '2026-06-19']);
+
+    const reviewQueueResponse = await fetch(`${proxy.baseUrl}/v1/reviews/next?limit=10`, {
+      headers: {
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+    });
+    const reviewQueue = await reviewQueueResponse.json();
+    assert.equal(reviewQueueResponse.status, 200);
+    assert.equal(reviewQueue.items.find((item) => item.itemId === importedItem.id)?.mode, 'transfer');
 
     const roleplayResponse = await fetch(`${proxy.baseUrl}/v1/roleplays/start`, {
       method: 'POST',
@@ -427,6 +456,18 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
     const roleplayResultBody = await roleplayResultResponse.json();
     assert.equal(roleplayResultResponse.status, 200);
     assert.deepEqual(roleplayResultBody, { accepted: true });
+
+    const transferredProfileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
+      headers: {
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+    });
+    const transferredProfile = await transferredProfileResponse.json();
+    const transferredItem = transferredProfile.learningItems.find((item) => item.id === importedItem.id);
+    assert.deepEqual(transferredItem.scheduling.successfulTransferScenarioIds, [
+      `roleplay:${roleplayBody.roleplayId}:${importedItem.id}`,
+    ]);
   } finally {
     await proxy.stop();
   }
@@ -670,6 +711,8 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
                 difficulty: 0.48,
                 stability: 1,
                 dueAt: new Date(Date.now() - 60_000).toISOString(),
+                independentRecallDays: ['2026-06-17'],
+                successfulTransferScenarioIds: [],
               },
             },
           ],
@@ -692,7 +735,7 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
           grade: 'good',
           captureSource: 'g2_bridge',
           userAttempt: 'Could you explain that again?',
-          attemptedAt: new Date().toISOString(),
+          attemptedAt: '2026-06-18T09:00:00.000Z',
           semanticScore: 0.87,
           audioLevelEvidence: {
             source: 'g2_bridge_pcm',
@@ -720,6 +763,9 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
     assert.equal(persistedText.includes('"captureSource": "g2_bridge"'), true);
     assert.equal(persistedText.includes('"audioLevelEvidence"'), true);
     assert.equal(persistedText.includes('"source": "g2_bridge_pcm"'), true);
+    assert.equal(persistedText.includes('"independentRecallDays"'), true);
+    assert.equal(persistedText.includes('2026-06-18'), true);
+    assert.equal(persistedText.includes('"successfulTransferScenarioIds"'), true);
     assert.equal(persistedText.includes('rawTranscript'), false);
     assert.equal(persistedText.includes('audioBase64'), false);
     assert.equal(persistedText.includes('test@example.com'), false);
@@ -736,7 +782,10 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
 
       assert.equal(profileResponse.status, 200);
       assert.equal(profile.metrics.totalSessions, 1);
-      assert.equal(profile.learningItems.some((item) => item.id === importedItemId), true);
+      const persistedItem = profile.learningItems.find((item) => item.id === importedItemId);
+      assert.ok(persistedItem);
+      assert.deepEqual(persistedItem.scheduling.independentRecallDays, ['2026-06-17', '2026-06-18']);
+      assert.deepEqual(persistedItem.scheduling.successfulTransferScenarioIds, []);
     } finally {
       await restartedProxy.stop();
     }

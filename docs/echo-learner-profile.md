@@ -146,6 +146,14 @@ The next server-synced integration boundary now lives under
   `g2_bridge` PCM attempts. Deployed smoke evidence may prove phone/Web Speech
   or typed attempts, but it still does not satisfy the separate real-device
   G2/audio-level evidence requirement.
+- `ReviewScheduling` carries `independentRecallDays` and
+  `successfulTransferScenarioIds` alongside `reps`, `lapses`, `difficulty`,
+  `stability`, and `dueAt`. The proxy normalizes legacy records into empty
+  arrays, appends a calendar day only after successful hidden
+  meaning-to-expression recall, and appends a transfer scenario ID only after a
+  successful transfer or roleplay outcome. `/v1/reviews/next` offers transfer
+  mode only after at least two separate recall days and before two successful
+  transfer scenarios have been recorded.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.

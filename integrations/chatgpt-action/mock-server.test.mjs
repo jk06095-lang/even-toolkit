@@ -58,6 +58,10 @@ test('serves bounded learner and review data matching the Action contract', asyn
     assert.ok(item.canonicalExpression.length <= 240);
     assert.ok(item.meaningKo.length <= 400);
     assert.ok(item.scenarioTags.length <= 5);
+    assert.ok(Array.isArray(item.scheduling.independentRecallDays));
+    assert.ok(item.scheduling.independentRecallDays.length <= 8);
+    assert.ok(Array.isArray(item.scheduling.successfulTransferScenarioIds));
+    assert.ok(item.scheduling.successfulTransferScenarioIds.length <= 8);
   }
 
   const reviewsResponse = await request('/v1/reviews/next');
@@ -66,6 +70,7 @@ test('serves bounded learner and review data matching the Action contract', asyn
   assert.equal(reviews.schemaVersion, ACTION_SCHEMA_VERSION);
   assert.ok(reviews.items.length > 0);
   assert.ok(reviews.items.length <= 10);
+  assert.equal(reviews.items.some((item) => item.mode === 'transfer'), true);
   assertNoForbiddenPayload(reviews);
 });
 
@@ -251,9 +256,10 @@ function jsonPost(pathname, body) {
 
 function assertNoForbiddenPayload(value) {
   const serialized = JSON.stringify(value);
+  const withoutDates = serialized.replace(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2}))?/g, 'ISO_DATE');
   for (const forbidden of FORBIDDEN_ACTION_FIELDS) {
     assert.equal(serialized.includes(`"${forbidden}"`), false, `payload contains ${forbidden}`);
   }
   assert.doesNotMatch(serialized, /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  assert.doesNotMatch(serialized, /\b(?:\+?\d[\s.-]?){8,}\b/);
+  assert.doesNotMatch(withoutDates, /\b(?:\+?\d[\s.-]?){8,}\b/);
 }

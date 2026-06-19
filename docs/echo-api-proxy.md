@@ -52,6 +52,13 @@ bounded `audioLevelEvidence` is accepted only for `g2_bridge` attempts. G2
 bridge attempts may include `audioLevelEvidence` derived from 16 kHz PCM frame
 metadata, but the Action schema still rejects raw transcript/audio payloads,
 contact identifiers, provider keys, and session tokens.
+Action review scheduling also persists `independentRecallDays` and
+`successfulTransferScenarioIds`. A successful hidden meaning-to-expression
+attempt appends one calendar day, repeated same-day success is de-duplicated,
+and transfer mode is offered only after at least two separate recall days. A
+successful transfer review or roleplay write-back appends a bounded scenario ID
+instead of counting repeated success in the same generated scenario as new
+evidence.
 Set `ECHO_ACTION_STORE_PATH` to enable the reference file-backed Action store;
 when unset, Action learner/review state remains process-local. The file-backed
 store persists only bounded learner profile, learning-item, review-attempt, and

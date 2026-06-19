@@ -40,6 +40,8 @@ const learningItems = [
       difficulty: 0.42,
       stability: 2.5,
       dueAt: '2026-06-20T09:00:00.000Z',
+      independentRecallDays: ['2026-06-18'],
+      successfulTransferScenarioIds: [],
     },
   },
   {
@@ -58,6 +60,8 @@ const learningItems = [
       difficulty: 0.35,
       stability: 4,
       dueAt: '2026-06-21T09:00:00.000Z',
+      independentRecallDays: ['2026-06-17', '2026-06-19'],
+      successfulTransferScenarioIds: [],
     },
   },
 ];
@@ -191,13 +195,21 @@ export function reviewQueue() {
     schemaVersion: ACTION_SCHEMA_VERSION,
     items: learningItems.map((item, index) => ({
       itemId: item.id,
-      mode: index === 0 ? 'meaning_to_expression' : 'transfer',
+      mode: reviewModeForItem(item),
       prompt: index === 0 ? item.meaningKo : '회의 중 바로 대답하기 어렵다는 뜻을 새 상황에서 표현하기',
       meaningKo: item.meaningKo,
       scenarioTag: item.scenarioTags[0],
       dueAt: item.scheduling.dueAt,
     })),
   };
+}
+
+function reviewModeForItem(item) {
+  const recallDays = item.scheduling.independentRecallDays ?? [];
+  const transferScenarios = item.scheduling.successfulTransferScenarioIds ?? [];
+  return recallDays.length >= 2 && transferScenarios.length < 2
+    ? 'transfer'
+    : 'meaning_to_expression';
 }
 
 function nextDueAtForGrade(grade) {
@@ -269,12 +281,17 @@ function assertPrivacySafe(value, path = '$') {
   }
 
   if (typeof value !== 'string') return;
+  if (isActionDateLikeString(value)) return;
   if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)) {
     throw httpError(400, 'Direct contact identifier rejected');
   }
   if (/\b(?:\+?\d[\s.-]?){8,}\b/.test(value)) {
     throw httpError(400, 'Direct contact identifier rejected');
   }
+}
+
+function isActionDateLikeString(value) {
+  return /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2}))?$/.test(value);
 }
 
 function assertRequired(body, fields) {

@@ -97,6 +97,16 @@ if (!serializedSpec.includes('"const":"2.0.0"')) {
   errors.push('schemaVersion const 2.0.0 is required');
 }
 
+const reviewScheduling = schemas.ReviewScheduling;
+for (const field of ['independentRecallDays', 'successfulTransferScenarioIds']) {
+  if (!reviewScheduling?.required?.includes(field)) {
+    errors.push(`ReviewScheduling must require ${field}`);
+  }
+  if (reviewScheduling?.properties?.[field]?.maxItems !== 8) {
+    errors.push(`ReviewScheduling.${field} must cap evidence history at 8 item(s)`);
+  }
+}
+
 if (errors.length > 0) {
   console.error('[chatgpt-action] validation failed');
   for (const error of errors) {
