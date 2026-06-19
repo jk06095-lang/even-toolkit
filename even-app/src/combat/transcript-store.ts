@@ -12,6 +12,12 @@ import {
   retentionCutoffMs,
   type TranscriptRetentionPolicy,
 } from '../privacy/settings';
+import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isConversationTurn,
+  type ConversationTurn,
+  type ConversationTurnSource,
+} from '@toolkit/echo-domain-v2';
 
 export interface TranscriptEntry {
   /** Epoch timestamp */
@@ -51,6 +57,8 @@ export interface SessionTranscript {
   category: string;
   /** All recorded entries */
   entries: TranscriptEntry[];
+  /** ECHO domain v2 learner turns, migrated from entries when loading legacy sessions. */
+  conversationTurns?: ConversationTurn[];
   /** Hint usage statistics (populated at session end) */
   hintUsageStats?: HintUsageStats;
   /** Consent and retention snapshot used for this raw transcript. */
@@ -95,6 +103,9 @@ export interface TranscriptStoreOptions {
   saveRawTranscript?: boolean;
   retentionPolicy?: TranscriptRetentionPolicy;
   now?: () => number;
+  defaultTurnSource?: ConversationTurnSource;
+  defaultLanguage?: string;
+  idFactory?: () => string;
 }
 
 export type SessionEventTelemetry = Omit<
@@ -133,6 +144,9 @@ export class TranscriptStore {
   private readonly saveRawTranscript: boolean;
   private readonly retentionPolicy: TranscriptRetentionPolicy;
   private readonly now: () => number;
+  private readonly defaultTurnSource: ConversationTurnSource;
+  private readonly defaultLanguage: string;
+  private readonly idFactory: () => string;
   private eventTelemetry: SessionEventTelemetry = {};
 
   constructor(
@@ -144,6 +158,9 @@ export class TranscriptStore {
     this.now = options.now ?? (() => Date.now());
     this.saveRawTranscript = options.saveRawTranscript === true;
     this.retentionPolicy = options.retentionPolicy ?? 'immediate';
+    this.defaultTurnSource = options.defaultTurnSource ?? 'g2';
+    this.defaultLanguage = options.defaultLanguage ?? 'en-US';
+    this.idFactory = options.idFactory ?? createTurnId;
 
     const now = this.now();
     const dateStr = new Date(now).toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -155,6 +172,7 @@ export class TranscriptStore {
       topic,
       category,
       entries: [],
+      conversationTurns: [],
       savedWithConsent: this.saveRawTranscript,
       retentionPolicy: this.retentionPolicy,
     };
@@ -290,6 +308,18 @@ export class TranscriptStore {
 
   private addEntry(entry: TranscriptEntry): void {
     this.session.entries.push(entry);
+    if (entry.type === 'user_speech') {
+      this.session.conversationTurns ??= [];
+      this.session.conversationTurns.push(
+        createConversationTurnFromEntry(
+          this.session,
+          entry,
+          this.idFactory(),
+          this.defaultTurnSource,
+          this.defaultLanguage,
+        ),
+      );
+    }
     this.flush();
   }
 
@@ -325,7 +355,7 @@ export class TranscriptStore {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      return Array.isArray(parsed) ? parsed.map(normalizeSessionTranscript) : [];
     } catch {
       return [];
     }
@@ -370,7 +400,7 @@ export class TranscriptStore {
     try {
       const raw = sessionStorage.getItem(SESSION_BUFFER_KEY);
       if (!raw) return null;
-      return JSON.parse(raw) as SessionTranscript;
+      return normalizeSessionTranscript(JSON.parse(raw));
     } catch {
       return null;
     }
@@ -468,6 +498,139 @@ export class TranscriptStore {
       return end >= cutoff;
     });
   }
+}
+
+export function getConversationTurns(session: SessionTranscript): ConversationTurn[] {
+  return normalizeSessionTranscript(session).conversationTurns ?? [];
+}
+
+function normalizeSessionTranscript(value: unknown): SessionTranscript {
+  const record = isRecord(value) ? value : {};
+  const startTime = coerceTimestamp(record.startTime, Date.now());
+  const session: SessionTranscript = {
+    sessionId: coerceString(record.sessionId, `legacy-${startTime}`),
+    startTime,
+    endTime: coerceTimestamp(record.endTime, 0),
+    week: coerceNumber(record.week, 1),
+    topic: coerceString(record.topic, 'Legacy session'),
+    category: coerceString(record.category, 'general'),
+    entries: Array.isArray(record.entries)
+      ? record.entries.filter(isTranscriptEntry)
+      : [],
+    hintUsageStats: isHintUsageStats(record.hintUsageStats)
+      ? record.hintUsageStats
+      : undefined,
+    savedWithConsent: typeof record.savedWithConsent === 'boolean'
+      ? record.savedWithConsent
+      : undefined,
+    retentionPolicy: isTranscriptRetentionPolicy(record.retentionPolicy)
+      ? record.retentionPolicy
+      : undefined,
+  };
+  session.conversationTurns = normalizeConversationTurns(record.conversationTurns, session);
+  return session;
+}
+
+function normalizeConversationTurns(value: unknown, session: SessionTranscript): ConversationTurn[] {
+  const storedTurns = Array.isArray(value)
+    ? value.filter(isConversationTurn)
+    : [];
+
+  if (storedTurns.length > 0) {
+    return storedTurns;
+  }
+
+  return session.entries
+    .filter((entry) => entry.type === 'user_speech' && entry.text.trim())
+    .map((entry, index) => createConversationTurnFromEntry(
+      session,
+      entry,
+      `${session.sessionId}:turn:${index + 1}`,
+      'g2',
+      'en-US',
+    ));
+}
+
+function createConversationTurnFromEntry(
+  session: SessionTranscript,
+  entry: TranscriptEntry,
+  id: string,
+  source: ConversationTurnSource,
+  language: string,
+): ConversationTurn {
+  const timestamp = coerceTimestamp(entry.t, session.startTime);
+  return {
+    schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+    id,
+    sessionId: session.sessionId,
+    speaker: 'learner',
+    startedAt: timestamp,
+    endedAt: timestamp,
+    source,
+    language,
+    transcript: entry.text.trim(),
+    isFinal: entry.isFinal ?? true,
+    piiFlags: [],
+  };
+}
+
+function createTurnId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+  return `turn-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function coerceString(value: unknown, fallback: string): string {
+  return typeof value === 'string' && value.trim() ? value : fallback;
+}
+
+function coerceNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function coerceTimestamp(value: unknown, fallback: number): number {
+  const timestamp = coerceNumber(value, fallback);
+  return timestamp >= 0 ? timestamp : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isTranscriptEntry(value: unknown): value is TranscriptEntry {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.t === 'number' &&
+    Number.isFinite(value.t) &&
+    typeof value.type === 'string' &&
+    [
+      'user_speech',
+      'hint_given',
+      'silence_event',
+      'hint_used',
+      'hint_missed',
+      'hint_simplified',
+    ].includes(value.type) &&
+    typeof value.text === 'string'
+  );
+}
+
+function isHintUsageStats(value: unknown): value is HintUsageStats {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.total === 'number' &&
+    typeof value.used === 'number' &&
+    typeof value.missed === 'number' &&
+    typeof value.simplified === 'number' &&
+    typeof value.successRate === 'number' &&
+    Array.isArray(value.difficultyProgression) &&
+    typeof value.recommendedNextDifficulty === 'number'
+  );
+}
+
+function isTranscriptRetentionPolicy(value: unknown): value is TranscriptRetentionPolicy {
+  return value === 'immediate' || value === '1d' || value === '7d' || value === 'until_deleted';
 }
 
 function buildEventAnalytics(

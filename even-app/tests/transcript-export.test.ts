@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionTranscript } from '../src/combat/transcript-store';
+import { ECHO_DOMAIN_V2_SCHEMA_VERSION } from '@toolkit/echo-domain-v2';
 
 const echoApiMock = vi.hoisted(() => ({
   configured: true,
@@ -80,6 +81,27 @@ describe('transcript export session-analysis guards', () => {
       weak_areas: [],
       recommended_chunks: [],
       next_session_focus: 'Continue current topic practice.',
+    });
+  });
+
+  it('exports ECHO domain v2 conversation turns in stage 1', async () => {
+    echoApiMock.configured = false;
+
+    const exportJson = await generateExportJSON(makeSession(), {
+      allowCloudProcessing: false,
+    });
+
+    expect(exportJson.stage_1_raw.conversation_turns).toHaveLength(1);
+    expect(exportJson.stage_1_raw.conversation_turns[0]).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'session-a:turn:1',
+      sessionId: 'session-a',
+      speaker: 'learner',
+      source: 'g2',
+      language: 'en-US',
+      transcript: 'I think we should start with the customer problem.',
+      isFinal: true,
+      piiFlags: [],
     });
   });
 

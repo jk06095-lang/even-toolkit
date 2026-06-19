@@ -261,7 +261,10 @@ export class SessionEngine {
     topic: string,
     category: string,
     options?: TranscriptStoreOptions,
-  ) => new TranscriptStore(week, topic, category, options);
+  ) => new TranscriptStore(week, topic, category, {
+    defaultTurnSource: this.preferredAudioSource === 'browser' ? 'phone' : 'g2',
+    ...options,
+  });
   private transcriptAnalyzerFactory = (week: number) => new TranscriptAnalyzer(week);
   private lifecycleToken = 0;
   private sessionRequestScopeId = '';

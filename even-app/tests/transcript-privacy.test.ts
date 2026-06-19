@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_PRIVACY_SETTINGS, loadPrivacySettings } from '../src/privacy/settings';
 import { TranscriptStore, type SessionTranscript } from '../src/combat/transcript-store';
+import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isConversationTurn,
+} from '@toolkit/echo-domain-v2';
 
 class MemoryStorage {
   private data = new Map<string, string>();
@@ -142,6 +146,67 @@ describe('transcript privacy controls', () => {
     expect(stored).toHaveLength(1);
     expect(stored[0]?.entries[0]?.text).toBe('store this sentence');
     expect(TranscriptStore.loadAnalytics()[0]?.rawTranscriptSaved).toBe(true);
+  });
+
+  it('writes ECHO domain v2 ConversationTurn records for saved speech', () => {
+    const store = new TranscriptStore(2, 'Saved Topic', 'business', {
+      saveRawTranscript: true,
+      retentionPolicy: '7d',
+      now: () => now,
+      defaultTurnSource: 'phone',
+      idFactory: () => '00000000-0000-4000-8000-000000000001',
+    });
+
+    store.addSpeech('store this sentence', 'live_final');
+
+    const transcript = store.finalize();
+    const turn = transcript?.conversationTurns?.[0];
+    expect(turn).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: '00000000-0000-4000-8000-000000000001',
+      sessionId: transcript?.sessionId,
+      speaker: 'learner',
+      startedAt: now,
+      endedAt: now,
+      source: 'phone',
+      language: 'en-US',
+      transcript: 'store this sentence',
+      isFinal: true,
+      piiFlags: [],
+    });
+    expect(isConversationTurn(turn)).toBe(true);
+  });
+
+  it('migrates legacy transcripts to v2 turns and rejects malformed turn records', () => {
+    const legacy = makeSession('legacy', now);
+    localStorage.setItem('echo_transcripts', JSON.stringify([
+      {
+        ...legacy,
+        conversationTurns: [
+          {
+            schemaVersion: 'bad',
+            id: 'bad',
+            transcript: '<script>alert(1)</script>',
+          },
+        ],
+      },
+    ]));
+
+    const [stored] = TranscriptStore.loadAll();
+    expect(stored?.conversationTurns).toHaveLength(1);
+    expect(stored?.conversationTurns?.[0]).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'legacy:turn:1',
+      sessionId: 'legacy',
+      speaker: 'learner',
+      source: 'g2',
+      language: 'en-US',
+      transcript: 'legacy',
+      isFinal: true,
+      piiFlags: [],
+    });
+    expect(isConversationTurn(stored?.conversationTurns?.[0])).toBe(true);
+    expect(JSON.stringify(stored?.conversationTurns)).not.toContain('<script>');
   });
 
   it('supports delete-after-session retention', () => {

@@ -11,8 +11,9 @@
  */
 
 import { isEchoApiConfigured, requestSessionAnalysis } from '../services/echo-api';
-import type { SessionTranscript } from './transcript-store';
+import { getConversationTurns, type SessionTranscript } from './transcript-store';
 import { getScenarioById } from './topic-registry';
+import type { ConversationTurn } from '@toolkit/echo-domain-v2';
 
 // ── Export Types (strict, never changes) ──
 
@@ -23,6 +24,7 @@ export interface ExportStage1 {
   week: number;
   topic: string;
   category: string;
+  conversation_turns: ConversationTurn[];
   entries: Array<{
     t: number;
     type: 'user_speech' | 'hint_given' | 'silence_event' | 'hint_used' | 'hint_missed' | 'hint_simplified';
@@ -77,6 +79,7 @@ function buildStage1(session: SessionTranscript): ExportStage1 {
     week: session.week,
     topic: session.topic,
     category: session.category,
+    conversation_turns: getConversationTurns(session),
     entries: session.entries.map((e) => ({
       t: e.t,
       type: e.type,
