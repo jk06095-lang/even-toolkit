@@ -10,7 +10,9 @@ The production smoke command result must include the production proxy URL and
 must not use local-only override flags. Final evidence must use an ISO
 `YYYY-MM-DD` rotation date and list the current `even-app/package.json` version
 under `Client build or package version`. Final evidence must also point to the
-JSON file written by `smoke:deploy -- --evidence-out ...`.
+JSON file written by `smoke:deploy -- --evidence-out ...`. Session token
+evidence must prove short-lived server-side issuance, client artifact scans, and
+old-token revocation after rotation.
 
 ## Rotation Date
 
@@ -26,6 +28,15 @@ JSON file written by `smoke:deploy -- --evidence-out ...`.
 - New key location:
 - Server secret manager reference:
 - Browser artifact key scan result:
+
+## Session Token Rotation
+
+- Session token issuer:
+- Session token TTL:
+- Session token rotation cadence:
+- Session token revocation evidence:
+- Session token storage boundary:
+- Session token client artifact scan result:
 
 ## Production Log Review
 

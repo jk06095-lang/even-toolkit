@@ -34,6 +34,12 @@ Required:
   `X-Echo-Session-Token`. Treat these as deploy/session guards, not provider
   secrets; rotate them and prefer an issuer-backed short TTL before production
   traffic.
+- `ECHO_PROXY_SESSION_TOKEN_ISSUER`: non-secret identifier for the server-side
+  issuer or secret-manager entry that minted the active session tokens.
+- `ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS`: maximum client session-token lifetime.
+  Release smoke expects a positive value no longer than 86400 seconds.
+- `ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS`: maximum operational rotation
+  cadence. Release smoke expects a positive value no longer than 30 days.
 
 Recommended:
 
@@ -68,10 +74,15 @@ Manifest:
    `https://api.project-echo.app`.
 2. Set `GEMINI_API_KEY` in the server secret manager only.
 3. Set `ECHO_PROXY_ALLOWED_ORIGINS` to the final ECHO app origins.
-4. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
+4. Configure `ECHO_PROXY_SESSION_TOKENS` from a server-side issuer or secret
+   manager, set `ECHO_PROXY_SESSION_TOKEN_ISSUER`, set a TTL of 86400 seconds or
+   less, and set a rotation cadence of 30 days or less. Keep session tokens out
+   of source control, `even-app/dist`, and `.ehpk` artifacts; revoke the old
+   smoke token after each production rotation.
+5. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
-5. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
-6. Smoke-test the deployed proxy without making a provider generation call:
+6. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
+7. Smoke-test the deployed proxy without making a provider generation call:
 
    ```bash
    cd echo-api-proxy
@@ -80,23 +91,25 @@ Manifest:
 
    The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
    CORS, `authConfigured: true`, a supplied smoke session token, blocked
-   untrusted origins, missing-token rejection, `qaDelayMs: 0`, and safe
-   non-echoing error responses. The `--evidence-out` JSON is required by the
-   final key-rotation evidence validator. Use
+   untrusted origins, missing-token rejection, `qaDelayMs: 0`, configured
+   session-token policy metadata, and safe non-echoing error responses. The
+   `--evidence-out` JSON is required by the final key-rotation evidence
+   validator. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
    only for local dry-runs.
-7. Build and package the app with `cd even-app && npm run verify`.
-8. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, direct
-   provider hostnames, SDK imports, and development IPs.
-9. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+8. Build and package the app with `cd even-app && npm run verify`.
+9. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
+   tokens, direct provider hostnames, SDK imports, and development IPs.
+10. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact. Copy `docs/key-rotation-evidence.template.md` to
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
    The evidence must use a production HTTPS proxy URL, include the same URL in
    the `smoke:deploy` result, reference the checked-in deployment smoke JSON,
-   mark smoke/log confirmations as passed or verified, and record clean artifact
-   scans such as `0 matches` or `no matches`.
-10. Confirm proxy logs do not contain request bodies, raw transcript text, or
+   mark smoke/log/session-token confirmations as passed or verified, prove a
+   TTL and rotation cadence inside policy limits, prove old-token revocation,
+   and record clean artifact scans such as `0 matches` or `no matches`.
+11. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
@@ -105,8 +118,9 @@ bounded schema validation, rate limiting, oversized payload rejection, and safe
 `proxy_not_configured` errors that do not echo learner text in the response body
 or proxy stdout/stderr logs. `npm run smoke:deploy` performs the corresponding
 remote deployment checks and expects the deployed server to report
-`configured: true`, `authConfigured: true`, and `qaDelayMs: 0` unless local-only
-override flags are passed for local testing.
+`configured: true`, `authConfigured: true`, `tokenPolicy.configured: true`,
+and `qaDelayMs: 0` unless local-only override flags are passed for local
+testing.
 For delayed-response QA, start a local or staging proxy with
 `ECHO_PROXY_QA_DELAY_MS=5000`; `/healthz` reports the active `qaDelayMs`.
 

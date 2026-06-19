@@ -13,6 +13,10 @@ const ALLOWED_ORIGINS = parseOrigins(
 const SESSION_TOKENS = parseTokens(
   process.env.ECHO_PROXY_SESSION_TOKENS || process.env.ECHO_PROXY_SESSION_TOKEN || '',
 );
+const SESSION_TOKEN_ISSUER = clipString(process.env.ECHO_PROXY_SESSION_TOKEN_ISSUER, 160);
+const SESSION_TOKEN_TTL_SECONDS = readNumberEnv('ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS', 0);
+const SESSION_TOKEN_ROTATION_DAYS = readNumberEnv('ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS', 0);
+const SESSION_TOKEN_POLICY = buildSessionTokenPolicy();
 const RATE_LIMIT_WINDOW_MS = readNumberEnv('ECHO_PROXY_RATE_LIMIT_WINDOW_MS', 60_000);
 const RATE_LIMIT_MAX = readNumberEnv('ECHO_PROXY_RATE_LIMIT_MAX', 60);
 const rateLimitBuckets = new Map();
@@ -45,6 +49,7 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         configured: Boolean(GEMINI_API_KEY),
         authConfigured: SESSION_TOKENS.length > 0,
+        tokenPolicy: SESSION_TOKEN_POLICY,
         model: GEMINI_MODEL,
         qaDelayMs: QA_DELAY_MS,
         rateLimit: {
@@ -574,6 +579,28 @@ function parseTokens(value) {
     .split(',')
     .map((token) => token.trim())
     .filter(Boolean);
+}
+
+function buildSessionTokenPolicy() {
+  const ttlSeconds = SESSION_TOKEN_TTL_SECONDS || null;
+  const rotationDays = SESSION_TOKEN_ROTATION_DAYS || null;
+  const configured =
+    SESSION_TOKENS.length > 0
+    && Boolean(SESSION_TOKEN_ISSUER)
+    && Number.isFinite(SESSION_TOKEN_TTL_SECONDS)
+    && SESSION_TOKEN_TTL_SECONDS > 0
+    && SESSION_TOKEN_TTL_SECONDS <= 86_400
+    && Number.isFinite(SESSION_TOKEN_ROTATION_DAYS)
+    && SESSION_TOKEN_ROTATION_DAYS > 0
+    && SESSION_TOKEN_ROTATION_DAYS <= 30;
+
+  return {
+    configured,
+    issuer: SESSION_TOKEN_ISSUER || null,
+    ttlSeconds,
+    rotationDays,
+    activeTokenCount: SESSION_TOKENS.length,
+  };
 }
 
 function readNumberEnv(name, fallback) {

@@ -23,6 +23,9 @@ before(async () => {
       ECHO_PROXY_ALLOWED_ORIGINS: allowedOrigin,
       ECHO_PROXY_QA_DELAY_MS: String(qaDelayMs),
       ECHO_PROXY_SESSION_TOKEN: sessionToken,
+      ECHO_PROXY_SESSION_TOKEN_ISSUER: 'test-session-issuer',
+      ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS: '3600',
+      ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS: '7',
       ECHO_PROXY_RATE_LIMIT_MAX: '2',
       ECHO_PROXY_RATE_LIMIT_WINDOW_MS: '60000',
       ECHO_PROXY_MAX_BODY_BYTES: '1024',
@@ -82,6 +85,12 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(body.ok, true);
   assert.equal(body.configured, false);
   assert.equal(body.authConfigured, true);
+  assert.equal(body.tokenPolicy.configured, true);
+  assert.equal(body.tokenPolicy.issuer, 'test-session-issuer');
+  assert.equal(body.tokenPolicy.ttlSeconds, 3600);
+  assert.equal(body.tokenPolicy.rotationDays, 7);
+  assert.equal(body.tokenPolicy.activeTokenCount, 1);
+  assert.equal(JSON.stringify(body).includes(sessionToken), false);
   assert.equal(body.qaDelayMs, qaDelayMs);
   assert.equal(body.rateLimit.max, 2);
   assert.equal(typeof body.model, 'string');

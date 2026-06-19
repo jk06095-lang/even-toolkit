@@ -37,6 +37,18 @@ test('rejects deployment smoke evidence that used local-only release override fl
   assert.match(result.stderr, /deploymentSmokeEvidence\.releaseFlags/);
 });
 
+test('rejects key-rotation evidence text that includes unauthenticated smoke override', async () => {
+  const fixture = writeFixture('unauthenticated-flag-text', smokeEvidence());
+  const markdownPath = path.join(repoRoot, fixture.markdownPath);
+  const markdown = readFileSync(markdownPath, 'utf8').replace(' passed', ' --allow-unauthenticated passed');
+  writeFileSync(markdownPath, markdown, 'utf8');
+
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /--allow-unauthenticated/);
+});
+
 test('rejects deployment smoke evidence that echoed sensitive learner text', async () => {
   const fixture = writeFixture('echoed-sensitive', smokeEvidence({
     checks: {
@@ -49,6 +61,24 @@ test('rejects deployment smoke evidence that echoed sensitive learner text', asy
 
   assert.notEqual(result.code, 0);
   assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.safeError\.responseEchoedSensitive/);
+});
+
+test('rejects deployment smoke evidence without configured session-token policy', async () => {
+  const fixture = writeFixture('missing-token-policy', smokeEvidence({
+    checks: {
+      healthz: {
+        tokenPolicyConfigured: false,
+        tokenPolicyIssuerPresent: false,
+        tokenPolicyTtlSeconds: null,
+        tokenPolicyRotationDays: null,
+        tokenPolicyActiveTokenCount: 0,
+      },
+    },
+  }));
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.tokenPolicyConfigured/);
 });
 
 function writeFixture(name, evidence) {
@@ -88,6 +118,11 @@ function smokeEvidence(overrides = {}) {
         configured: true,
         authConfigured: true,
         qaDelayMs: 0,
+        tokenPolicyConfigured: true,
+        tokenPolicyIssuerPresent: true,
+        tokenPolicyTtlSeconds: 3600,
+        tokenPolicyRotationDays: 7,
+        tokenPolicyActiveTokenCount: 1,
         corsOriginMatches: true,
         cacheControlNoStore: true,
       },
@@ -138,6 +173,15 @@ function keyRotationMarkdown(evidenceRelativePath) {
 - New key location: server secret manager current version
 - Server secret manager reference: production/project-echo/GEMINI_API_KEY
 - Browser artifact key scan result: 0 matches
+
+## Session Token Rotation
+
+- Session token issuer: production/project-echo/session-token-issuer
+- Session token TTL: 1 hour
+- Session token rotation cadence: 7 days
+- Session token revocation evidence: verified old smoke token rejected after rotation
+- Session token storage boundary: server secret manager only
+- Session token client artifact scan result: 0 matches
 
 ## Production Log Review
 

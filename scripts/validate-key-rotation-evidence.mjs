@@ -16,6 +16,7 @@ const PLACEHOLDER_PATTERNS = [
 const REQUIRED_SECTIONS = [
   'Rotation Date',
   'Rotated Provider Keys',
+  'Session Token Rotation',
   'Production Log Review',
   'Deployment Smoke Evidence',
   'Artifact Scan Evidence',
@@ -32,6 +33,12 @@ const REQUIRED_FIELDS = [
   'New key location',
   'Server secret manager reference',
   'Browser artifact key scan result',
+  'Session token issuer',
+  'Session token TTL',
+  'Session token rotation cadence',
+  'Session token revocation evidence',
+  'Session token storage boundary',
+  'Session token client artifact scan result',
   'Reviewed time window',
   'Log source',
   'Log allowlist confirmation',
@@ -52,6 +59,7 @@ const REQUIRED_FIELDS = [
 ];
 
 const TRUE_CONFIRMATION_FIELDS = [
+  'Session token revocation evidence',
   'Log allowlist confirmation',
   'Raw transcript/audio log exclusion',
   '/healthz configured true',
@@ -62,6 +70,7 @@ const TRUE_CONFIRMATION_FIELDS = [
 
 const CLEAN_SCAN_FIELDS = [
   'Browser artifact key scan result',
+  'Session token client artifact scan result',
   'even-app/dist scan result',
   'even-app/echo.ehpk scan result',
   'Direct provider hostname scan result',
@@ -108,8 +117,9 @@ Validates the Project ECHO production proxy/key-rotation evidence file.
 
 Without --allow-draft, all required sections and fields must be filled with
 non-placeholder values, production smoke evidence must avoid local-only smoke
-flags, deployment smoke JSON must prove the remote checks, and the evidence must
-not contain raw provider keys or tokens.`);
+flags, deployment smoke JSON must prove the remote checks and configured
+session-token policy, and the evidence must not contain raw provider keys or
+tokens.`);
   process.exit(wantsHelp ? 0 : 1);
 }
 
@@ -210,6 +220,7 @@ const proxyUrl = fields.get('Production proxy URL') ?? '';
 validateIsoDateField('Date');
 validateCurrentClientBuildVersion();
 validateProductionProxyUrl(proxyUrl);
+validateSessionTokenPolicyFields();
 
 const smokeValue = fields.get('Deployment smoke command result') ?? '';
 if (!allowDraft && !/smoke:deploy/.test(smokeValue)) {
@@ -226,7 +237,7 @@ if (
 }
 validateDeploymentSmokeEvidence(proxyUrl);
 
-const forbiddenSmokeFlags = ['--allow-http', '--allow-unconfigured', '--allow-qa-delay'];
+const forbiddenSmokeFlags = ['--allow-http', '--allow-unconfigured', '--allow-unauthenticated', '--allow-qa-delay'];
 for (const flag of forbiddenSmokeFlags) {
   if (text.includes(flag)) {
     addError('deploymentSmoke', `must not include local-only smoke flag ${flag}`);
@@ -390,9 +401,12 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
     configured: true,
     authConfigured: true,
     qaDelayMs: 0,
+    tokenPolicyConfigured: true,
+    tokenPolicyIssuerPresent: true,
     corsOriginMatches: true,
     cacheControlNoStore: true,
   });
+  validateSmokeTokenPolicy(checks.healthz);
   validateSmokeCheck(checks.options, 'options', {
     status: 204,
     corsOriginMatches: true,
@@ -433,6 +447,21 @@ function validateSmokeCheck(check, key, expectedFields) {
     if (check[field] !== expected) {
       addError(`${pointer}.${field}`, `must be ${JSON.stringify(expected)}`);
     }
+  }
+}
+
+function validateSmokeTokenPolicy(healthz) {
+  const pointer = 'deploymentSmokeEvidence.checks.healthz';
+  if (!healthz || typeof healthz !== 'object' || Array.isArray(healthz)) return;
+
+  validateNumberRange(healthz.tokenPolicyTtlSeconds, 1, 86_400, `${pointer}.tokenPolicyTtlSeconds`);
+  validateNumberRange(healthz.tokenPolicyRotationDays, 1, 30, `${pointer}.tokenPolicyRotationDays`);
+  validateNumberRange(healthz.tokenPolicyActiveTokenCount, 1, 1_000, `${pointer}.tokenPolicyActiveTokenCount`);
+}
+
+function validateNumberRange(value, min, max, pointer) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    addError(pointer, `must be a number from ${min} to ${max}`);
   }
 }
 
@@ -482,6 +511,50 @@ function isPrivateIpv4(host) {
     || (a === 192 && b === 168)
     || (a === 169 && b === 254)
   );
+}
+
+function validateSessionTokenPolicyFields() {
+  validateDurationField('Session token TTL', 1, 86_400);
+  validateDurationField('Session token rotation cadence', 1, 30 * 24 * 60 * 60);
+
+  const issuer = fields.get('Session token issuer') ?? '';
+  if (!(allowDraft && isPlaceholder(issuer)) && !/(issuer|session|auth|secret|edge|server)/i.test(issuer)) {
+    addError('field.Session token issuer', 'must identify a server-side token issuer or secret-manager reference');
+  }
+
+  const boundary = fields.get('Session token storage boundary') ?? '';
+  if (!(allowDraft && isPlaceholder(boundary)) && !/(server|secret manager|edge config|issuer)/i.test(boundary)) {
+    addError('field.Session token storage boundary', 'must confirm server-side storage boundary');
+  }
+}
+
+function validateDurationField(field, minSeconds, maxSeconds) {
+  const value = fields.get(field) ?? '';
+  if (allowDraft && isPlaceholder(value)) return;
+
+  const seconds = parseDurationSeconds(value);
+  if (seconds === null) {
+    addError(`field.${field}`, 'must include a numeric duration with units');
+    return;
+  }
+  if (seconds < minSeconds || seconds > maxSeconds) {
+    addError(`field.${field}`, `must be between ${minSeconds} and ${maxSeconds} seconds`);
+  }
+}
+
+function parseDurationSeconds(value) {
+  const match = String(value || '').match(/\b(\d+)\s*(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d)\b/i);
+  if (!match) return null;
+
+  const amount = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const unit = match[2].toLowerCase();
+  if (unit === 's' || unit.startsWith('sec') || unit.startsWith('second')) return amount;
+  if (unit === 'm' || unit.startsWith('min') || unit.startsWith('minute')) return amount * 60;
+  if (unit === 'h' || unit.startsWith('hr') || unit.startsWith('hour')) return amount * 60 * 60;
+  if (unit === 'd' || unit.startsWith('day')) return amount * 24 * 60 * 60;
+  return null;
 }
 
 function validatePositiveEvidenceField(field) {
