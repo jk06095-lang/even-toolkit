@@ -99,12 +99,14 @@ function createEvidenceFiles() {
   const ko = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.ko.md'), '# KO case study\n');
   const en = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.en.md'), '# EN case study\n');
   const architecture = writeEvidenceFile(path.join(evidenceDir, 'project-echo-architecture.md'), '# Architecture\n');
+  const outcomeSummary = writeEvidenceFile(path.join(evidenceDir, 'project-echo-outcome-summary.md'), '# Outcome summary\n');
   const video = writeEvidenceFile(path.join(videosDir, 'project-echo-real-g2-video.mp4'), 'video placeholder\n');
 
   return {
     ko,
     en,
     architecture,
+    outcomeSummary,
     video,
     qaExport(condition, participantId) {
       return writeEvidenceFile(
@@ -173,6 +175,15 @@ function validPilotManifest(evidence) {
         B: aggregateCondition('B'),
         C: aggregateCondition('C'),
       },
+    },
+    outcomeMetrics: {
+      conversationRecoveryRate: 0.74,
+      conversationRecoveryWindowSeconds: 8,
+      independentTransferRateDay1: 0.46,
+      independentTransferRateDay7: 0.34,
+      transferScenarioCount: 10,
+      evidenceRef: evidence.outcomeSummary,
+      notes: 'Portfolio promotion fixture includes core outcome KPI proof.',
     },
     caseStudy: {
       koreanCaseStudyUrl: evidence.ko,

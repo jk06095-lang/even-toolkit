@@ -32,7 +32,10 @@ manifests should pass
 `npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json`
 and final hardware QA manifests should pass
 `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json`
-before README portfolio links are updated. The Custom GPT Action evidence
+before README portfolio links are updated. The pilot manifest must include the
+core outcome metrics from the plan: Conversation Recovery Rate with an 8-second
+window, Day 1/Day 7 Independent Transfer Rate, transfer scenario count, and a
+real evidence reference. The Custom GPT Action evidence
 manifest should pass
 `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`
 after the Action API is deployed, OAuth is configured, privacy rejection tests

@@ -74,6 +74,12 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.notEqual(hardware.evidenceStatus, 'complete');
   assert.equal(hardware.device.appVersion, appVersion);
   assert.equal(pilot.hardware.appVersion, appVersion);
+  assert.equal(pilot.outcomeMetrics.conversationRecoveryRate, null);
+  assert.equal(pilot.outcomeMetrics.conversationRecoveryWindowSeconds, 8);
+  assert.equal(pilot.outcomeMetrics.independentTransferRateDay1, null);
+  assert.equal(pilot.outcomeMetrics.independentTransferRateDay7, null);
+  assert.equal(pilot.outcomeMetrics.transferScenarioCount, null);
+  assert.equal(pilot.outcomeMetrics.evidenceRef, 'TBD');
   assert.equal(hardware.buildArtifact.packagePath, 'even-app/echo.ehpk');
   assert.match(hardware.buildArtifact.sha256, /^[a-f0-9]{64}$/);
   assert.equal(hardware.buildArtifact.installedViaBetaOrPrivateBuild, null);
@@ -176,6 +182,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, new RegExp(`npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence ${escapeRegExp(repoRelative(proxySmokePath))}`));
   assert.match(fieldRunbook, /#2\/#3\/#6\/#12\/#13\/#14\/#28/);
   assert.doesNotMatch(fieldRunbook, /#2\/#3\/#4\/#6/);
+  assert.match(fieldRunbook, /outcomeMetrics/);
+  assert.match(fieldRunbook, /Conversation Recovery Rate/);
+  assert.match(fieldRunbook, /Day 1 and Day 7 Independent Transfer Rates/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
   assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);

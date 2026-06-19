@@ -58,6 +58,21 @@ npm run qa:summarize-export -- path/to/echo_my_data.json
 
 The generated Markdown can be pasted into the pilot scorecard sections below.
 
+## Core Outcome Metrics
+
+The completed pilot manifest must include `outcomeMetrics` in addition to the
+A/B/C condition metrics:
+
+| Metric | Definition | Required evidence |
+| --- | --- | --- |
+| Conversation Recovery Rate | Share of help requests or detected breakdowns where the learner completes the communication goal within 8 seconds | Pilot scorecard or QA summary evidence ref |
+| Independent Transfer Rate Day 1 | Share of previously assisted expressions used independently in a new situation after 1 day | Transfer review or roleplay evidence ref |
+| Independent Transfer Rate Day 7 | Share of previously assisted expressions used independently in a new situation after 7 days | Transfer review or roleplay evidence ref |
+| Transfer Scenario Count | Number of bounded transfer scenarios reviewed for the rate calculation | Integer count with evidence ref |
+
+`conversationRecoveryWindowSeconds` must stay `8` so results are comparable
+across users and conditions.
+
 ## Evidence Manifest Gate
 
 Use [docs/project-echo-pilot-evidence.template.json](./docs/project-echo-pilot-evidence.template.json)
@@ -106,6 +121,9 @@ noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.
 Each final A/B/C aggregate must include `sampleSize`, and that value must match
 the number of participant runs recorded for the same condition.
+The final manifest must also fill `outcomeMetrics` with Conversation Recovery
+Rate, an 8-second recovery window, Day 1 and Day 7 Independent Transfer Rates,
+an integer transfer-scenario count, a real evidence ref, and notes.
 Condition A is the no-assistance baseline, so final evidence must record
 `cueP50LatencyMs`, `cueP95LatencyMs`, `cueUsageRate`, `cueDismissalRate`, and
 `falseCueRate` as `0` for both per-user runs and aggregate metrics. If any of

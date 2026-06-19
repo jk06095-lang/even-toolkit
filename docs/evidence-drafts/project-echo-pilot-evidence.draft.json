@@ -669,6 +669,15 @@
       }
     }
   },
+  "outcomeMetrics": {
+    "conversationRecoveryRate": null,
+    "conversationRecoveryWindowSeconds": 8,
+    "independentTransferRateDay1": null,
+    "independentTransferRateDay7": null,
+    "transferScenarioCount": null,
+    "evidenceRef": "TBD",
+    "notes": "TBD"
+  },
   "caseStudy": {
     "koreanCaseStudyUrl": "TBD",
     "englishCaseStudyUrl": "TBD",

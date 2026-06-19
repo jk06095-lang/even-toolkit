@@ -576,15 +576,18 @@ without moving heavy review text onto the glasses:
    and speech-evaluation cues stay at level 2 or lower, while level 3/full
    structure appears only after an explicit Manual Assist request.
 7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
-8. Fill final Korean/English case studies, architecture evidence, and the real
+8. Fill \`outcomeMetrics\` with Conversation Recovery Rate using the fixed
+   8-second window, Day 1 and Day 7 Independent Transfer Rates, integer
+   transfer scenario count, and the pilot scorecard evidence ref.
+9. Fill final Korean/English case studies, architecture evidence, and the real
    G2 video target.
-9. Run production proxy smoke and key-rotation checks without local-only
+10. Run production proxy smoke and key-rotation checks without local-only
    overrides.
-10. Deploy the OAuth-backed Custom GPT Action API and capture privacy rejection
+11. Deploy the OAuth-backed Custom GPT Action API and capture privacy rejection
     plus G2/audio-level active-recall evidence, including two separate recall
     days and at least one bounded transfer scenario or roleplay write-back.
-11. Validate all completed manifests, then run \`npm run promote:echo-portfolio-links\`.
-12. Run \`npm run readiness:echo\`; only close the remaining issues after it
+12. Validate all completed manifests, then run \`npm run promote:echo-portfolio-links\`.
+13. Run \`npm run readiness:echo\`; only close the remaining issues after it
     passes and the linked evidence is committed or stable.
 
 ## Non-Negotiables

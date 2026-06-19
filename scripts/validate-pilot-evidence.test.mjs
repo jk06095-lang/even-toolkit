@@ -69,6 +69,25 @@ test('rejects duplicate participant IDs in completed pilot evidence', async () =
   assert.match(combinedOutput(result), /participants\[4\]\.id: participant id must be unique/);
 });
 
+test('rejects completed pilot evidence without core outcome KPI proof', async () => {
+  const fixture = writeCompletedPilotFixture('missing-outcome-kpis');
+  const manifest = readFixture(fixture.manifestPath);
+  manifest.outcomeMetrics.conversationRecoveryWindowSeconds = 10;
+  manifest.outcomeMetrics.independentTransferRateDay7 = null;
+  manifest.outcomeMetrics.transferScenarioCount = 0.5;
+  manifest.outcomeMetrics.evidenceRef = 'metrics summarized';
+  writeFixtureManifest(fixture.manifestPath, manifest);
+
+  const result = await runValidator(fixture.manifestPath);
+  const output = combinedOutput(result);
+
+  assert.notEqual(result.code, 0);
+  assert.match(output, /outcomeMetrics\.conversationRecoveryWindowSeconds/);
+  assert.match(output, /outcomeMetrics\.independentTransferRateDay7/);
+  assert.match(output, /outcomeMetrics\.transferScenarioCount/);
+  assert.match(output, /outcomeMetrics\.evidenceRef: must be an https URL or repo path/);
+});
+
 function writeCompletedPilotFixture(name) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -103,6 +122,15 @@ function writeCompletedPilotFixture(name) {
         C: aggregateCondition('C'),
       },
     },
+    outcomeMetrics: {
+      conversationRecoveryRate: 0.72,
+      conversationRecoveryWindowSeconds: 8,
+      independentTransferRateDay1: 0.48,
+      independentTransferRateDay7: 0.36,
+      transferScenarioCount: 10,
+      evidenceRef: refs.outcomeSummary,
+      notes: 'Conversation recovery and independent transfer outcomes reviewed from pilot scorecard.',
+    },
     caseStudy: {
       koreanCaseStudyUrl: refs.caseStudyKo,
       englishCaseStudyUrl: refs.caseStudyEn,
@@ -124,6 +152,7 @@ function createEvidenceRefs(fixtureDir) {
   const files = {
     qaExport: path.join(fixtureDir, 'qa-export.json'),
     observerNotes: path.join(fixtureDir, 'observer-notes.md'),
+    outcomeSummary: path.join(fixtureDir, 'outcome-summary.md'),
     video: path.join(fixtureDir, 'real-g2-video.mp4'),
     caseStudyKo: path.join(fixtureDir, 'case-study.ko.md'),
     caseStudyEn: path.join(fixtureDir, 'case-study.en.md'),

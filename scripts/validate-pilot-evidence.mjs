@@ -30,6 +30,14 @@ const UX_METRICS = [
   { key: 'privacyConcernRating', min: 1, max: 7 },
 ];
 
+const OUTCOME_METRICS = [
+  { key: 'conversationRecoveryRate', min: 0, max: 1 },
+  { key: 'conversationRecoveryWindowSeconds', min: 8, max: 8 },
+  { key: 'independentTransferRateDay1', min: 0, max: 1 },
+  { key: 'independentTransferRateDay7', min: 0, max: 1 },
+  { key: 'transferScenarioCount', min: 1 },
+];
+
 const VAD_METRICS = [
   { key: 'vadSpeechThreshold', min: 0 },
   { key: 'vadNoiseFloorRms', min: 0 },
@@ -553,6 +561,32 @@ function validateAggregate(manifestObject) {
   }
 }
 
+function validateOutcomeMetrics(manifestObject) {
+  if (!validateObject(manifestObject.outcomeMetrics, 'outcomeMetrics')) {
+    return;
+  }
+
+  validateMetricGroup(manifestObject.outcomeMetrics, OUTCOME_METRICS, 'outcomeMetrics');
+  validateOutcomeMetricRelationships(manifestObject.outcomeMetrics);
+  validateEvidenceLink(manifestObject.outcomeMetrics, 'evidenceRef', 'outcomeMetrics', {
+    extensions: PILOT_ARTIFACT_EXTENSIONS,
+  });
+  validateText(manifestObject.outcomeMetrics, 'notes', 'outcomeMetrics');
+}
+
+function validateOutcomeMetricRelationships(outcomeMetrics) {
+  if (!isPlainObject(outcomeMetrics)) return;
+
+  const transferScenarioCount = outcomeMetrics.transferScenarioCount;
+  if (allowDraft && (transferScenarioCount === null || transferScenarioCount === 'TBD')) {
+    return;
+  }
+
+  if (typeof transferScenarioCount === 'number' && Number.isFinite(transferScenarioCount) && !Number.isInteger(transferScenarioCount)) {
+    addError('outcomeMetrics.transferScenarioCount', 'must be an integer count');
+  }
+}
+
 function validateVadCalibration(manifestObject) {
   if (!validateObject(manifestObject.vadCalibration, 'vadCalibration')) {
     return;
@@ -715,6 +749,7 @@ function validateManifest(manifestObject) {
 
   validateVadCalibration(manifestObject);
   validateAggregate(manifestObject);
+  validateOutcomeMetrics(manifestObject);
 
   if (validateObject(manifestObject.caseStudy, 'caseStudy')) {
     validateEvidenceLink(manifestObject.caseStudy, 'koreanCaseStudyUrl', 'caseStudy');
