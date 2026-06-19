@@ -47,6 +47,7 @@ const ACTION_OAUTH_CLIENT_SECRET = String(process.env.ECHO_ACTION_OAUTH_CLIENT_S
 const ACTION_OAUTH_REDIRECT_ORIGINS = parseOrigins(process.env.ECHO_ACTION_OAUTH_REDIRECT_ORIGINS || '');
 const ACTION_OAUTH_CODE_TTL_SECONDS = readNumberEnv('ECHO_ACTION_OAUTH_CODE_TTL_SECONDS', 300);
 const ACTION_OAUTH_TOKEN_TTL_SECONDS = readNumberEnv('ECHO_ACTION_OAUTH_TOKEN_TTL_SECONDS', 3600);
+const ACTION_OAUTH_TOKEN_STORAGE = 'hashed_in_memory';
 const ACTION_OAUTH_ENABLED = Boolean(
   ACTION_OAUTH_CLIENT_ID
     && ACTION_OAUTH_CLIENT_SECRET.length >= 16
@@ -135,6 +136,7 @@ const server = http.createServer(async (req, res) => {
           configured: ACTION_OAUTH_ENABLED,
           authorizationCode: true,
           tokenTtlSeconds: ACTION_OAUTH_TOKEN_TTL_SECONDS,
+          tokenStorage: ACTION_OAUTH_TOKEN_STORAGE,
           redirectOriginCount: ACTION_OAUTH_REDIRECT_ORIGINS.length,
           scopes: ACTION_OAUTH_SCOPES,
         },
@@ -329,7 +331,7 @@ async function createActionAccessToken(req) {
   }
 
   const accessToken = `echo_oauth_${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '')}`;
-  actionOauthTokens.set(accessToken, {
+  actionOauthTokens.set(hashActionOAuthAccessToken(accessToken), {
     sessionId: codeRecord.subject,
     scopes: codeRecord.scopes,
     expiresAt: Date.now() + ACTION_OAUTH_TOKEN_TTL_SECONDS * 1000,
@@ -405,16 +407,20 @@ function parseActionScopes(value) {
 
 function verifyActionOAuthToken(token) {
   if (!token || !token.startsWith('echo_oauth_')) return null;
-  const record = actionOauthTokens.get(token);
+  const record = actionOauthTokens.get(hashActionOAuthAccessToken(token));
   if (!record) return null;
   if (record.expiresAt <= Date.now()) {
-    actionOauthTokens.delete(token);
+    actionOauthTokens.delete(hashActionOAuthAccessToken(token));
     return null;
   }
   return {
     sessionId: record.sessionId,
     scopes: record.scopes,
   };
+}
+
+function hashActionOAuthAccessToken(token) {
+  return createHash('sha256').update(String(token)).digest('hex');
 }
 
 function requireActionScopes(auth, requiredScopes = []) {

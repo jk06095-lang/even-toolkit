@@ -83,6 +83,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(action.oauth.authorizationCodeConfigured, true);
   assert.equal(action.oauth.evidenceRef, repoRelative(actionSmokePath));
   assert.match(action.oauth.tokenStorageBoundary, /token-free Action smoke evidence/);
+  assert.match(action.oauth.tokenStorageBoundary, /hashed in memory/);
   assert.equal(action.oauth.providerSecretsInGpt, null);
   assert.equal(action.endpoints.learnerProfile.status, 200);
   assert.equal(action.endpoints.learnerProfile.schemaVersion, '2.0.0');
@@ -226,6 +227,7 @@ function actionOauthSmokeFixture(baseUrl) {
         status: 200,
         actionOAuthConfigured: true,
         authorizationCode: true,
+        tokenStorage: 'hashed_in_memory',
       },
       oauthAuthorize: {
         status: 302,

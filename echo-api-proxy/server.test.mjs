@@ -101,6 +101,7 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(body.idempotency.ttlMs, 600000);
   assert.equal(body.circuitBreaker.failureThreshold, 5);
   assert.equal(body.actionOAuth.configured, false);
+  assert.equal(body.actionOAuth.tokenStorage, 'hashed_in_memory');
   assert.deepEqual(body.actionOAuth.scopes, [
     'profile:read',
     'review:read',
@@ -452,6 +453,7 @@ test('ChatGPT Action OAuth authorization-code tokens are scope-bound', async () 
     assert.equal(healthz.actionOAuth.configured, true);
     assert.equal(healthz.actionOAuth.redirectOriginCount, 2);
     assert.equal(healthz.actionOAuth.tokenTtlSeconds, 3600);
+    assert.equal(healthz.actionOAuth.tokenStorage, 'hashed_in_memory');
 
     const authorizeUrl = new URL(`${proxy.baseUrl}/oauth/authorize`);
     authorizeUrl.searchParams.set('response_type', 'code');
@@ -495,6 +497,7 @@ test('ChatGPT Action OAuth authorization-code tokens are scope-bound', async () 
     assert.equal(tokenBody.expires_in, 3600);
     assert.equal(tokenBody.scope, 'profile:read review:read');
     assert.equal(JSON.stringify(tokenBody).includes(clientSecret), false);
+    assert.equal(JSON.stringify(healthz).includes(tokenBody.access_token), false);
 
     const profileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
       headers: {

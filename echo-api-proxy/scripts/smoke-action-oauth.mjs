@@ -201,6 +201,7 @@ async function checkHealthz() {
     actionOAuthConfigured: body?.actionOAuth?.configured === true,
     authorizationCode: body?.actionOAuth?.authorizationCode === true,
     tokenTtlSeconds: body?.actionOAuth?.tokenTtlSeconds ?? null,
+    tokenStorage: body?.actionOAuth?.tokenStorage ?? null,
     redirectOriginCount: body?.actionOAuth?.redirectOriginCount ?? null,
     scopes,
     corsOriginMatches: corsMatches(response),
@@ -212,6 +213,7 @@ async function checkHealthz() {
   assertTrue(body?.actionOAuth?.configured === true, 'GET /healthz actionOAuth.configured');
   assertTrue(body?.actionOAuth?.authorizationCode === true, 'GET /healthz actionOAuth.authorizationCode');
   assertNumberInRange(body?.actionOAuth?.tokenTtlSeconds, 1, 86_400, 'GET /healthz actionOAuth.tokenTtlSeconds');
+  assertEqual(body?.actionOAuth?.tokenStorage, 'hashed_in_memory', 'GET /healthz actionOAuth.tokenStorage');
   assertNumberInRange(body?.actionOAuth?.redirectOriginCount, 1, 100, 'GET /healthz actionOAuth.redirectOriginCount');
   for (const scope of REQUIRED_SCOPES) assertIncludes(scopes.join(' '), scope, `GET /healthz actionOAuth.scopes ${scope}`);
   assertTrue(corsMatches(response), 'GET /healthz CORS origin');

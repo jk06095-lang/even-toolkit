@@ -782,7 +782,10 @@ function applyActionOauthSmoke(manifest, smoke, smokePath) {
     manifest.oauth.scopesGranted = Array.isArray(smoke.requestedScopes)
       ? smoke.requestedScopes
       : manifest.oauth.scopesGranted;
-    manifest.oauth.tokenStorageBoundary = 'Server-side OAuth authorization-code flow verified by token-free Action smoke evidence; access tokens and client secrets are not stored in evidence.';
+    const tokenStorage = smoke.checks?.healthz?.tokenStorage === 'hashed_in_memory'
+      ? ' hashed in memory on the proxy'
+      : ' kept server-side on the proxy';
+    manifest.oauth.tokenStorageBoundary = `Server-side OAuth authorization-code flow verified by token-free Action smoke evidence; access tokens are${tokenStorage}, and access tokens/client secrets are not stored in evidence.`;
     manifest.oauth.evidenceRef = evidenceRef;
   }
 
@@ -827,6 +830,7 @@ function isValidActionOauthSmokeForDraft(manifest, smoke) {
   if (smoke.checks?.oauthToken?.accessTokenStoredInEvidence !== false) return false;
   if (smoke.checks?.oauthToken?.responseEchoedClientSecret !== false) return false;
   if (smoke.checks?.healthz?.actionOAuthConfigured !== true) return false;
+  if (smoke.checks?.healthz?.tokenStorage !== 'hashed_in_memory') return false;
   if (smoke.checks?.oauthAuthorize?.codeReturned !== true) return false;
   if (smoke.checks?.oauthToken?.tokenTypeBearer !== true) return false;
 

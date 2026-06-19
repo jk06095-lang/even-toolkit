@@ -49,6 +49,10 @@ When `ECHO_ACTION_OAUTH_CLIENT_ID`, `ECHO_ACTION_OAUTH_CLIENT_SECRET`, and
 reference authorization-code OAuth flow declared by
 `integrations/chatgpt-action/openapi.json`. OAuth tokens are accepted only for
 the Action route family and are checked against the route's read/write scopes.
+Issued Action OAuth access tokens are stored only as in-memory SHA-256
+fingerprints; `/healthz` exposes the non-secret `tokenStorage:
+hashed_in_memory` metadata so deployment smoke evidence can confirm that
+boundary without revealing token values.
 Production release still requires the OAuth-backed deployed Action evidence in
 `docs/project-echo-chatgpt-action-evidence.completed.json`.
 

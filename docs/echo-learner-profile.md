@@ -108,7 +108,9 @@ The next server-synced integration boundary now lives under
   The same proxy now includes a reference authorization-code OAuth flow at
   `/oauth/authorize` and `/oauth/token`; OAuth access tokens are scoped to the
   Action route family and cannot be used for provider-bound cue, transcription,
-  translation, or session-analysis calls.
+  translation, or session-analysis calls. The proxy keeps Action OAuth access
+  tokens as in-memory SHA-256 fingerprints and reports only the non-secret
+  `hashed_in_memory` storage boundary through health/smoke evidence.
   `npm --prefix echo-api-proxy run smoke:action-oauth` exercises that deployed
   OAuth flow, all Action endpoints, and privacy rejection checks while writing a
   token-free evidence JSON that can be referenced from the completed Action

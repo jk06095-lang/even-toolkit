@@ -70,6 +70,7 @@ test('Action OAuth smoke completes local flow without writing secrets to evidenc
     assert.equal(evidenceText.includes('echo_oauth_'), false);
     assert.equal(evidenceText.includes('test@example.com'), false);
     assert.equal(evidence.checks.healthz.actionOAuthConfigured, true);
+    assert.equal(evidence.checks.healthz.tokenStorage, 'hashed_in_memory');
     assert.equal(evidence.checks.oauthAuthorize.codeReturned, true);
     assert.equal(evidence.checks.oauthToken.tokenTypeBearer, true);
     assert.equal(evidence.checks.learnerProfile.schemaVersion, '2.0.0');
