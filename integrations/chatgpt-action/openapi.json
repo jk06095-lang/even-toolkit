@@ -373,6 +373,7 @@
           "itemId",
           "mode",
           "grade",
+          "captureSource",
           "attemptedAt"
         ],
         "properties": {
@@ -390,6 +391,14 @@
           },
           "grade": {
             "$ref": "#/components/schemas/ActiveRecallGrade"
+          },
+          "captureSource": {
+            "description": "How the learner produced this active-recall attempt. Browser Web Speech attempts are not G2/audio-level evidence.",
+            "enum": [
+              "typed",
+              "phone_web_speech",
+              "g2_bridge"
+            ]
           },
           "userAttempt": {
             "$ref": "#/components/schemas/PlainText1000"

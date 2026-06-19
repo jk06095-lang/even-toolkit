@@ -113,6 +113,11 @@ The next server-synced integration boundary now lives under
   OAuth flow, all Action endpoints, and privacy rejection checks while writing a
   token-free evidence JSON that can be referenced from the completed Action
   evidence manifest.
+- `/v1/reviews/attempt` now requires `captureSource` (`typed`,
+  `phone_web_speech`, or future `g2_bridge`) so Action write-back preserves the
+  same production-attempt boundary as the local phone review store. Deployed
+  smoke evidence may prove phone/Web Speech or typed attempts, but it still does
+  not satisfy the separate G2/audio-level pronunciation evidence requirement.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.

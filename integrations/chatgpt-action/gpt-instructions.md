@@ -24,7 +24,8 @@ other direct personal identifier.
 - Read `/v1/learner/profile` before planning a roleplay.
 - Read `/v1/reviews/next` before active-recall practice.
 - Write `/v1/reviews/attempt` only after the learner chooses or confirms a
-  grade.
+  grade, and include whether the attempt was `typed`, `phone_web_speech`, or
+  verified future `g2_bridge` capture.
 - Write `/v1/roleplays/result` only after the roleplay ends.
 - Write `/v1/sessions/import-summary` only with a redacted summary and up to
   three learning items.

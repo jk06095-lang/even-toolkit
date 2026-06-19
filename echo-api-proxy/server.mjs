@@ -40,6 +40,7 @@ const providerCircuit = {
 const ACTION_SCHEMA_VERSION = '2.0.0';
 const ACTION_STORE_SCHEMA_VERSION = 'project-echo-action-store-v1';
 const ACTION_MAX_LEARNING_ITEMS = 30;
+const ACTION_REVIEW_CAPTURE_SOURCES = ['typed', 'phone_web_speech', 'g2_bridge'];
 const ACTION_STORE_PATH = String(process.env.ECHO_ACTION_STORE_PATH || '').trim();
 const ACTION_OAUTH_CLIENT_ID = clipString(process.env.ECHO_ACTION_OAUTH_CLIENT_ID, 180);
 const ACTION_OAUTH_CLIENT_SECRET = String(process.env.ECHO_ACTION_OAUTH_CLIENT_SECRET || '');
@@ -453,6 +454,7 @@ function handleActionEndpoint(endpoint, body, url, auth) {
       itemId: body.itemId,
       mode: body.mode,
       grade: body.grade,
+      captureSource: body.captureSource,
       attemptedAt: body.attemptedAt,
       semanticScore: boundedOptionalNumber(body.semanticScore, 0, 1),
       pronunciationScore: boundedOptionalNumber(body.pronunciationScore, 0, 1),
@@ -819,6 +821,7 @@ function validateActionRequestBody(endpoint, body, url) {
       'itemId',
       'mode',
       'grade',
+      'captureSource',
       'userAttempt',
       'attemptedAt',
       'semanticScore',
@@ -828,6 +831,7 @@ function validateActionRequestBody(endpoint, body, url) {
     assertSafeIdField(body, 'itemId');
     assertEnumField(body, 'mode', ['meaning_to_expression', 'transfer']);
     assertEnumField(body, 'grade', ['again', 'hard', 'good', 'easy']);
+    assertEnumField(body, 'captureSource', ACTION_REVIEW_CAPTURE_SOURCES);
     assertOptionalPlainText(body, 'userAttempt', 1_000);
     assertIsoDateField(body, 'attemptedAt');
     assertOptionalNumber(body, 'semanticScore', 0, 1);
@@ -1077,11 +1081,21 @@ function normalizePersistedActionAttempts(value) {
       itemId: attempt.itemId,
       mode: attempt.mode,
       grade: attempt.grade,
+      captureSource: normalizeActionAttemptCaptureSource(attempt),
       attemptedAt: attempt.attemptedAt,
       semanticScore: boundedOptionalNumber(attempt.semanticScore, 0, 1),
       pronunciationScore: boundedOptionalNumber(attempt.pronunciationScore, 0, 1),
     }];
   });
+}
+
+function normalizeActionAttemptCaptureSource(attempt) {
+  if (ACTION_REVIEW_CAPTURE_SOURCES.includes(attempt.captureSource)) {
+    return attempt.captureSource;
+  }
+  return typeof attempt.pronunciationScore === 'number'
+    ? 'phone_web_speech'
+    : 'typed';
 }
 
 function serializeActionStore(store) {

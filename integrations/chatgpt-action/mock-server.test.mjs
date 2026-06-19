@@ -78,6 +78,7 @@ test('accepts review, roleplay, and redacted session writes', async () => {
     itemId: item.id,
     mode: 'meaning_to_expression',
     grade: 'good',
+    captureSource: 'phone_web_speech',
     userAttempt: 'Could you say that again, please?',
     attemptedAt: '2026-06-19T09:05:00.000Z',
     semanticScore: 0.82,

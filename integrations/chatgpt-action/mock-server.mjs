@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { pathToFileURL } from 'node:url';
 
 export const ACTION_SCHEMA_VERSION = '2.0.0';
+export const REVIEW_CAPTURE_SOURCES = ['typed', 'phone_web_speech', 'g2_bridge'];
 
 export const FORBIDDEN_ACTION_FIELDS = [
   'rawTranscript',
@@ -94,10 +95,11 @@ export function createChatGptActionMockServer() {
       if (request.method === 'POST' && url.pathname === '/v1/reviews/attempt') {
         const body = await readJsonBody(request);
         assertPrivacySafe(body);
-        assertRequired(body, ['schemaVersion', 'itemId', 'mode', 'grade', 'attemptedAt']);
+        assertRequired(body, ['schemaVersion', 'itemId', 'mode', 'grade', 'captureSource', 'attemptedAt']);
         assertSchemaVersion(body);
         assertOneOf(body.grade, ['again', 'hard', 'good', 'easy'], 'grade');
         assertOneOf(body.mode, ['meaning_to_expression', 'transfer'], 'mode');
+        assertOneOf(body.captureSource, REVIEW_CAPTURE_SOURCES, 'captureSource');
         sendJson(response, 200, {
           accepted: true,
           itemId: body.itemId,

@@ -341,6 +341,7 @@ async function checkActionEndpoints() {
     itemId: seedItemId,
     mode: 'meaning_to_expression',
     grade: 'good',
+    captureSource: 'phone_web_speech',
     userAttempt: 'Could you say that again, please?',
     attemptedAt: new Date().toISOString(),
     semanticScore: 0.9,

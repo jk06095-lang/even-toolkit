@@ -36,6 +36,9 @@ guards as the provider-bound routes, but they do not require a provider API key.
 These routes intentionally accept only bounded learner profile, review,
 roleplay, and redacted session-summary data. They reject raw transcript/audio
 fields, direct contact identifiers, provider secrets, and HTML-like content.
+Review attempts also require a bounded `captureSource` value (`typed`,
+`phone_web_speech`, or future `g2_bridge`) so Web Speech confidence cannot be
+mistaken for G2/audio-level recall evidence.
 Set `ECHO_ACTION_STORE_PATH` to enable the reference file-backed Action store;
 when unset, Action learner/review state remains process-local. The file-backed
 store persists only bounded learner profile, learning-item, review-attempt, and

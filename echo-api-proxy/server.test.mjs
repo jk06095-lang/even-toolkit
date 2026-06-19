@@ -369,6 +369,7 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
         itemId: importedItem.id,
         mode: 'meaning_to_expression',
         grade: 'good',
+        captureSource: 'typed',
         userAttempt: 'Could you clarify that?',
         attemptedAt: new Date().toISOString(),
         semanticScore: 0.91,
@@ -518,6 +519,7 @@ test('ChatGPT Action OAuth authorization-code tokens are scope-bound', async () 
         itemId: 'li_read_only_scope_check',
         mode: 'meaning_to_expression',
         grade: 'good',
+        captureSource: 'typed',
         userAttempt: 'Could you clarify that?',
         attemptedAt: new Date().toISOString(),
       }),
@@ -615,6 +617,28 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
         }),
       });
       assert.equal(response.status, 200);
+
+      const reviewResponse = await fetch(`${firstProxy.baseUrl}/v1/reviews/attempt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: allowedOrigin,
+          'Idempotency-Key': 'persisted-review-0001',
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          schemaVersion: '2.0.0',
+          itemId: importedItemId,
+          mode: 'meaning_to_expression',
+          grade: 'good',
+          captureSource: 'phone_web_speech',
+          userAttempt: 'Could you explain that again?',
+          attemptedAt: new Date().toISOString(),
+          semanticScore: 0.87,
+          pronunciationScore: 0.72,
+        }),
+      });
+      assert.equal(reviewResponse.status, 200);
     } finally {
       await firstProxy.stop();
     }
@@ -622,6 +646,7 @@ test('ChatGPT Action file store persists bounded learner state across proxy rest
     const persistedText = readFileSync(storePath, 'utf8');
     assert.match(persistedText, /project-echo-action-store-v1/);
     assert.equal(persistedText.includes(importedItemId), true);
+    assert.equal(persistedText.includes('"captureSource": "phone_web_speech"'), true);
     assert.equal(persistedText.includes('rawTranscript'), false);
     assert.equal(persistedText.includes('test@example.com'), false);
 
