@@ -194,35 +194,35 @@ function writeFieldRunbookDraft() {
 function caseStudyKoDraft() {
   return `# Project ECHO Case Study Draft (KO)
 
-Draft only. Do not link this file from README as project-echo-case-study-ko until
-the completed pilot manifest passes validation and the final file is copied to a
-stable non-draft path such as docs/project-echo-case-study.ko.md.
+초안 전용 파일입니다. 완료된 파일을 docs/project-echo-case-study.ko.md 같은
+안정적인 비초안 경로로 복사하고, completed pilot manifest 검증이 통과하기
+전까지 README의 project-echo-case-study-ko 링크로 연결하지 마세요.
 
 ## 제품 문제
 
-- 대상 사용자:
-- 실제 회화 상황:
-- 기존 문제:
-- Project ECHO의 개입 방식:
+- 대상 학습자:
+- 실제 대화 상황:
+- 기존 실패 패턴:
+- Project ECHO 개입 방식:
 
 ## 빌드 범위
 
-- App version: ${appVersion}
-- G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED
-- Audio sources: G2 Mic, Phone Mic
-- Privacy boundary: server-side ECHO API proxy, local fallback cues
-- Evidence status: draft
+- 앱 버전: ${appVersion}
+- G2 HUD 상태: READY, LISTENING, CUE, ACK, PAUSED
+- 오디오 소스: G2 Mic, Phone Mic
+- 개인정보 경계: 서버 측 ECHO API 프록시, 로컬 fallback cue
+- 증거 상태: draft
 
 ## 파일럿 요약
 
 | 항목 | 결과 |
 | --- | --- |
-| 참가자 수 | TBD |
+| 참여자 수 | TBD |
 | 조건 A: No assistance | TBD |
 | 조건 B: Full sentence suggestion | TBD |
 | 조건 C: 3-5 word cue | TBD |
-| 가장 낮은 방해감 조건 | TBD |
-| 가장 높은 신뢰 조건 | TBD |
+| 방해감이 가장 낮은 조건 | TBD |
+| 신뢰도가 가장 높은 조건 | TBD |
 
 ## 정량 결과
 
@@ -238,23 +238,23 @@ stable non-draft path such as docs/project-echo-case-study.ko.md.
 
 ## 실제 G2 증거
 
-- Real G2 video: TBD
-- Hardware QA manifest: TBD
-- Pilot evidence manifest: TBD
-- Architecture evidence: TBD
+- 실제 G2 영상: TBD
+- 하드웨어 QA manifest: TBD
+- 파일럿 evidence manifest: TBD
+- 아키텍처 evidence: TBD
 
 ## 한계
 
 - 표본 수:
 - 통제된 시나리오:
 - 영어 회화 초점:
-- G2 하드웨어/Even Hub 제약:
+- G2 하드웨어 / Even Hub 제약:
 
 ## README 전환 조건
 
-- Final manifest: docs/project-echo-pilot-evidence.completed.json
-- Required marker: project-echo-case-study-ko
-- Link only after README target matches the completed pilot manifest.
+- 최종 manifest: docs/project-echo-pilot-evidence.completed.json
+- 필수 marker: project-echo-case-study-ko
+- README 링크는 completed pilot manifest의 target과 일치할 때만 연결하세요.
 `;
 }
 
@@ -487,6 +487,20 @@ The generated Action draft may prefill endpoint and privacy smoke fields, but it
 must remain \`draft\` until Custom GPT configuration screenshots/exports and
 G2/audio-level recall evidence are also captured.
 
+## Custom GPT Active Recall Evidence
+
+The completed #29 manifest must prove the learning boundary, not only endpoint
+availability:
+
+- \`twoSeparateRecallDaysProven=true\`: a hidden meaning-to-expression item is
+  recalled successfully on at least two different calendar days.
+- \`transferScenarioEvidenceCaptured=true\`: a transfer review or roleplay
+  write-back records a bounded transfer scenario ID for that item.
+- \`sameDayRepeatNotCountedAsTransfer=true\`: repeated same-day reveal/grade
+  loops do not unlock transfer or count as independent transfer evidence.
+- \`webSpeechOnlyMarkedInsufficient=true\`: phone Web Speech evidence is clearly
+  separated from G2 bridge audio-level recall evidence.
+
 ## Evidence Queue
 
 | Issues | Evidence artifact | Completion gate |
@@ -522,7 +536,8 @@ G2/audio-level recall evidence are also captured.
 9. Run production proxy smoke and key-rotation checks without local-only
    overrides.
 10. Deploy the OAuth-backed Custom GPT Action API and capture privacy rejection
-    plus G2/audio-level active-recall evidence.
+    plus G2/audio-level active-recall evidence, including two separate recall
+    days and at least one bounded transfer scenario or roleplay write-back.
 11. Validate all completed manifests, then run \`npm run promote:echo-portfolio-links\`.
 12. Run \`npm run readiness:echo\`; only close the remaining issues after it
     passes and the linked evidence is committed or stable.

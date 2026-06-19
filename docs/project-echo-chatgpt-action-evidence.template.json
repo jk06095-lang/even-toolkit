@@ -103,6 +103,9 @@
     "g2BridgeRecallCaptured": null,
     "audioLevelPronunciationScoring": null,
     "webSpeechOnlyMarkedInsufficient": null,
+    "twoSeparateRecallDaysProven": null,
+    "transferScenarioEvidenceCaptured": null,
+    "sameDayRepeatNotCountedAsTransfer": null,
     "evidenceRef": "TBD"
   }
 }

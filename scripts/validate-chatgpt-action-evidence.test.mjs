@@ -55,6 +55,20 @@ test('rejects completed Action evidence that omits a non-raw storage mechanism',
   assert.match(result.stderr, /non-raw token storage/);
 });
 
+test('rejects completed Action evidence without spaced-recall transfer proof', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.activeRecallDeviceEvidence.twoSeparateRecallDaysProven = false;
+  manifest.activeRecallDeviceEvidence.transferScenarioEvidenceCaptured = false;
+  const manifestPath = writeManifest('missing-transfer-proof', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.twoSeparateRecallDaysProven/);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.transferScenarioEvidenceCaptured/);
+});
+
 function writeManifest(name, manifest) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -118,6 +132,9 @@ function completeManifest({ tokenStorageBoundary }) {
       g2BridgeRecallCaptured: true,
       audioLevelPronunciationScoring: true,
       webSpeechOnlyMarkedInsufficient: true,
+      twoSeparateRecallDaysProven: true,
+      transferScenarioEvidenceCaptured: true,
+      sameDayRepeatNotCountedAsTransfer: true,
       evidenceRef: deviceEvidenceRef,
     },
   };

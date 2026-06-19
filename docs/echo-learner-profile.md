@@ -195,10 +195,14 @@ The final manifest must prove the Custom GPT has the Action schema and privacy
 policy configured, OAuth authorization-code flow is server-side, every Action
 endpoint returns bounded learner/review/roleplay data, raw transcripts/audio and
 direct identifiers are rejected, and G2/audio-level active-recall pronunciation
-evidence exists. `npm run readiness:echo` blocks #29 until that completed
-manifest is present. The Action OAuth smoke JSON is endpoint evidence only; it
-does not replace screenshots or exports proving that the Custom GPT itself is
-configured against the deployed schema and privacy policy.
+evidence exists. It must also prove the spaced-recall transfer boundary:
+successful hidden recall on at least two separate calendar days, bounded
+transfer scenario evidence from transfer review or roleplay write-back, and a
+same-day repeat case that does not count as transfer evidence. `npm run
+readiness:echo` blocks #29 until that completed manifest is present. The Action
+OAuth smoke JSON is endpoint evidence only; it does not replace screenshots or
+exports proving that the Custom GPT itself is configured against the deployed
+schema and privacy policy.
 
 ## Remaining Work
 

@@ -80,6 +80,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(action.actionContractVersion, actionSpec.info.version);
   assert.equal(action.actionGpt.customGptConfigured, null);
   assert.equal(action.activeRecallDeviceEvidence.g2BridgeRecallCaptured, null);
+  assert.equal(action.activeRecallDeviceEvidence.twoSeparateRecallDaysProven, null);
+  assert.equal(action.activeRecallDeviceEvidence.transferScenarioEvidenceCaptured, null);
+  assert.equal(action.activeRecallDeviceEvidence.sameDayRepeatNotCountedAsTransfer, null);
   assert.equal(action.oauth.authorizationCodeConfigured, true);
   assert.equal(action.oauth.evidenceRef, repoRelative(actionSmokePath));
   assert.match(action.oauth.tokenStorageBoundary, /token-free Action smoke evidence/);
@@ -125,10 +128,11 @@ test('prepares draft evidence manifests without marking external evidence comple
   const videoShotList = readFileSync(videoShotListPath, 'utf8');
   const fieldRunbook = readFileSync(fieldRunbookPath, 'utf8');
 
-  assert.match(caseStudyKo, /Draft only/);
+  assert.match(caseStudyKo, /\uCD08\uC548 \uC804\uC6A9/);
+  assert.match(caseStudyKo, /\uC81C\uD488 \uBB38\uC81C/);
   assert.match(caseStudyKo, /project-echo-case-study-ko/);
-  assert.match(caseStudyKo, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
-  assert.match(caseStudyKo, /G2 HUD states: READY, LISTENING, CUE, ACK, PAUSED/);
+  assert.match(caseStudyKo, new RegExp(`\\uC571 \\uBC84\\uC804: ${escapeRegExp(appVersion)}`));
+  assert.match(caseStudyKo, /G2 HUD \uC0C1\uD0DC: READY, LISTENING, CUE, ACK, PAUSED/);
   assert.match(caseStudyEn, /Draft only/);
   assert.match(caseStudyEn, /project-echo-case-study-en/);
   assert.match(caseStudyEn, new RegExp(`App version: ${escapeRegExp(appVersion)}`));
@@ -148,6 +152,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
+  assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);
+  assert.match(fieldRunbook, /twoSeparateRecallDaysProven=true/);
+  assert.match(fieldRunbook, /sameDayRepeatNotCountedAsTransfer=true/);
   assert.match(fieldRunbook, /smoke:action-oauth/);
   assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);

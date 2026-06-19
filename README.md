@@ -37,6 +37,9 @@ manifest should pass
 `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`
 after the Action API is deployed, OAuth is configured, privacy rejection tests
 are captured, and G2/audio-level active-recall pronunciation evidence exists.
+It also has to prove the spaced-recall boundary: two separate hidden recall
+days, transfer scenario evidence, and same-day repeat attempts not counting as
+transfer.
 The hardware QA manifest must identify the exact repo-local `.ehpk` package
 path and matching SHA-256 digest used for the real G2 run, and must include
 private/beta locked-phone background lifecycle evidence, Android cold-start
@@ -44,7 +47,7 @@ rebuild evidence, foreground audio-capture re-enable evidence, WebSocket
 reconnect handling or explicit non-use evidence,
 phone-only conversation timeline evidence for the G2 Mic, Phone Mic, and import
 flows plus G2 HUD evidence for `READY`, `LISTENING`, `CUE`, `ACK`, and
-`PAUSED`. A
+`PAUSED`.
 GitHub Actions runs the same gate from
 [.github/workflows/verify.yml](./.github/workflows/verify.yml). A reference copy
 is also kept at [docs/github-actions-verify.yml](./docs/github-actions-verify.yml).

@@ -369,6 +369,9 @@ function validateDeviceEvidence() {
   validateExpected(manifest.activeRecallDeviceEvidence, 'g2BridgeRecallCaptured', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'audioLevelPronunciationScoring', true, 'activeRecallDeviceEvidence');
   validateExpected(manifest.activeRecallDeviceEvidence, 'webSpeechOnlyMarkedInsufficient', true, 'activeRecallDeviceEvidence');
+  validateExpected(manifest.activeRecallDeviceEvidence, 'twoSeparateRecallDaysProven', true, 'activeRecallDeviceEvidence');
+  validateExpected(manifest.activeRecallDeviceEvidence, 'transferScenarioEvidenceCaptured', true, 'activeRecallDeviceEvidence');
+  validateExpected(manifest.activeRecallDeviceEvidence, 'sameDayRepeatNotCountedAsTransfer', true, 'activeRecallDeviceEvidence');
   validateEvidenceLink(manifest.activeRecallDeviceEvidence, 'evidenceRef', 'activeRecallDeviceEvidence');
 }
 
