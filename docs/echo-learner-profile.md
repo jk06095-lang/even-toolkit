@@ -133,7 +133,16 @@ Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
 `docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
 current Action API base URL and contract version prefilled. The generated file
 remains draft evidence and does not replace OAuth, endpoint, privacy, or
-G2/audio-level recall proof.
+G2/audio-level recall proof. After running the deployed Action OAuth smoke, pass
+its token-free JSON back into draft preparation:
+
+```bash
+npm run prepare:echo-evidence-drafts -- --action-oauth-smoke docs/chatgpt-action-oauth-smoke.json
+```
+
+That pre-fills only the OAuth endpoint, Action endpoint, and privacy-rejection
+fields supported by the smoke output; the manifest stays `draft` until Custom
+GPT configuration evidence and G2/audio-level recall evidence are also present.
 The final manifest must prove the Custom GPT has the Action schema and privacy
 policy configured, OAuth authorization-code flow is server-side, every Action
 endpoint returns bounded learner/review/roleplay data, raw transcripts/audio and

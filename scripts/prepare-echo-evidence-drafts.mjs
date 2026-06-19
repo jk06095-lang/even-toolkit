@@ -7,17 +7,21 @@ import { gzipSync } from 'node:zlib';
 const args = process.argv.slice(2);
 const wantsHelp = args.includes('--help') || args.includes('-h');
 const outDirArg = readOption('--out-dir') || 'docs/evidence-drafts';
+const actionOauthSmokeArg = readOption('--action-oauth-smoke') || 'docs/chatgpt-action-oauth-smoke.json';
 const repoRoot = process.cwd();
 const outDir = path.resolve(repoRoot, outDirArg);
 
 if (wantsHelp) {
-  console.info(`Usage: npm run prepare:echo-evidence-drafts -- [--out-dir docs/evidence-drafts]
+  console.info(`Usage: npm run prepare:echo-evidence-drafts -- [--out-dir docs/evidence-drafts] [--action-oauth-smoke docs/chatgpt-action-oauth-smoke.json]
 
 Creates draft evidence manifests for the remaining Project ECHO readiness gates.
 The command fills only local, reproducible fields such as app version, package
 SHA-256, and bundle metrics when available. It does not create completed
 evidence files and does not mark real-device, deployment, or key-rotation checks
-as passed.`);
+as passed.
+
+If an Action OAuth smoke JSON is present, the ChatGPT Action draft is prefilled
+with endpoint and privacy smoke metadata while staying in draft status.`);
   process.exit(0);
 }
 
@@ -28,6 +32,8 @@ const actionSpec = readJson('integrations/chatgpt-action/openapi.json') ?? {};
 const hardware = readJson('docs/project-echo-hardware-qa.template.json');
 const pilot = readJson('docs/project-echo-pilot-evidence.template.json');
 const action = readJson('docs/project-echo-chatgpt-action-evidence.template.json');
+const actionOauthSmokePath = path.resolve(repoRoot, actionOauthSmokeArg);
+const actionOauthSmoke = readOptionalJson(actionOauthSmokePath);
 const keyRotationTemplate = readFileSync(path.resolve(repoRoot, 'docs/key-rotation-evidence.template.md'), 'utf8');
 
 const ARTIFACT_SCAN_PATHS = ['even-app/dist', 'even-app/echo.ehpk'];
@@ -119,6 +125,11 @@ function prepareActionDraft(manifest, spec) {
   manifest.evidenceStatus = 'draft';
   manifest.actionApiBaseUrl = String(spec.servers?.[0]?.url ?? manifest.actionApiBaseUrl ?? 'TBD');
   manifest.actionContractVersion = String(spec.info?.version ?? manifest.actionContractVersion ?? 'TBD');
+  if (manifest.privacy) {
+    manifest.privacy.boundedLearningItemsMax = readLearnerProfileItemLimit(spec) ?? manifest.privacy.boundedLearningItemsMax;
+  }
+
+  applyActionOauthSmoke(manifest, actionOauthSmoke, actionOauthSmokePath);
 }
 
 function prepareKeyRotationDraft(template) {
@@ -376,6 +387,9 @@ function fieldRunbookDraft() {
   const packageSha = hardware?.buildArtifact?.sha256 ?? 'TBD';
   const packageEvidenceRef = hardware?.buildArtifact?.evidenceRef ?? 'docs/evidence-drafts/project-echo-build-artifact.md';
   const bundleReportRef = hardware?.voiceRuntime?.bundleReportRef ?? 'docs/evidence-drafts/project-echo-bundle-report.md';
+  const actionSmokeRef = action?.oauth?.evidenceRef && action.oauth.evidenceRef !== 'TBD'
+    ? action.oauth.evidenceRef
+    : 'docs/chatgpt-action-oauth-smoke.json';
 
   return `# Project ECHO Field Runbook Draft
 
@@ -440,6 +454,21 @@ npm run readiness:echo
 The readiness command converts \`docs/proxy-smoke-evidence.json\` to the
 \`../docs/proxy-smoke-evidence.json\` path expected by \`smoke:deploy\`, because
 the smoke runner executes from \`echo-api-proxy\`.
+
+## Custom GPT Action OAuth Smoke
+
+After the deployed proxy reports \`actionOAuth.configured: true\`, collect the
+token-free Action OAuth endpoint evidence. Keep the client secret in the shell
+environment or secret manager; the smoke output must not contain it.
+
+\`\`\`bash
+npm --prefix echo-api-proxy run smoke:action-oauth -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin --client-id "$ECHO_ACTION_OAUTH_CLIENT_ID" --client-secret "$ECHO_ACTION_OAUTH_CLIENT_SECRET" --redirect-uri https://chatgpt.com/aip/project-echo/oauth/callback --evidence-out ../${actionSmokeRef}
+npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${actionSmokeRef}
+\`\`\`
+
+The generated Action draft may prefill endpoint and privacy smoke fields, but it
+must remain \`draft\` until Custom GPT configuration screenshots/exports and
+G2/audio-level recall evidence are also captured.
 
 ## Evidence Queue
 
@@ -671,6 +700,90 @@ function formatDraftCleanScanResult(scan) {
   return `TBD - local scan found ${scan.matches} potential match(es) across ${scan.filesScanned} file(s): ${scan.paths.join(', ')} (${scan.labels.join(', ') || 'review required'})`;
 }
 
+function applyActionOauthSmoke(manifest, smoke, smokePath) {
+  if (!isValidActionOauthSmokeForDraft(manifest, smoke)) return;
+  const evidenceRef = repoEvidenceRef(smokePath);
+  if (!evidenceRef) return;
+
+  if (manifest.oauth) {
+    manifest.oauth.authorizationCodeConfigured = true;
+    manifest.oauth.authorizationUrl = `${manifest.actionApiBaseUrl}/oauth/authorize`;
+    manifest.oauth.tokenUrl = `${manifest.actionApiBaseUrl}/oauth/token`;
+    manifest.oauth.scopesGranted = Array.isArray(smoke.requestedScopes)
+      ? smoke.requestedScopes
+      : manifest.oauth.scopesGranted;
+    manifest.oauth.tokenStorageBoundary = 'Server-side OAuth authorization-code flow verified by token-free Action smoke evidence; access tokens and client secrets are not stored in evidence.';
+    manifest.oauth.evidenceRef = evidenceRef;
+  }
+
+  const endpointMappings = {
+    learnerProfile: { key: 'learnerProfile', write: false },
+    reviewsNext: { key: 'reviewsNext', write: false },
+    reviewAttempt: { key: 'reviewAttempt', write: true },
+    roleplayStart: { key: 'roleplayStart', write: false },
+    roleplayResult: { key: 'roleplayResult', write: true },
+    sessionImport: { key: 'sessionImport', write: true },
+  };
+  for (const [manifestKey, mapping] of Object.entries(endpointMappings)) {
+    const source = smoke.checks?.[mapping.key];
+    const target = manifest.endpoints?.[manifestKey];
+    if (!source || !target) continue;
+    target.status = source.status;
+    target.schemaVersion = source.schemaVersion ?? '2.0.0';
+    if (mapping.write) target.writeAccepted = source.writeAccepted === true;
+    target.rawTranscriptReturned = source.rawTranscriptReturned === true ? true : false;
+    target.rawAudioReturned = source.rawAudioReturned === true ? true : false;
+    target.directIdentifierReturned = source.directIdentifierReturned === true ? true : false;
+    target.evidenceRef = evidenceRef;
+  }
+
+  if (manifest.privacy && smoke.checks?.privacy) {
+    manifest.privacy.rawTranscriptRejected = smoke.checks.privacy.rawTranscriptRejected?.rejected === true;
+    manifest.privacy.rawAudioRejected = smoke.checks.privacy.rawAudioRejected?.rejected === true;
+    manifest.privacy.directContactIdentifiersRejected = smoke.checks.privacy.directContactIdentifiersRejected?.rejected === true;
+    manifest.privacy.providerSecretsRejected = smoke.checks.privacy.providerSecretsRejected?.rejected === true;
+    manifest.privacy.boundedLearningItemsMax = readLearnerProfileItemLimit(actionSpec) ?? manifest.privacy.boundedLearningItemsMax;
+    manifest.privacy.evidenceRef = evidenceRef;
+  }
+}
+
+function isValidActionOauthSmokeForDraft(manifest, smoke) {
+  if (!smoke || typeof smoke !== 'object' || Array.isArray(smoke)) return false;
+  if (smoke.schema !== 'project-echo-action-oauth-smoke-v1' || smoke.ok !== true) return false;
+  if (String(smoke.baseUrl || '').replace(/\/+$/, '') !== String(manifest.actionApiBaseUrl || '').replace(/\/+$/, '')) {
+    return false;
+  }
+  if (smoke.accessTokenStoredInEvidence !== false) return false;
+  if (smoke.checks?.oauthToken?.accessTokenStoredInEvidence !== false) return false;
+  if (smoke.checks?.oauthToken?.responseEchoedClientSecret !== false) return false;
+  if (smoke.checks?.healthz?.actionOAuthConfigured !== true) return false;
+  if (smoke.checks?.oauthAuthorize?.codeReturned !== true) return false;
+  if (smoke.checks?.oauthToken?.tokenTypeBearer !== true) return false;
+
+  for (const key of ['learnerProfile', 'reviewsNext', 'reviewAttempt', 'roleplayStart', 'roleplayResult', 'sessionImport']) {
+    if (smoke.checks?.[key]?.status !== 200) return false;
+    if (smoke.checks[key].rawTranscriptReturned !== false) return false;
+    if (smoke.checks[key].rawAudioReturned !== false) return false;
+    if (smoke.checks[key].directIdentifierReturned !== false) return false;
+  }
+  for (const key of ['rawTranscriptRejected', 'rawAudioRejected', 'directContactIdentifiersRejected', 'providerSecretsRejected']) {
+    if (smoke.checks?.privacy?.[key]?.rejected !== true) return false;
+  }
+  return true;
+}
+
+function readLearnerProfileItemLimit(spec) {
+  const value = spec.components?.schemas?.LearnerProfileResponse?.properties?.learningItems?.maxItems;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function repoEvidenceRef(filePath) {
+  const resolved = path.resolve(filePath);
+  const rootWithSep = `${path.resolve(repoRoot)}${path.sep}`;
+  if (resolved !== path.resolve(repoRoot) && !resolved.startsWith(rootWithSep)) return null;
+  return repoRelative(resolved);
+}
+
 function readInitialAssetNames(indexHtmlPath) {
   const indexHtml = readFileSync(indexHtmlPath, 'utf8');
   const matches = indexHtml.matchAll(/(?:src|href)="\/assets\/([^"]+)"/g);
@@ -693,6 +806,11 @@ function readOption(name) {
 
 function readJson(relativePath) {
   return JSON.parse(readFileSync(path.resolve(repoRoot, relativePath), 'utf8'));
+}
+
+function readOptionalJson(filePath) {
+  if (!existsSync(filePath)) return null;
+  return JSON.parse(readFileSync(filePath, 'utf8'));
 }
 
 function writeJson(fileName, value) {

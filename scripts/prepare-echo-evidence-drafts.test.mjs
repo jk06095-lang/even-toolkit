@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 
@@ -20,10 +20,16 @@ after(() => {
 });
 
 test('prepares draft evidence manifests without marking external evidence complete', async () => {
+  const actionSpec = JSON.parse(readFileSync(path.join(repoRoot, 'integrations/chatgpt-action/openapi.json'), 'utf8'));
+  const actionSmokePath = path.join(tmpRoot, 'chatgpt-action-oauth-smoke.json');
+  writeFileSync(actionSmokePath, `${JSON.stringify(actionOauthSmokeFixture(actionSpec.servers[0].url), null, 2)}\n`, 'utf8');
+
   const result = await runNode([
     'scripts/prepare-echo-evidence-drafts.mjs',
     '--out-dir',
     repoRelative(tmpRoot),
+    '--action-oauth-smoke',
+    repoRelative(actionSmokePath),
   ]);
   assert.equal(result.code, 0, result.stderr);
 
@@ -67,7 +73,25 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(hardware.buildArtifact.packagePath, 'even-app/echo.ehpk');
   assert.match(hardware.buildArtifact.sha256, /^[a-f0-9]{64}$/);
   assert.equal(hardware.buildArtifact.installedViaBetaOrPrivateBuild, null);
-  assert.equal(action.actionContractVersion, JSON.parse(readFileSync(path.join(repoRoot, 'integrations/chatgpt-action/openapi.json'), 'utf8')).info.version);
+  assert.equal(action.actionContractVersion, actionSpec.info.version);
+  assert.equal(action.actionGpt.customGptConfigured, null);
+  assert.equal(action.activeRecallDeviceEvidence.g2BridgeRecallCaptured, null);
+  assert.equal(action.oauth.authorizationCodeConfigured, true);
+  assert.equal(action.oauth.evidenceRef, repoRelative(actionSmokePath));
+  assert.match(action.oauth.tokenStorageBoundary, /token-free Action smoke evidence/);
+  assert.equal(action.oauth.providerSecretsInGpt, null);
+  assert.equal(action.endpoints.learnerProfile.status, 200);
+  assert.equal(action.endpoints.learnerProfile.schemaVersion, '2.0.0');
+  assert.equal(action.endpoints.learnerProfile.rawTranscriptReturned, false);
+  assert.equal(action.endpoints.reviewAttempt.writeAccepted, true);
+  assert.equal(action.endpoints.roleplayResult.writeAccepted, true);
+  assert.equal(action.endpoints.sessionImport.writeAccepted, true);
+  assert.equal(action.privacy.rawTranscriptRejected, true);
+  assert.equal(action.privacy.rawAudioRejected, true);
+  assert.equal(action.privacy.directContactIdentifiersRejected, true);
+  assert.equal(action.privacy.providerSecretsRejected, true);
+  assert.equal(action.privacy.boundedLearningItemsMax, 30);
+  assert.equal(action.privacy.evidenceRef, repoRelative(actionSmokePath));
 
   const keyRotation = readFileSync(keyRotationPath, 'utf8');
   assert.match(keyRotation, new RegExp(`Client build or package version: echo-app ${escapeRegExp(appVersion)}`));
@@ -101,6 +125,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /\.\.\/docs\/proxy-smoke-evidence\.json/);
   assert.match(fieldRunbook, /#2\/#3\/#4\/#6\/#12\/#13\/#14\/#28/);
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
+  assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
+  assert.match(fieldRunbook, /smoke:action-oauth/);
+  assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);
   assert.doesNotMatch(caseStudyKo, /\]\(docs\/project-echo-case-study\.ko\.md\)/);
   assert.doesNotMatch(caseStudyEn, /\]\(docs\/project-echo-case-study\.en\.md\)/);
@@ -146,4 +173,66 @@ function repoRelative(filePath) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function actionOauthSmokeFixture(baseUrl) {
+  const endpointCheck = (schemaVersion = '2.0.0', writeAccepted = undefined) => ({
+    status: 200,
+    schemaVersion,
+    writeAccepted,
+    corsOriginMatches: true,
+    cacheControlNoStore: true,
+    rawTranscriptReturned: false,
+    rawAudioReturned: false,
+    directIdentifierReturned: false,
+  });
+
+  return {
+    schema: 'project-echo-action-oauth-smoke-v1',
+    generatedAt: '2026-06-19T00:00:00.000Z',
+    baseUrl,
+    allowedOrigin: 'https://echo-client.example.test',
+    redirectUri: 'https://chatgpt.com/aip/project-echo/oauth/callback',
+    clientIdFingerprint: '0123456789abcdef',
+    clientSecretProvided: true,
+    accessTokenStoredInEvidence: false,
+    requestedScopes: [
+      'profile:read',
+      'review:read',
+      'review:write',
+      'roleplay:write',
+      'session:write',
+    ],
+    ok: true,
+    checks: {
+      healthz: {
+        status: 200,
+        actionOAuthConfigured: true,
+        authorizationCode: true,
+      },
+      oauthAuthorize: {
+        status: 302,
+        codeReturned: true,
+      },
+      oauthToken: {
+        status: 200,
+        tokenTypeBearer: true,
+        accessTokenReturned: true,
+        accessTokenStoredInEvidence: false,
+        responseEchoedClientSecret: false,
+      },
+      learnerProfile: endpointCheck(),
+      reviewsNext: endpointCheck(),
+      reviewAttempt: endpointCheck('2.0.0', true),
+      roleplayStart: endpointCheck(),
+      roleplayResult: endpointCheck('2.0.0', true),
+      sessionImport: endpointCheck('2.0.0', true),
+      privacy: {
+        rawTranscriptRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
+        rawAudioRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
+        directContactIdentifiersRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
+        providerSecretsRejected: { status: 400, rejected: true, responseEchoedSensitive: false },
+      },
+    },
+  };
 }

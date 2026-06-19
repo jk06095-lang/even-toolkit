@@ -163,7 +163,12 @@ Manifest:
    behavior, and privacy-rejection checks, but it never writes the access token
    or client secret. Reference it from the completed ChatGPT Action evidence
    manifest only after the deployed Custom GPT configuration has also been
-   captured.
+   captured. To prefill the draft Action evidence without marking it complete,
+   run:
+
+   ```bash
+   npm run prepare:echo-evidence-drafts -- --action-oauth-smoke docs/chatgpt-action-oauth-smoke.json
+   ```
 7. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
 8. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
