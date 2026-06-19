@@ -475,7 +475,12 @@ export class HUDController {
     await this.setCombatHudState('ACK');
     this._ackTimeout = setTimeout(() => {
       this._ackTimeout = null;
-      if (this._combatHudState === 'ACK' && !this._isInterruptMenuVisible) {
+      if (
+        this._combatHudState === 'ACK'
+        && this._mode === 'combat'
+        && this._isSessionActive
+        && !this._isInterruptMenuVisible
+      ) {
         void this.setCombatHudState('LISTENING');
       }
     }, 750);
@@ -519,6 +524,7 @@ export class HUDController {
    * └──────────────────────────────────┘
    */
   async showStandbyScreen(): Promise<void> {
+    this.clearAckTimeout();
     this._mode = 'standby';
     this._isStandby = true;
     await this.showText(['', '', '', '       READY', ''].join('\n'));
@@ -560,6 +566,7 @@ export class HUDController {
   // ── Common ──
 
   async clearDisplay(): Promise<void> {
+    this.clearAckTimeout();
     await this.showText(' ');
     this._mode = 'off';
     this._isStandby = false;
@@ -793,6 +800,7 @@ export class HUDController {
   setSessionActive(active: boolean) {
     this._isSessionActive = active;
     if (!active) {
+      this.clearAckTimeout();
       this._isInterruptMenuVisible = false;
     }
   }
@@ -888,6 +896,7 @@ export class HUDController {
   }
 
   async exitEcho(): Promise<void> {
+    this.clearAckTimeout();
     if (this.bridge && this._ready) {
       await this.setAudioCapture(false);
     }
@@ -911,6 +920,7 @@ export class HUDController {
   }
 
   dispose(): void {
+    this.clearAckTimeout();
     // Unsubscribe from events
     this.unsubscribeEvents?.();
     this.unsubscribeEvents = undefined;

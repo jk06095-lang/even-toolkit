@@ -76,6 +76,7 @@ describe('HUDController simplified live HUD contract', () => {
     vi.useFakeTimers();
     const { hud, frames } = createHudHarness();
 
+    hud.setSessionActive(true);
     await hud.initCombatDisplay();
     expect(frames.at(-1)).toContain('READY');
 
@@ -107,6 +108,46 @@ describe('HUDController simplified live HUD contract', () => {
     expect(frames.join('\n')).not.toContain('raw live transcript');
     expect(frames.join('\n')).not.toContain('grammar feedback');
     expect(frames.join('\n')).not.toContain('Good');
+  });
+
+  it('does not let the ACK timeout update the HUD after the session stops', async () => {
+    vi.useFakeTimers();
+    const { hud, frames } = createHudHarness();
+
+    hud.setSessionActive(true);
+    await hud.initCombatDisplay();
+    await hud.showGoodJob();
+    expect(frames.at(-1)).toContain('ACK');
+
+    const ackFrameCount = frames.length;
+    hud.setSessionActive(false);
+
+    vi.advanceTimersByTime(750);
+    await Promise.resolve();
+
+    expect(frames.length).toBe(ackFrameCount);
+    expect(frames.at(-1)).toContain('ACK');
+  });
+
+  it('clears a pending ACK return when the HUD returns to standby', async () => {
+    vi.useFakeTimers();
+    const { hud, frames } = createHudHarness();
+
+    hud.setSessionActive(true);
+    await hud.initCombatDisplay();
+    await hud.showGoodJob();
+    expect(frames.at(-1)).toContain('ACK');
+
+    hud.setSessionActive(false);
+    await hud.showStandbyScreen();
+    expect(frames.at(-1)).toContain('READY');
+    const standbyFrameCount = frames.length;
+
+    vi.advanceTimersByTime(750);
+    await Promise.resolve();
+
+    expect(frames.length).toBe(standbyFrameCount);
+    expect(frames.at(-1)).toContain('READY');
   });
 
   it('maps active-session gestures to manual cue, dismiss, end practice, and exit echo actions', async () => {

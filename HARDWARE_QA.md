@@ -168,6 +168,9 @@ Automated coverage added on 2026-06-19:
 - Each cycle verifies VAD start/stop parity, recognizer start/stop parity, no active detector after cleanup, and zero pending timeouts or intervals.
 - Late Web Speech interim/final/error callbacks after cleanup are ignored and do not update HUD or transcript callbacks.
 - Late VAD speech/silence callbacks after cleanup do not update HUD state.
+- `hud-controller` verifies a pending `ACK` return timer cannot switch the G2
+  HUD back to `LISTENING` after the session is stopped or the HUD returns to
+  standby.
 
 Still requires real G2 validation:
 
@@ -414,6 +417,8 @@ Still requires real G2 validation:
 Automated coverage added on 2026-06-19:
 
 - `hud-controller` verifies live G2 rendering is limited to `READY`, `LISTENING`, `CUE`, `ACK`, and `PAUSED`.
+- `hud-controller` verifies the short `ACK` state clears its return timer before
+  session stop or standby, preventing a late `LISTENING` render after cleanup.
 - `hud-controller` verifies transcript text, grammar feedback, and achievement detail do not render on the live G2 surface.
 - `hud-controller` verifies long cues are clipped to a glanceable phrase.
 

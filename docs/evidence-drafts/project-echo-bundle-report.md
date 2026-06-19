@@ -5,7 +5,7 @@ It records local bundle facts only; it is not physical device QA evidence.
 
 | Metric | Value |
 | --- | ---: |
-| Largest initial JS kB | 245.13 |
+| Largest initial JS kB | 245.28 |
 | Initial JS limit kB | 500.00 |
 | Voice runtime JS kB | 763.40 |
 | Voice runtime gzip kB | 207.66 |
