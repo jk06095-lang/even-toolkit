@@ -15,6 +15,8 @@ The app calls a server-side proxy, and only the proxy calls the AI provider.
 - `POST /v1/roleplays/start`
 - `POST /v1/roleplays/result`
 - `POST /v1/sessions/import-summary`
+- `GET /oauth/authorize`
+- `POST /oauth/token`
 - `GET /healthz`
 
 The deploy-ready reference implementation lives in `echo-api-proxy/server.mjs`.
@@ -39,6 +41,11 @@ when unset, Action learner/review state remains process-local. The file-backed
 store persists only bounded learner profile, learning-item, review-attempt, and
 summary counters, not raw transcripts, audio, contact identifiers, provider
 keys, or session tokens.
+When `ECHO_ACTION_OAUTH_CLIENT_ID`, `ECHO_ACTION_OAUTH_CLIENT_SECRET`, and
+`ECHO_ACTION_OAUTH_REDIRECT_ORIGINS` are configured, the proxy also serves the
+reference authorization-code OAuth flow declared by
+`integrations/chatgpt-action/openapi.json`. OAuth tokens are accepted only for
+the Action route family and are checked against the route's read/write scopes.
 Production release still requires the OAuth-backed deployed Action evidence in
 `docs/project-echo-chatgpt-action-evidence.completed.json`.
 
@@ -84,6 +91,14 @@ Recommended:
 - `ECHO_PROXY_CIRCUIT_FAILURE_THRESHOLD=5`
 - `ECHO_PROXY_CIRCUIT_COOLDOWN_MS=30000`
 - `ECHO_ACTION_STORE_PATH=/var/lib/project-echo/action-store.json`
+- `ECHO_ACTION_OAUTH_CLIENT_ID`: Custom GPT Action OAuth client id.
+- `ECHO_ACTION_OAUTH_CLIENT_SECRET`: server-only OAuth client secret. Use at
+  least 16 characters; keep it out of client bundles, logs, and evidence files.
+- `ECHO_ACTION_OAUTH_REDIRECT_ORIGINS`: comma-separated HTTPS redirect origins
+  allowed for Custom GPT OAuth callbacks, such as
+  `https://chatgpt.com,https://chat.openai.com`.
+- `ECHO_ACTION_OAUTH_CODE_TTL_SECONDS=300`
+- `ECHO_ACTION_OAUTH_TOKEN_TTL_SECONDS=3600`
 - `ECHO_PROXY_QA_DELAY_MS=0`
 
 QA only:
@@ -129,17 +144,24 @@ Manifest:
 
    The printed token is the only value that should be passed to
    `smoke:deploy`; do not commit it.
-5. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
+5. Configure Custom GPT Action OAuth if the deployment will expose the Action
+   contract: set `ECHO_ACTION_OAUTH_CLIENT_ID`,
+   `ECHO_ACTION_OAUTH_CLIENT_SECRET`, and
+   `ECHO_ACTION_OAUTH_REDIRECT_ORIGINS` in the server secret manager/runtime,
+   then confirm `/healthz` reports `actionOAuth.configured: true`. The
+   authorize and token URLs are `/oauth/authorize` and `/oauth/token` on the
+   same proxy origin.
+6. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
-6. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
-7. For client retries, send an `Idempotency-Key` header with each provider-bound
+7. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
+8. For client retries, send an `Idempotency-Key` header with each provider-bound
    retryable POST. The key must be a bounded token. The proxy caches only
    successful responses keyed by session, path, key, and request-body hash; it
    does not cache raw request bodies, audio, or transcript text.
-8. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
+9. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
    `circuitBreaker` metadata. If `circuitBreaker.open` is true, the proxy is
    intentionally failing closed before making more provider calls.
-9. Smoke-test the deployed proxy without making a provider generation call:
+10. Smoke-test the deployed proxy without making a provider generation call:
 
    ```bash
    cd echo-api-proxy
@@ -168,10 +190,10 @@ Manifest:
    `readiness:echo` accepts the evidence path as a repo-local JSON path and
    converts it to the correct `echo-api-proxy` relative path before invoking
    `smoke:deploy`.
-10. Build and package the app with `cd even-app && npm run verify`.
-11. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
-   tokens, direct provider hostnames, SDK imports, and development IPs.
-12. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+11. Build and package the app with `cd even-app && npm run verify`.
+12. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
+    tokens, direct provider hostnames, SDK imports, and development IPs.
+13. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact. Copy `docs/key-rotation-evidence.template.md` to
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
@@ -187,8 +209,8 @@ Manifest:
    counts prefilled. Treat it as a draft only; rotation date, deployed smoke
    JSON, session-token revocation, and log review still require production
    evidence.
-13. Confirm proxy logs do not contain request bodies, raw transcript text, or
-   audio base64 payloads.
+14. Confirm proxy logs do not contain request bodies, raw transcript text, or
+    audio base64 payloads.
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
 session-token rejection, allowed CORS behavior, disallowed-origin rejection,
@@ -197,8 +219,9 @@ bounded schema validation, rate limiting, oversized payload rejection, and safe
 or proxy stdout/stderr logs. It also checks successful response idempotency,
 provider circuit opening against a local stub provider, and the proxy-backed
 Custom GPT Action read/write routes for bounded profile, session import, review
-attempt, roleplay start/result, privacy rejection behavior, and optional
-file-backed Action store persistence across proxy restarts. `npm run
+attempt, roleplay start/result, reference OAuth authorization-code scope
+enforcement, privacy rejection behavior, and optional file-backed Action store
+persistence across proxy restarts. `npm run
 smoke:deploy` performs the corresponding remote deployment checks and expects
 the deployed server to report `configured: true`, `authConfigured: true`,
 `tokenPolicy.configured: true`, `tokenPolicy.signedTokenConfigured: true`, and

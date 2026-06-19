@@ -41,7 +41,26 @@ const ACTION_SCHEMA_VERSION = '2.0.0';
 const ACTION_STORE_SCHEMA_VERSION = 'project-echo-action-store-v1';
 const ACTION_MAX_LEARNING_ITEMS = 30;
 const ACTION_STORE_PATH = String(process.env.ECHO_ACTION_STORE_PATH || '').trim();
+const ACTION_OAUTH_CLIENT_ID = clipString(process.env.ECHO_ACTION_OAUTH_CLIENT_ID, 180);
+const ACTION_OAUTH_CLIENT_SECRET = String(process.env.ECHO_ACTION_OAUTH_CLIENT_SECRET || '');
+const ACTION_OAUTH_REDIRECT_ORIGINS = parseOrigins(process.env.ECHO_ACTION_OAUTH_REDIRECT_ORIGINS || '');
+const ACTION_OAUTH_CODE_TTL_SECONDS = readNumberEnv('ECHO_ACTION_OAUTH_CODE_TTL_SECONDS', 300);
+const ACTION_OAUTH_TOKEN_TTL_SECONDS = readNumberEnv('ECHO_ACTION_OAUTH_TOKEN_TTL_SECONDS', 3600);
+const ACTION_OAUTH_ENABLED = Boolean(
+  ACTION_OAUTH_CLIENT_ID
+    && ACTION_OAUTH_CLIENT_SECRET.length >= 16
+    && ACTION_OAUTH_REDIRECT_ORIGINS.length > 0,
+);
+const ACTION_OAUTH_SCOPES = [
+  'profile:read',
+  'review:read',
+  'review:write',
+  'roleplay:write',
+  'session:write',
+];
 const actionStores = new Map();
+const actionOauthCodes = new Map();
+const actionOauthTokens = new Map();
 const ACTION_FORBIDDEN_FIELDS = new Set([
   'rawtranscript',
   'fulltranscript',
@@ -57,12 +76,12 @@ const ACTION_FORBIDDEN_FIELDS = new Set([
   'secret',
 ]);
 const ACTION_ROUTES = new Map([
-  ['/v1/learner/profile', { method: 'GET', endpoint: 'action-profile' }],
-  ['/v1/reviews/next', { method: 'GET', endpoint: 'action-reviews-next' }],
-  ['/v1/reviews/attempt', { method: 'POST', endpoint: 'action-review-attempt' }],
-  ['/v1/roleplays/start', { method: 'POST', endpoint: 'action-roleplay-start' }],
-  ['/v1/roleplays/result', { method: 'POST', endpoint: 'action-roleplay-result' }],
-  ['/v1/sessions/import-summary', { method: 'POST', endpoint: 'action-session-import' }],
+  ['/v1/learner/profile', { method: 'GET', endpoint: 'action-profile', scopes: ['profile:read'] }],
+  ['/v1/reviews/next', { method: 'GET', endpoint: 'action-reviews-next', scopes: ['review:read'] }],
+  ['/v1/reviews/attempt', { method: 'POST', endpoint: 'action-review-attempt', scopes: ['review:write'] }],
+  ['/v1/roleplays/start', { method: 'POST', endpoint: 'action-roleplay-start', scopes: ['profile:read', 'roleplay:write'] }],
+  ['/v1/roleplays/result', { method: 'POST', endpoint: 'action-roleplay-result', scopes: ['roleplay:write'] }],
+  ['/v1/sessions/import-summary', { method: 'POST', endpoint: 'action-session-import', scopes: ['session:write'] }],
 ]);
 
 class HttpError extends Error {
@@ -111,13 +130,26 @@ const server = http.createServer(async (req, res) => {
           cooldownMs: PROVIDER_CIRCUIT_COOLDOWN_MS,
           open: isProviderCircuitOpen(),
         },
+        actionOAuth: {
+          configured: ACTION_OAUTH_ENABLED,
+          authorizationCode: true,
+          tokenTtlSeconds: ACTION_OAUTH_TOKEN_TTL_SECONDS,
+          redirectOriginCount: ACTION_OAUTH_REDIRECT_ORIGINS.length,
+          scopes: ACTION_OAUTH_SCOPES,
+        },
       });
+      return;
+    }
+
+    if (url.pathname === '/oauth/authorize' || url.pathname === '/oauth/token') {
+      await handleActionOAuthEndpoint(req, res, url);
       return;
     }
 
     const actionRoute = resolveActionEndpoint(req.method, url.pathname);
     if (actionRoute) {
-      const auth = authenticateRequest(req);
+      const auth = authenticateRequest(req, { allowActionOAuth: true });
+      requireActionScopes(auth, actionRoute.scopes);
       const body = actionRoute.method === 'POST' ? await readJsonBody(req) : {};
       validateActionRequestBody(actionRoute.endpoint, body, url);
 
@@ -215,6 +247,194 @@ function handleEndpoint(endpoint, body) {
   throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
 }
 
+async function handleActionOAuthEndpoint(req, res, url) {
+  if (!ACTION_OAUTH_ENABLED) {
+    throw new HttpError(503, 'action_oauth_not_configured', 'Project ECHO Action OAuth is not configured.');
+  }
+
+  pruneActionOAuthState();
+
+  if (req.method === 'GET' && url.pathname === '/oauth/authorize') {
+    const redirectUrl = createActionAuthorizationCode(url);
+    sendRedirect(req, res, redirectUrl);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/oauth/token') {
+    const tokenBody = await createActionAccessToken(req);
+    sendJson(req, res, 200, tokenBody);
+    return;
+  }
+
+  throw new HttpError(405, 'method_not_allowed', 'Unsupported OAuth method.');
+}
+
+function createActionAuthorizationCode(url) {
+  const responseType = url.searchParams.get('response_type') || '';
+  const clientId = url.searchParams.get('client_id') || '';
+  const redirectUri = url.searchParams.get('redirect_uri') || '';
+  const scopeText = url.searchParams.get('scope') || '';
+  const state = url.searchParams.get('state') || '';
+
+  if (responseType !== 'code') {
+    throw new HttpError(400, 'invalid_oauth_request', 'response_type must be code.');
+  }
+  if (clientId !== ACTION_OAUTH_CLIENT_ID) {
+    throw new HttpError(401, 'invalid_oauth_client', 'OAuth client is not allowed.');
+  }
+  const normalizedRedirectUri = validateActionRedirectUri(redirectUri);
+  const scopes = parseActionScopes(scopeText || ACTION_OAUTH_SCOPES.join(' '));
+  const code = `echo_code_${randomUUID().replace(/-/g, '')}`;
+  const subject = `oauth:${hashSessionKey(`${clientId}:${normalizedRedirectUri}`)}`;
+  actionOauthCodes.set(code, {
+    clientId,
+    redirectUri: normalizedRedirectUri,
+    scopes,
+    subject,
+    expiresAt: Date.now() + ACTION_OAUTH_CODE_TTL_SECONDS * 1000,
+  });
+
+  const redirectUrl = new URL(normalizedRedirectUri);
+  redirectUrl.searchParams.set('code', code);
+  if (state) {
+    if (state.length > 500) throw new HttpError(400, 'invalid_oauth_request', 'state is too long.');
+    redirectUrl.searchParams.set('state', state);
+  }
+  return redirectUrl.toString();
+}
+
+async function createActionAccessToken(req) {
+  const body = await readFormBody(req);
+  const client = readOAuthClient(req, body);
+  const grantType = body.get('grant_type') || '';
+  const code = body.get('code') || '';
+  const redirectUri = body.get('redirect_uri') || '';
+
+  if (client.clientId !== ACTION_OAUTH_CLIENT_ID || !safeTokenEquals(client.clientSecret, ACTION_OAUTH_CLIENT_SECRET)) {
+    throw new HttpError(401, 'invalid_oauth_client', 'OAuth client authentication failed.');
+  }
+  if (grantType !== 'authorization_code') {
+    throw new HttpError(400, 'unsupported_grant_type', 'Only authorization_code grant is supported.');
+  }
+  const normalizedRedirectUri = validateActionRedirectUri(redirectUri);
+
+  const codeRecord = actionOauthCodes.get(code);
+  actionOauthCodes.delete(code);
+  if (!codeRecord || codeRecord.expiresAt <= Date.now()) {
+    throw new HttpError(400, 'invalid_grant', 'Authorization code is invalid or expired.');
+  }
+  if (codeRecord.clientId !== client.clientId || codeRecord.redirectUri !== normalizedRedirectUri) {
+    throw new HttpError(400, 'invalid_grant', 'Authorization code does not match the client or redirect URI.');
+  }
+
+  const accessToken = `echo_oauth_${randomUUID().replace(/-/g, '')}${randomUUID().replace(/-/g, '')}`;
+  actionOauthTokens.set(accessToken, {
+    sessionId: codeRecord.subject,
+    scopes: codeRecord.scopes,
+    expiresAt: Date.now() + ACTION_OAUTH_TOKEN_TTL_SECONDS * 1000,
+  });
+
+  return {
+    access_token: accessToken,
+    token_type: 'Bearer',
+    expires_in: ACTION_OAUTH_TOKEN_TTL_SECONDS,
+    scope: codeRecord.scopes.join(' '),
+  };
+}
+
+function readOAuthClient(req, body) {
+  const authorization = req.headers.authorization;
+  if (typeof authorization === 'string') {
+    const match = authorization.match(/^Basic\s+(.+)$/i);
+    if (match) {
+      try {
+        const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+        const separator = decoded.indexOf(':');
+        if (separator >= 0) {
+          return {
+            clientId: decoded.slice(0, separator),
+            clientSecret: decoded.slice(separator + 1),
+          };
+        }
+      } catch {
+        // Fall through to body credentials.
+      }
+    }
+  }
+
+  return {
+    clientId: body.get('client_id') || '',
+    clientSecret: body.get('client_secret') || '',
+  };
+}
+
+function validateActionRedirectUri(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new HttpError(400, 'invalid_oauth_request', 'redirect_uri must be a valid URL.');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new HttpError(400, 'invalid_oauth_request', 'redirect_uri must use HTTPS.');
+  }
+  if (!ACTION_OAUTH_REDIRECT_ORIGINS.includes(parsed.origin)) {
+    throw new HttpError(400, 'invalid_oauth_request', 'redirect_uri origin is not allowed.');
+  }
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+function parseActionScopes(value) {
+  const scopes = String(value)
+    .split(/\s+/)
+    .map((scope) => scope.trim())
+    .filter(Boolean);
+  if (scopes.length === 0) {
+    throw new HttpError(400, 'invalid_scope', 'At least one OAuth scope is required.');
+  }
+  for (const scope of scopes) {
+    if (!ACTION_OAUTH_SCOPES.includes(scope)) {
+      throw new HttpError(400, 'invalid_scope', 'OAuth scope is not supported.');
+    }
+  }
+  return Array.from(new Set(scopes));
+}
+
+function verifyActionOAuthToken(token) {
+  if (!token || !token.startsWith('echo_oauth_')) return null;
+  const record = actionOauthTokens.get(token);
+  if (!record) return null;
+  if (record.expiresAt <= Date.now()) {
+    actionOauthTokens.delete(token);
+    return null;
+  }
+  return {
+    sessionId: record.sessionId,
+    scopes: record.scopes,
+  };
+}
+
+function requireActionScopes(auth, requiredScopes = []) {
+  if (!auth.scopes) return;
+  for (const scope of requiredScopes) {
+    if (!auth.scopes.includes(scope)) {
+      throw new HttpError(403, 'insufficient_scope', 'OAuth token does not include the required Action scope.');
+    }
+  }
+}
+
+function pruneActionOAuthState() {
+  const now = Date.now();
+  for (const [code, record] of actionOauthCodes) {
+    if (record.expiresAt <= now) actionOauthCodes.delete(code);
+  }
+  for (const [token, record] of actionOauthTokens) {
+    if (record.expiresAt <= now) actionOauthTokens.delete(token);
+  }
+}
+
 function handleActionEndpoint(endpoint, body, url, auth) {
   const store = getActionStore(auth);
 
@@ -288,15 +508,21 @@ function handleActionEndpoint(endpoint, body, url, auth) {
   throw new HttpError(404, 'not_found', 'Unknown ECHO Action endpoint.');
 }
 
-function authenticateRequest(req) {
-  if (SESSION_TOKENS.length === 0 && !SIGNED_SESSION_TOKENS_ENABLED) {
-    return { sessionId: 'anonymous' };
-  }
-
+function authenticateRequest(req, options = {}) {
+  const allowActionOAuth = Boolean(options.allowActionOAuth);
   const token = readSessionToken(req);
   if (!token) {
+    if (SESSION_TOKENS.length === 0 && !SIGNED_SESSION_TOKENS_ENABLED && !(allowActionOAuth && ACTION_OAUTH_ENABLED)) {
+      return { sessionId: 'anonymous' };
+    }
     throw new HttpError(401, 'missing_session_token', 'A valid ECHO session token is required.');
   }
+
+  if (allowActionOAuth) {
+    const actionOAuth = verifyActionOAuthToken(token);
+    if (actionOAuth) return actionOAuth;
+  }
+
   if (SESSION_TOKENS.some((expected) => safeTokenEquals(token, expected))) {
     return { sessionId: tokenSessionId(token) };
   }
@@ -1307,7 +1533,7 @@ async function callGemini(parts, maxOutputTokens) {
   }
 }
 
-async function readJsonBody(req) {
+async function readTextBody(req) {
   const chunks = [];
   let total = 0;
 
@@ -1319,7 +1545,11 @@ async function readJsonBody(req) {
     chunks.push(chunk);
   }
 
-  const text = Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function readJsonBody(req) {
+  const text = await readTextBody(req);
   if (!text.trim()) return {};
 
   try {
@@ -1329,6 +1559,10 @@ async function readJsonBody(req) {
   }
 }
 
+async function readFormBody(req) {
+  return new URLSearchParams(await readTextBody(req));
+}
+
 function sendJson(req, res, status, body) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -1336,6 +1570,15 @@ function sendJson(req, res, status, body) {
     ...corsHeaders(req),
   });
   res.end(JSON.stringify(body));
+}
+
+function sendRedirect(req, res, location) {
+  res.writeHead(302, {
+    Location: location,
+    'Cache-Control': 'no-store',
+    ...corsHeaders(req),
+  });
+  res.end();
 }
 
 function sendEmpty(req, res, status) {

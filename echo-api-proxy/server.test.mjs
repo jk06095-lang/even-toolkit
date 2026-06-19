@@ -100,6 +100,14 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(body.rateLimit.max, 2);
   assert.equal(body.idempotency.ttlMs, 600000);
   assert.equal(body.circuitBreaker.failureThreshold, 5);
+  assert.equal(body.actionOAuth.configured, false);
+  assert.deepEqual(body.actionOAuth.scopes, [
+    'profile:read',
+    'review:read',
+    'review:write',
+    'roleplay:write',
+    'session:write',
+  ]);
   assert.equal(typeof body.model, 'string');
 });
 
@@ -417,6 +425,106 @@ test('ChatGPT Action routes serve bounded profile and write-backs without provid
     const roleplayResultBody = await roleplayResultResponse.json();
     assert.equal(roleplayResultResponse.status, 200);
     assert.deepEqual(roleplayResultBody, { accepted: true });
+  } finally {
+    await proxy.stop();
+  }
+});
+
+test('ChatGPT Action OAuth authorization-code tokens are scope-bound', async () => {
+  const clientId = 'chatgpt-action-client';
+  const clientSecret = 'test-action-oauth-secret-32';
+  const redirectUri = 'https://chatgpt.com/aip/g-echo/oauth/callback';
+  const proxy = await startProxy({
+    GEMINI_API_KEY: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+    ECHO_ACTION_OAUTH_CLIENT_ID: clientId,
+    ECHO_ACTION_OAUTH_CLIENT_SECRET: clientSecret,
+    ECHO_ACTION_OAUTH_REDIRECT_ORIGINS: 'https://chatgpt.com,https://chat.openai.com',
+  });
+
+  try {
+    const healthzResponse = await fetch(`${proxy.baseUrl}/healthz`, {
+      headers: { Origin: allowedOrigin },
+    });
+    const healthz = await healthzResponse.json();
+    assert.equal(healthz.actionOAuth.configured, true);
+    assert.equal(healthz.actionOAuth.redirectOriginCount, 2);
+    assert.equal(healthz.actionOAuth.tokenTtlSeconds, 3600);
+
+    const authorizeUrl = new URL(`${proxy.baseUrl}/oauth/authorize`);
+    authorizeUrl.searchParams.set('response_type', 'code');
+    authorizeUrl.searchParams.set('client_id', clientId);
+    authorizeUrl.searchParams.set('redirect_uri', redirectUri);
+    authorizeUrl.searchParams.set('scope', 'profile:read review:read');
+    authorizeUrl.searchParams.set('state', 'state-123');
+
+    const authorizeResponse = await fetch(authorizeUrl, {
+      headers: { Origin: allowedOrigin },
+      redirect: 'manual',
+    });
+    assert.equal(authorizeResponse.status, 302);
+    assert.equal(authorizeResponse.headers.get('cache-control'), 'no-store');
+    assert.equal(authorizeResponse.headers.get('access-control-allow-origin'), allowedOrigin);
+
+    const callbackUrl = new URL(authorizeResponse.headers.get('location'));
+    assert.equal(callbackUrl.origin + callbackUrl.pathname, redirectUri);
+    assert.equal(callbackUrl.searchParams.get('state'), 'state-123');
+    const code = callbackUrl.searchParams.get('code');
+    assert.match(code, /^echo_code_/);
+
+    const tokenResponse = await fetch(`${proxy.baseUrl}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+        Origin: allowedOrigin,
+      },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+    const tokenBody = await tokenResponse.json();
+    assert.equal(tokenResponse.status, 200);
+    assert.equal(tokenResponse.headers.get('cache-control'), 'no-store');
+    assert.match(tokenBody.access_token, /^echo_oauth_/);
+    assert.equal(tokenBody.token_type, 'Bearer');
+    assert.equal(tokenBody.expires_in, 3600);
+    assert.equal(tokenBody.scope, 'profile:read review:read');
+    assert.equal(JSON.stringify(tokenBody).includes(clientSecret), false);
+
+    const profileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
+      headers: {
+        Authorization: `Bearer ${tokenBody.access_token}`,
+        Origin: allowedOrigin,
+      },
+    });
+    const profile = await profileResponse.json();
+    assert.equal(profileResponse.status, 200);
+    assert.equal(profile.schemaVersion, '2.0.0');
+    assert.equal(profile.privacyMode, 'server_synced');
+
+    const writeResponse = await fetch(`${proxy.baseUrl}/v1/reviews/attempt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokenBody.access_token}`,
+        Origin: allowedOrigin,
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        itemId: 'li_read_only_scope_check',
+        mode: 'meaning_to_expression',
+        grade: 'good',
+        userAttempt: 'Could you clarify that?',
+        attemptedAt: new Date().toISOString(),
+      }),
+    });
+    const writeBody = await writeResponse.json();
+    assert.equal(writeResponse.status, 403);
+    assert.equal(writeBody.error.code, 'insufficient_scope');
   } finally {
     await proxy.stop();
   }
