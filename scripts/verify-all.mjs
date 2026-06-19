@@ -47,6 +47,10 @@ const steps = [
     args: ['run', 'test:echo-evidence-drafts'],
   },
   {
+    label: 'Project ECHO release readiness tests',
+    args: ['run', 'test:echo-readiness'],
+  },
+  {
     label: 'Project ECHO portfolio link promotion tests',
     args: ['run', 'test:echo-portfolio-links'],
   },

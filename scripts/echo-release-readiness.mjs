@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const repoRoot = process.cwd();
 const resolvedRepoRoot = path.resolve(repoRoot);
@@ -178,7 +179,8 @@ async function checkProxySmoke() {
   return true;
 }
 
-function validateProxySmokeEvidenceOut(value) {
+export function validateProxySmokeEvidenceOut(value, options = {}) {
+  const root = path.resolve(options.repoRoot ?? resolvedRepoRoot);
   if (!value) {
     return {
       ok: false,
@@ -193,16 +195,16 @@ function validateProxySmokeEvidenceOut(value) {
     };
   }
 
-  const resolvedPath = path.resolve(resolvedRepoRoot, value);
-  const repoPrefix = `${resolvedRepoRoot}${path.sep}`;
-  if (resolvedPath !== resolvedRepoRoot && !resolvedPath.startsWith(repoPrefix)) {
+  const resolvedPath = path.resolve(root, value);
+  const repoPrefix = `${root}${path.sep}`;
+  if (resolvedPath !== root && !resolvedPath.startsWith(repoPrefix)) {
     return {
       ok: false,
       detail: 'ECHO_PROXY_SMOKE_EVIDENCE_OUT must stay inside the repository.',
     };
   }
 
-  const repoRelativePath = path.relative(resolvedRepoRoot, resolvedPath).replace(/\\/g, '/');
+  const repoRelativePath = path.relative(root, resolvedPath).replace(/\\/g, '/');
   if (!repoRelativePath || repoRelativePath.startsWith('..') || path.isAbsolute(repoRelativePath)) {
     return {
       ok: false,
@@ -210,7 +212,7 @@ function validateProxySmokeEvidenceOut(value) {
     };
   }
 
-  const proxyRoot = path.resolve(resolvedRepoRoot, 'echo-api-proxy');
+  const proxyRoot = path.resolve(root, 'echo-api-proxy');
   const proxyRelativePath = path.relative(proxyRoot, resolvedPath).replace(/\\/g, '/');
   return {
     ok: true,
@@ -613,44 +615,50 @@ function printReport() {
   console.info('');
 }
 
-await validateFinalManifest({
-  label: 'completed pilot evidence manifest',
-  filePath: 'docs/project-echo-pilot-evidence.completed.json',
-  npmScript: 'validate:pilot-evidence',
-  issue: '#5/#10',
-  missingDetail: 'Missing docs/project-echo-pilot-evidence.completed.json with 5-user real G2 pilot, VAD environment metrics, case-study links, and real G2 video evidence.',
-});
+async function main() {
+  await validateFinalManifest({
+    label: 'completed pilot evidence manifest',
+    filePath: 'docs/project-echo-pilot-evidence.completed.json',
+    npmScript: 'validate:pilot-evidence',
+    issue: '#5/#10',
+    missingDetail: 'Missing docs/project-echo-pilot-evidence.completed.json with 5-user real G2 pilot, VAD environment metrics, case-study links, and real G2 video evidence.',
+  });
 
-checkEchoAppManifest();
-checkPortfolioAttributionDocs();
+  checkEchoAppManifest();
+  checkPortfolioAttributionDocs();
 
-await validateFinalManifest({
-  label: 'completed hardware QA manifest',
-  filePath: 'docs/project-echo-hardware-qa.completed.json',
-  npmScript: 'validate:hardware-qa',
-  issue: '#2/#3/#4/#6/#12/#13/#14/#28',
-  missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with .ehpk build-artifact hash, physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, explicit G2/Phone audio-source evidence, and two-speaker conversation timeline evidence.',
-});
+  await validateFinalManifest({
+    label: 'completed hardware QA manifest',
+    filePath: 'docs/project-echo-hardware-qa.completed.json',
+    npmScript: 'validate:hardware-qa',
+    issue: '#2/#3/#4/#6/#12/#13/#14/#28',
+    missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with .ehpk build-artifact hash, physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, explicit G2/Phone audio-source evidence, and two-speaker conversation timeline evidence.',
+  });
 
-await validateFinalManifest({
-  label: 'completed ChatGPT Action evidence manifest',
-  filePath: 'docs/project-echo-chatgpt-action-evidence.completed.json',
-  npmScript: 'validate:chatgpt-action-evidence',
-  issue: '#29',
-  missingDetail: 'Missing docs/project-echo-chatgpt-action-evidence.completed.json with deployed Custom GPT Action/OAuth endpoint proof, privacy rejection evidence, and G2/audio-level active-recall pronunciation evidence.',
-});
+  await validateFinalManifest({
+    label: 'completed ChatGPT Action evidence manifest',
+    filePath: 'docs/project-echo-chatgpt-action-evidence.completed.json',
+    npmScript: 'validate:chatgpt-action-evidence',
+    issue: '#29',
+    missingDetail: 'Missing docs/project-echo-chatgpt-action-evidence.completed.json with deployed Custom GPT Action/OAuth endpoint proof, privacy rejection evidence, and G2/audio-level active-recall pronunciation evidence.',
+  });
 
-checkManifestSummaries();
-await checkProxySmoke();
-await checkKeyRotationEvidence();
-checkReadmeLinks();
+  checkManifestSummaries();
+  await checkProxySmoke();
+  await checkKeyRotationEvidence();
+  checkReadmeLinks();
 
-printReport();
+  printReport();
 
-const blocked = checks.filter((check) => check.status !== 'passed');
-if (blocked.length > 0) {
-  console.error(`[readiness] ${blocked.length} blocker(s) remain`);
-  process.exit(1);
+  const blocked = checks.filter((check) => check.status !== 'passed');
+  if (blocked.length > 0) {
+    console.error(`[readiness] ${blocked.length} blocker(s) remain`);
+    process.exit(1);
+  }
+
+  console.info('[readiness] Project ECHO release evidence is complete');
 }
 
-console.info('[readiness] Project ECHO release evidence is complete');
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  await main();
+}
