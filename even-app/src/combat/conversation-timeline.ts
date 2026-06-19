@@ -1,9 +1,23 @@
-import type { ConversationTurn, SpeakerRole } from '@toolkit/echo-domain-v2';
+import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isConversationTurn,
+  type ConversationTurn,
+  type SpeakerRole,
+} from '@toolkit/echo-domain-v2';
 import { getConversationTurns, type SessionTranscript } from './transcript-store';
 import {
   getConversationTranslationState,
   type ConversationTranslationStatus,
 } from './translation-queue';
+
+export interface ImportedConversationOptions {
+  sessionId: string;
+  sessionStartTime: number;
+  language?: string;
+  defaultSpeaker?: SpeakerRole;
+  defaultTurnDurationMs?: number;
+  idFactory?: (index: number) => string;
+}
 
 export interface ConversationTimelineRow {
   turnId: string;
@@ -28,10 +42,64 @@ export function buildConversationTimelineRows(
     .map((turn) => toTimelineRow(turn));
 }
 
+export function parseImportedConversationTranscript(
+  transcript: string,
+  options: ImportedConversationOptions,
+): ConversationTurn[] {
+  const lines = transcript
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const durationMs = Math.max(1, options.defaultTurnDurationMs ?? 1_000);
+
+  return lines
+    .map((line, index) => {
+      const parsed = parseImportedLine(line, options.defaultSpeaker ?? 'unknown');
+      const startedAt = options.sessionStartTime + index * durationMs;
+      const turn: ConversationTurn = {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: options.idFactory?.(index) ?? `${options.sessionId}:import:${index + 1}`,
+        sessionId: options.sessionId,
+        speaker: parsed.speaker,
+        startedAt,
+        endedAt: startedAt + durationMs,
+        source: 'import',
+        language: options.language ?? 'en-US',
+        transcript: parsed.text,
+        isFinal: true,
+        piiFlags: [],
+      };
+
+      return isConversationTurn(turn) ? turn : null;
+    })
+    .filter((turn): turn is ConversationTurn => turn !== null);
+}
+
 export function speakerLabel(speaker: SpeakerRole): string {
   if (speaker === 'learner') return 'Me';
   if (speaker === 'partner') return 'Partner';
   return 'Unknown';
+}
+
+function parseImportedLine(line: string, fallbackSpeaker: SpeakerRole): { speaker: SpeakerRole; text: string } {
+  const match = line.match(/^([A-Za-z0-9 _-]{1,32}):\s*(.+)$/);
+  if (!match) {
+    return { speaker: fallbackSpeaker, text: line };
+  }
+
+  const speaker = importedSpeakerRole(match[1] ?? '') ?? fallbackSpeaker;
+  return {
+    speaker,
+    text: (match[2] ?? '').trim(),
+  };
+}
+
+function importedSpeakerRole(label: string): SpeakerRole | null {
+  const normalized = label.toLowerCase().replace(/[\s_-]+/g, '');
+  if (['me', 'i', 'learner', 'student', 'user', 'speaker1'].includes(normalized)) return 'learner';
+  if (['partner', 'other', 'interviewer', 'customer', 'client', 'speaker2'].includes(normalized)) return 'partner';
+  if (['unknown', 'speaker'].includes(normalized)) return 'unknown';
+  return null;
 }
 
 function toTimelineRow(turn: ConversationTurn): ConversationTimelineRow {

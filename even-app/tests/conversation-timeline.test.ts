@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION } from '@toolkit/echo-domain-v2';
-import { buildConversationTimelineRows, speakerLabel } from '../src/combat/conversation-timeline';
+import {
+  buildConversationTimelineRows,
+  parseImportedConversationTranscript,
+  speakerLabel,
+} from '../src/combat/conversation-timeline';
 import {
   enqueueConversationTurnTranslation,
   markConversationTranslationFailed,
@@ -178,5 +182,37 @@ describe('conversation timeline rows', () => {
 
   it('labels unknown speakers without assuming diarization confidence', () => {
     expect(speakerLabel('unknown')).toBe('Unknown');
+  });
+
+  it('builds v2 import turns from speaker-prefixed transcript lines', () => {
+    const sessionStartTime = Date.UTC(2026, 5, 19, 10, 0, 0);
+    const turns = parseImportedConversationTranscript(
+      [
+        'Partner: What problem are you solving first?',
+        'Me: I think we can start with onboarding.',
+        'Unknown: <b>malformed imported line</b>',
+        'Customer: Could you clarify the customer segment?',
+      ].join('\n'),
+      {
+        sessionId: 'import-session',
+        sessionStartTime,
+        defaultTurnDurationMs: 1_500,
+      },
+    );
+
+    expect(turns.map((turn) => turn.id)).toEqual([
+      'import-session:import:1',
+      'import-session:import:2',
+      'import-session:import:4',
+    ]);
+    expect(turns.map((turn) => turn.speaker)).toEqual(['partner', 'learner', 'partner']);
+    expect(turns.map((turn) => turn.source)).toEqual(['import', 'import', 'import']);
+    expect(turns[1]).toMatchObject({
+      startedAt: sessionStartTime + 1_500,
+      endedAt: sessionStartTime + 3_000,
+      transcript: 'I think we can start with onboarding.',
+      isFinal: true,
+      piiFlags: [],
+    });
   });
 });

@@ -43,6 +43,13 @@ that snapshot without adding conversation history to the glasses HUD. Placeholde
 speech-detection events remain analytics/cache events and are not displayed as
 phone timeline turns.
 
+Imported line transcripts can be converted into v2 `ConversationTurn` rows with
+speaker prefixes such as `Partner:`, `Me:`, `Speaker 1:`, and `Speaker 2:`.
+Imported rows use `source: "import"`, deterministic import turn IDs, ordered
+timing offsets, `isFinal: true`, and the same domain guard as stored live turns;
+malformed imported records are skipped instead of being coerced into valid
+conversation history.
+
 `ConversationTurn.confidence` is pass-through metadata only. The app preserves
 browser or provider STT confidence when it is supplied, but it does not invent a
 confidence score for G2 audio or Gemini transcription responses that do not
@@ -50,5 +57,5 @@ include one.
 
 Remaining work for issue #28:
 
-- real G2/phone/import speaker segmentation evidence
+- real G2/phone speaker segmentation and hardware/simulator evidence
 - simulator or hardware proof that the glasses HUD remains cue-only
