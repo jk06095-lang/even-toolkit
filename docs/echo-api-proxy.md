@@ -9,6 +9,12 @@ The app calls a server-side proxy, and only the proxy calls the AI provider.
 - `POST /v1/transcribe`
 - `POST /v1/translate`
 - `POST /v1/session-analysis`
+- `GET /v1/learner/profile`
+- `GET /v1/reviews/next`
+- `POST /v1/reviews/attempt`
+- `POST /v1/roleplays/start`
+- `POST /v1/roleplays/result`
+- `POST /v1/sessions/import-summary`
 - `GET /healthz`
 
 The deploy-ready reference implementation lives in `echo-api-proxy/server.mjs`.
@@ -19,6 +25,17 @@ bodies, raw transcripts, or audio payloads.
 `/v1/transcribe` may return an optional numeric `confidence` in the range
 `0..1` when the upstream STT provider supplies one. The reference Gemini proxy
 does not fabricate confidence; clients treat a missing value as unknown.
+
+The `/v1/learner/*`, `/v1/reviews/*`, `/v1/roleplays/*`, and
+`/v1/sessions/import-summary` routes are the server-backed reference surface for
+the Custom GPT Action contract. They use the same proxy authentication,
+CORS/rate-limit, no-store JSON, idempotency for POST write-backs, and privacy
+guards as the provider-bound routes, but they do not require a provider API key.
+These routes intentionally accept only bounded learner profile, review,
+roleplay, and redacted session-summary data. They reject raw transcript/audio
+fields, direct contact identifiers, provider secrets, and HTML-like content.
+Production release still requires the OAuth-backed deployed Action evidence in
+`docs/project-echo-chatgpt-action-evidence.completed.json`.
 
 ## Environment
 
@@ -171,13 +188,14 @@ Manifest:
 session-token rejection, allowed CORS behavior, disallowed-origin rejection,
 bounded schema validation, rate limiting, oversized payload rejection, and safe
 `proxy_not_configured` errors that do not echo learner text in the response body
-or proxy stdout/stderr logs. It also checks successful response idempotency and
-provider circuit opening against a local stub provider so retry and failure
-behavior does not require real provider traffic. `npm run smoke:deploy` performs
-the corresponding remote deployment checks and expects the deployed server to report
-`configured: true`, `authConfigured: true`, `tokenPolicy.configured: true`,
-`tokenPolicy.signedTokenConfigured: true`, and `qaDelayMs: 0` unless local-only
-override flags are passed for local testing.
+or proxy stdout/stderr logs. It also checks successful response idempotency,
+provider circuit opening against a local stub provider, and the proxy-backed
+Custom GPT Action read/write routes for bounded profile, session import, review
+attempt, roleplay start/result, and privacy rejection behavior. `npm run
+smoke:deploy` performs the corresponding remote deployment checks and expects
+the deployed server to report `configured: true`, `authConfigured: true`,
+`tokenPolicy.configured: true`, `tokenPolicy.signedTokenConfigured: true`, and
+`qaDelayMs: 0` unless local-only override flags are passed for local testing.
 For delayed-response QA, start a local or staging proxy with
 `ECHO_PROXY_QA_DELAY_MS=5000`; `/healthz` reports the active `qaDelayMs`.
 

@@ -94,6 +94,11 @@ The next server-synced integration boundary now lives under
   `npm run test:chatgpt-action-mock` starts it on an ephemeral loopback port
   and proves bearer auth, no-store JSON responses, redacted read/write shapes,
   and rejection of raw transcript/audio/contact payloads.
+- `echo-api-proxy/server.mjs` now also serves the same bounded Action read/write
+  route family behind the proxy's session-token auth, CORS/rate-limit,
+  idempotency, and privacy guards. This gives the contract a server-backed
+  reference path for learner profile reads, session-summary imports, review
+  attempts, and roleplay write-back without requiring provider credentials.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.
@@ -102,10 +107,11 @@ This contract is intentionally server-synced and OAuth-scoped. It is separate
 from the local manual Knowledge export. The Action schema does not accept full
 raw transcripts, raw audio, direct contact identifiers, provider keys, or
 session tokens. Run `npm run validate:chatgpt-action` after edits; the same
-check and the local mock smoke test are included in `npm run verify:all`.
-The mock server is pre-deployment contract proof only. It does not replace a
-real OAuth-backed Action API, Custom GPT Action configuration, production CORS
-checks, or G2/audio-level active-recall evidence.
+check, the local mock smoke test, and the proxy-backed Action route tests are
+included in `npm run verify:all`. The mock and proxy reference routes are
+pre-deployment contract proof only. They do not replace a real OAuth-backed
+Custom GPT Action configuration, production CORS checks, durable per-user
+storage, or G2/audio-level active-recall evidence.
 
 The deployment evidence shape is captured in
 `docs/project-echo-chatgpt-action-evidence.template.json`. Final release
@@ -126,10 +132,11 @@ manifest is present.
 
 ## Remaining Work
 
-This is the data foundation and first phone review surface for the
-active-recall loop. Remaining work is to add a real server implementation for
-the Action contract, deploy and connect it to a real Custom GPT Action with
-OAuth, collect G2/audio-level pronunciation scoring evidence, and capture
-G2/bridge-based recall evidence. The current pronunciation layer is limited to
-optional browser speech confidence; Web Speech-only evidence is explicitly
-insufficient for closing the G2/audio-level requirement.
+This is the data foundation, first phone review surface, and server-backed
+reference Action route family for the active-recall loop. Remaining work is to
+deploy and connect it to a real Custom GPT Action with OAuth, replace the
+reference in-memory Action store with durable per-user storage, collect
+G2/audio-level pronunciation scoring evidence, and capture G2/bridge-based
+recall evidence. The current pronunciation layer is limited to optional browser
+speech confidence; Web Speech-only evidence is explicitly insufficient for
+closing the G2/audio-level requirement.

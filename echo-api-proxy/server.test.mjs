@@ -273,6 +273,188 @@ test('missing provider key fails safely for translation without echoing source t
   assert.equal((proxyOutput + proxyErrorOutput).includes(sensitiveText), false);
 });
 
+test('ChatGPT Action routes serve bounded profile and write-backs without provider credentials', async () => {
+  const proxy = await startProxy({
+    GEMINI_API_KEY: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const profileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
+      headers: {
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+    });
+    const profile = await profileResponse.json();
+
+    assert.equal(profileResponse.status, 200);
+    assert.equal(profileResponse.headers.get('cache-control'), 'no-store');
+    assert.equal(profile.schemaVersion, '2.0.0');
+    assert.equal(profile.privacyMode, 'server_synced');
+    assert.ok(Array.isArray(profile.learningItems));
+    assert.equal(JSON.stringify(profile).includes('rawTranscript'), false);
+
+    const importedItem = {
+      schemaVersion: '2.0.0',
+      id: 'li_imported_repair_001',
+      canonicalExpression: 'Could you clarify that?',
+      meaningKo: '상대방에게 의미를 다시 확인하기',
+      speechAct: 'clarify',
+      breakdownType: 'listening_gap',
+      lastOutcome: 'assisted',
+      scenarioTags: ['travel'],
+      naturalRecast: 'Can you explain that again?',
+      scheduling: {
+        reps: 0,
+        lapses: 0,
+        difficulty: 0.5,
+        stability: 1,
+        dueAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+    };
+
+    const importResponse = await fetch(`${proxy.baseUrl}/v1/sessions/import-summary`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        sessionId: 'session_import_001',
+        endedAt: new Date().toISOString(),
+        sessionSummary: 'Bounded session summary with no raw transcript.',
+        learningItems: [importedItem],
+      }),
+    });
+    const importBody = await importResponse.json();
+    assert.equal(importResponse.status, 200);
+    assert.deepEqual(importBody, { accepted: true });
+
+    const updatedProfileResponse = await fetch(`${proxy.baseUrl}/v1/learner/profile`, {
+      headers: {
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+    });
+    const updatedProfile = await updatedProfileResponse.json();
+    assert.equal(updatedProfileResponse.status, 200);
+    assert.equal(updatedProfile.learningItems.some((item) => item.id === importedItem.id), true);
+    assert.equal(updatedProfile.metrics.totalSessions, 1);
+
+    const reviewResponse = await fetch(`${proxy.baseUrl}/v1/reviews/attempt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        'Idempotency-Key': 'action-review-0001',
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        itemId: importedItem.id,
+        mode: 'meaning_to_expression',
+        grade: 'good',
+        userAttempt: 'Could you clarify that?',
+        attemptedAt: new Date().toISOString(),
+        semanticScore: 0.91,
+      }),
+    });
+    const reviewBody = await reviewResponse.json();
+    assert.equal(reviewResponse.status, 200);
+    assert.equal(reviewBody.accepted, true);
+    assert.equal(reviewBody.itemId, importedItem.id);
+    assert.match(reviewBody.nextDueAt, /^\d{4}-\d{2}-\d{2}T/);
+
+    const roleplayResponse = await fetch(`${proxy.baseUrl}/v1/roleplays/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        learningItemIds: [importedItem.id],
+        targetLanguage: 'en-US',
+        scenarioPreference: 'airport counter',
+        difficulty: 0.4,
+      }),
+    });
+    const roleplayBody = await roleplayResponse.json();
+    assert.equal(roleplayResponse.status, 200);
+    assert.match(roleplayBody.roleplayId, /^rp_/);
+    assert.equal(Array.isArray(roleplayBody.goals), true);
+
+    const roleplayResultResponse = await fetch(`${proxy.baseUrl}/v1/roleplays/result`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        roleplayId: roleplayBody.roleplayId,
+        completedAt: new Date().toISOString(),
+        summary: 'Learner repaired the conversation without exposing transcript history.',
+        outcomes: [
+          {
+            itemId: importedItem.id,
+            outcome: 'independent',
+            evidenceSummary: 'Used the clarification goal in a new situation.',
+            suggestedGrade: 'easy',
+          },
+        ],
+      }),
+    });
+    const roleplayResultBody = await roleplayResultResponse.json();
+    assert.equal(roleplayResultResponse.status, 200);
+    assert.deepEqual(roleplayResultBody, { accepted: true });
+  } finally {
+    await proxy.stop();
+  }
+});
+
+test('ChatGPT Action write routes reject raw transcript and direct contact payloads', async () => {
+  const proxy = await startProxy({
+    GEMINI_API_KEY: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const sensitiveText = 'learner said my email is test@example.com';
+    const response = await fetch(`${proxy.baseUrl}/v1/sessions/import-summary`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        schemaVersion: '2.0.0',
+        sessionId: 'session_reject_001',
+        endedAt: new Date().toISOString(),
+        sessionSummary: 'Bounded summary.',
+        rawTranscript: sensitiveText,
+        learningItems: [],
+      }),
+    });
+    const text = await response.text();
+    const body = JSON.parse(text);
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, 'invalid_request_schema');
+    assert.equal(text.includes(sensitiveText), false);
+  } finally {
+    await proxy.stop();
+  }
+});
+
 test('rate limit returns a clear 429 before provider work starts', async () => {
   const request = () => fetch(`${baseUrl}/v1/cue`, {
     method: 'POST',

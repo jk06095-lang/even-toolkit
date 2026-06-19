@@ -35,6 +35,31 @@ const providerCircuit = {
   failureCount: 0,
   openedUntil: 0,
 };
+const ACTION_SCHEMA_VERSION = '2.0.0';
+const ACTION_MAX_LEARNING_ITEMS = 30;
+const actionStores = new Map();
+const ACTION_FORBIDDEN_FIELDS = new Set([
+  'rawtranscript',
+  'fulltranscript',
+  'transcriptentries',
+  'conversationturns',
+  'audio',
+  'audiobase64',
+  'email',
+  'phone',
+  'apikey',
+  'sessiontoken',
+  'providersecret',
+  'secret',
+]);
+const ACTION_ROUTES = new Map([
+  ['/v1/learner/profile', { method: 'GET', endpoint: 'action-profile' }],
+  ['/v1/reviews/next', { method: 'GET', endpoint: 'action-reviews-next' }],
+  ['/v1/reviews/attempt', { method: 'POST', endpoint: 'action-review-attempt' }],
+  ['/v1/roleplays/start', { method: 'POST', endpoint: 'action-roleplay-start' }],
+  ['/v1/roleplays/result', { method: 'POST', endpoint: 'action-roleplay-result' }],
+  ['/v1/sessions/import-summary', { method: 'POST', endpoint: 'action-session-import' }],
+]);
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -81,6 +106,36 @@ const server = http.createServer(async (req, res) => {
           open: isProviderCircuitOpen(),
         },
       });
+      return;
+    }
+
+    const actionRoute = resolveActionEndpoint(req.method, url.pathname);
+    if (actionRoute) {
+      const auth = authenticateRequest(req);
+      const body = actionRoute.method === 'POST' ? await readJsonBody(req) : {};
+      validateActionRequestBody(actionRoute.endpoint, body, url);
+
+      const idempotency = actionRoute.method === 'POST'
+        ? buildIdempotencyRecord(req, auth, body, url.pathname)
+        : null;
+      const cached = readIdempotencyCache(idempotency);
+      if (cached) {
+        sendJson(req, res, cached.status, cached.body);
+        return;
+      }
+
+      applyRateLimit(req, auth, { clientSessionId: auth.sessionId }, url.pathname);
+
+      if (QA_DELAY_MS > 0) {
+        await delay(QA_DELAY_MS);
+      }
+
+      const responseBody = validateActionResponseBody(
+        actionRoute.endpoint,
+        handleActionEndpoint(actionRoute.endpoint, body, url, auth),
+      );
+      writeIdempotencyCache(idempotency, 200, responseBody);
+      sendJson(req, res, 200, responseBody);
       return;
     }
 
@@ -137,12 +192,93 @@ function resolveEndpoint(pathname) {
   throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
 }
 
+function resolveActionEndpoint(method, pathname) {
+  const route = ACTION_ROUTES.get(pathname);
+  if (!route) return null;
+  if (route.method !== method) {
+    throw new HttpError(405, 'method_not_allowed', 'Unsupported method for this ECHO Action endpoint.');
+  }
+  return route;
+}
+
 function handleEndpoint(endpoint, body) {
   if (endpoint === 'cue') return handleCue(body);
   if (endpoint === 'transcribe') return handleTranscription(body);
   if (endpoint === 'translate') return handleTranslation(body);
   if (endpoint === 'session-analysis') return handleSessionAnalysis(body);
   throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
+}
+
+function handleActionEndpoint(endpoint, body, url, auth) {
+  const store = getActionStore(auth);
+
+  if (endpoint === 'action-profile') {
+    return actionLearnerProfile(store);
+  }
+
+  if (endpoint === 'action-reviews-next') {
+    return actionReviewQueue(store, readActionLimit(url));
+  }
+
+  if (endpoint === 'action-review-attempt') {
+    const item = findActionLearningItem(store, body.itemId);
+    const nextDueAt = applyActionReviewGrade(item, body.grade, body.mode);
+    store.attempts.push({
+      itemId: body.itemId,
+      mode: body.mode,
+      grade: body.grade,
+      attemptedAt: body.attemptedAt,
+      semanticScore: boundedOptionalNumber(body.semanticScore, 0, 1),
+      pronunciationScore: boundedOptionalNumber(body.pronunciationScore, 0, 1),
+    });
+    touchActionStore(store);
+    return {
+      accepted: true,
+      itemId: item.id,
+      nextDueAt,
+    };
+  }
+
+  if (endpoint === 'action-roleplay-start') {
+    const selectedItems = body.learningItemIds.map((itemId) => findActionLearningItem(store, itemId));
+    const roleplayId = `rp_${Date.now()}_${randomUUID().slice(0, 8)}`;
+    store.roleplays.set(roleplayId, {
+      roleplayId,
+      learningItemIds: selectedItems.map((item) => item.id),
+      startedAt: new Date().toISOString(),
+    });
+    return {
+      roleplayId,
+      scenario: buildRoleplayScenario(selectedItems, body.scenarioPreference),
+      goals: selectedItems.map((item) => `Use ${item.speechAct.replace(/_/g, ' ')} without exposing raw session history.`),
+    };
+  }
+
+  if (endpoint === 'action-roleplay-result') {
+    for (const outcome of body.outcomes) {
+      const item = findActionLearningItem(store, outcome.itemId);
+      item.lastOutcome = outcome.outcome === 'independent'
+        ? 'independent'
+        : outcome.outcome === 'assisted'
+          ? 'assisted'
+          : 'failed';
+      if (outcome.suggestedGrade) {
+        applyActionReviewGrade(item, outcome.suggestedGrade, 'transfer');
+      }
+    }
+    touchActionStore(store);
+    return { accepted: true };
+  }
+
+  if (endpoint === 'action-session-import') {
+    const importedItems = body.learningItems.map((item, index) => normalizeActionLearningItem(item, index));
+    mergeActionLearningItems(store, importedItems);
+    store.metrics.totalSessions += 1;
+    touchActionStore(store);
+    return { accepted: true };
+  }
+
+  throw new HttpError(404, 'not_found', 'Unknown ECHO Action endpoint.');
 }
 
 function authenticateRequest(req) {
@@ -434,6 +570,98 @@ function validateRequestBody(endpoint, body) {
   }
 }
 
+function validateActionRequestBody(endpoint, body, url) {
+  if (endpoint === 'action-profile') return;
+  if (endpoint === 'action-reviews-next') {
+    readActionLimit(url);
+    return;
+  }
+
+  assertPlainObject(body, 'body');
+  assertActionPrivacySafe(body);
+
+  if (endpoint === 'action-review-attempt') {
+    assertAllowedFields(body, [
+      'schemaVersion',
+      'itemId',
+      'mode',
+      'grade',
+      'userAttempt',
+      'attemptedAt',
+      'semanticScore',
+      'pronunciationScore',
+    ], 'body');
+    assertActionSchemaVersion(body);
+    assertSafeIdField(body, 'itemId');
+    assertEnumField(body, 'mode', ['meaning_to_expression', 'transfer']);
+    assertEnumField(body, 'grade', ['again', 'hard', 'good', 'easy']);
+    assertOptionalPlainText(body, 'userAttempt', 1_000);
+    assertIsoDateField(body, 'attemptedAt');
+    assertOptionalNumber(body, 'semanticScore', 0, 1);
+    assertOptionalNumber(body, 'pronunciationScore', 0, 1);
+    return;
+  }
+
+  if (endpoint === 'action-roleplay-start') {
+    assertAllowedFields(body, [
+      'schemaVersion',
+      'learningItemIds',
+      'targetLanguage',
+      'scenarioPreference',
+      'difficulty',
+    ], 'body');
+    assertActionSchemaVersion(body);
+    assertSafeIdArray(body.learningItemIds, 1, 3, 'learningItemIds');
+    assertRequiredString(body, 'targetLanguage', 35);
+    assertOptionalPlainText(body, 'scenarioPreference', 120);
+    assertOptionalNumber(body, 'difficulty', 0, 1);
+    return;
+  }
+
+  if (endpoint === 'action-roleplay-result') {
+    assertAllowedFields(body, [
+      'schemaVersion',
+      'roleplayId',
+      'completedAt',
+      'summary',
+      'outcomes',
+    ], 'body');
+    assertActionSchemaVersion(body);
+    assertSafeIdField(body, 'roleplayId');
+    assertIsoDateField(body, 'completedAt');
+    assertOptionalPlainText(body, 'summary', 1_000);
+    assertArrayBounds(body.outcomes, 1, 3, 'outcomes');
+    body.outcomes.forEach((outcome, index) => {
+      assertPlainObject(outcome, `outcomes[${index}]`);
+      assertActionPrivacySafe(outcome);
+      assertAllowedFields(outcome, ['itemId', 'outcome', 'evidenceSummary', 'suggestedGrade'], `outcomes[${index}]`);
+      assertSafeIdField(outcome, 'itemId');
+      assertEnumField(outcome, 'outcome', ['independent', 'assisted', 'failed']);
+      assertRequiredPlainText(outcome, 'evidenceSummary', 600);
+      assertOptionalEnum(outcome, 'suggestedGrade', ['again', 'hard', 'good', 'easy']);
+    });
+    return;
+  }
+
+  if (endpoint === 'action-session-import') {
+    assertAllowedFields(body, [
+      'schemaVersion',
+      'sessionId',
+      'endedAt',
+      'sessionSummary',
+      'learningItems',
+    ], 'body');
+    assertActionSchemaVersion(body);
+    assertSafeIdField(body, 'sessionId');
+    assertIsoDateField(body, 'endedAt');
+    assertRequiredPlainText(body, 'sessionSummary', 1_000);
+    assertArrayBounds(body.learningItems, 0, 3, 'learningItems');
+    body.learningItems.forEach((item, index) => {
+      normalizeActionLearningItem(item, index);
+    });
+  }
+}
+
 function validateResponseBody(endpoint, body) {
   assertPlainObject(body, 'response');
   if (endpoint === 'cue') {
@@ -463,6 +691,271 @@ function validateResponseBody(endpoint, body) {
   assertOptionalString(body, 'source', 40);
   assertOptionalNumber(body, 'latencyMs', 0, 120_000);
   return body;
+}
+
+function validateActionResponseBody(_endpoint, body) {
+  assertPlainObject(body, 'response');
+  assertActionPrivacySafe(body);
+  return body;
+}
+
+function getActionStore(auth) {
+  const sessionKey = auth.sessionId || 'anonymous';
+  const storeKey = hashSessionKey(sessionKey);
+  let store = actionStores.get(storeKey);
+  if (!store) {
+    store = createActionStore(storeKey);
+    actionStores.set(storeKey, store);
+  }
+  return store;
+}
+
+function createActionStore(storeKey) {
+  const now = new Date().toISOString();
+  return {
+    learnerId: `learner_${storeKey}`,
+    updatedAt: now,
+    profileLocale: 'ko-KR',
+    targetLanguage: 'en-US',
+    metrics: {
+      conversationRecoveryRate: 0,
+      independentTransferRate: 0,
+      assistedExactRate: 0,
+      activeRecallDueCount: 0,
+      totalSessions: 0,
+    },
+    ability: {
+      recall: 0.5,
+      listening: 0.5,
+      grammar: 0.5,
+      wordChoice: 0.5,
+      pronunciation: 0.5,
+      turnTaking: 0.5,
+    },
+    learningItems: seedActionLearningItems(now),
+    attempts: [],
+    roleplays: new Map(),
+  };
+}
+
+function seedActionLearningItems(nowIso) {
+  const now = Date.parse(nowIso);
+  return [
+    {
+      schemaVersion: ACTION_SCHEMA_VERSION,
+      id: 'li_ask_repeat_seed',
+      canonicalExpression: 'Could you say that again, please?',
+      meaningKo: '다시 말해 달라고 정중하게 요청하기',
+      speechAct: 'ask_repeat',
+      breakdownType: 'listening_gap',
+      lastOutcome: 'assisted',
+      scenarioTags: ['repair', 'conversation'],
+      naturalRecast: 'Could you repeat that, please?',
+      scheduling: {
+        reps: 0,
+        lapses: 0,
+        difficulty: 0.42,
+        stability: 1,
+        dueAt: nextDueAtForActionGrade('hard', now),
+      },
+    },
+    {
+      schemaVersion: ACTION_SCHEMA_VERSION,
+      id: 'li_buy_time_seed',
+      canonicalExpression: 'Let me think for a second.',
+      meaningKo: '생각할 시간을 잠깐 벌기',
+      speechAct: 'buy_time',
+      breakdownType: 'turn_taking',
+      lastOutcome: 'independent',
+      scenarioTags: ['meeting', 'small_talk'],
+      naturalRecast: 'Give me a second to think about that.',
+      scheduling: {
+        reps: 1,
+        lapses: 0,
+        difficulty: 0.35,
+        stability: 2,
+        dueAt: nextDueAtForActionGrade('good', now),
+      },
+    },
+  ];
+}
+
+function actionLearnerProfile(store) {
+  const learningItems = boundedActionLearningItems(store);
+  return {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    learnerId: store.learnerId,
+    updatedAt: store.updatedAt,
+    profileLocale: store.profileLocale,
+    targetLanguage: store.targetLanguage,
+    privacyMode: 'server_synced',
+    metrics: {
+      ...store.metrics,
+      activeRecallDueCount: countDueActionItems(learningItems),
+    },
+    ability: store.ability,
+    learningItems,
+  };
+}
+
+function actionReviewQueue(store, limit) {
+  const items = boundedActionLearningItems(store)
+    .slice()
+    .sort((a, b) => Date.parse(a.scheduling.dueAt) - Date.parse(b.scheduling.dueAt))
+    .slice(0, limit)
+    .map((item, index) => {
+      const mode = index % 2 === 0 ? 'meaning_to_expression' : 'transfer';
+      return {
+        itemId: item.id,
+        mode,
+        prompt: buildReviewPrompt(item, mode),
+        meaningKo: item.meaningKo,
+        scenarioTag: item.scenarioTags?.[0] || 'general',
+        dueAt: item.scheduling.dueAt,
+      };
+    });
+
+  return {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    items,
+  };
+}
+
+function buildReviewPrompt(item, mode) {
+  if (mode === 'transfer') {
+    return `Use this communication goal in a new ${item.scenarioTags?.[0] || 'daily'} situation without seeing the answer.`;
+  }
+  return item.meaningKo;
+}
+
+function findActionLearningItem(store, itemId) {
+  const item = store.learningItems.find((entry) => entry.id === itemId);
+  if (!item) {
+    throw new HttpError(404, 'not_found', 'Learning item was not found for this learner.');
+  }
+  return item;
+}
+
+function applyActionReviewGrade(item, grade, mode) {
+  const scheduling = item.scheduling;
+  scheduling.reps = Math.min(10_000, Math.max(0, Number(scheduling.reps) || 0) + 1);
+  if (grade === 'again') {
+    scheduling.lapses = Math.min(10_000, Math.max(0, Number(scheduling.lapses) || 0) + 1);
+  }
+
+  const difficultyDelta = grade === 'again' ? 0.08 : grade === 'hard' ? 0.03 : grade === 'good' ? -0.02 : -0.05;
+  const stabilityFactor = grade === 'again' ? 0.45 : grade === 'hard' ? 1.25 : grade === 'good' ? 2.2 : 3.5;
+  scheduling.difficulty = round3(clamp01((Number(scheduling.difficulty) || 0.5) + difficultyDelta));
+  scheduling.stability = round3(Math.max(0.1, Math.min(3650, (Number(scheduling.stability) || 1) * stabilityFactor)));
+  scheduling.dueAt = nextDueAtForActionGrade(grade);
+
+  if (mode === 'transfer' && (grade === 'good' || grade === 'easy')) {
+    item.lastOutcome = 'independent';
+  }
+
+  return scheduling.dueAt;
+}
+
+function nextDueAtForActionGrade(grade, now = Date.now()) {
+  const delayMs =
+    grade === 'again' ? 30 * 60_000
+      : grade === 'hard' ? 24 * 60 * 60_000
+        : grade === 'good' ? 3 * 24 * 60 * 60_000
+          : 7 * 24 * 60 * 60_000;
+  return new Date(now + delayMs).toISOString();
+}
+
+function buildRoleplayScenario(items, preference) {
+  const goals = items
+    .map((item) => item.speechAct.replace(/_/g, ' '))
+    .join(', ');
+  const preferred = clipString(preference, 120);
+  return preferred
+    ? `Practice ${goals} in a ${preferred} roleplay while keeping corrections brief.`
+    : `Practice ${goals} in a short everyday roleplay while keeping corrections brief.`;
+}
+
+function mergeActionLearningItems(store, importedItems) {
+  const byId = new Map(store.learningItems.map((item) => [item.id, item]));
+  for (const item of importedItems) {
+    byId.set(item.id, item);
+  }
+  store.learningItems = Array.from(byId.values()).slice(-ACTION_MAX_LEARNING_ITEMS);
+}
+
+function boundedActionLearningItems(store) {
+  return cloneJson(store.learningItems.slice(0, ACTION_MAX_LEARNING_ITEMS));
+}
+
+function countDueActionItems(items) {
+  const now = Date.now();
+  return items.filter((item) => Date.parse(item.scheduling?.dueAt) <= now).length;
+}
+
+function touchActionStore(store) {
+  store.updatedAt = new Date().toISOString();
+}
+
+function normalizeActionLearningItem(value, index) {
+  assertPlainObject(value, `learningItems[${index}]`);
+  assertActionPrivacySafe(value);
+  assertAllowedFields(value, [
+    'schemaVersion',
+    'id',
+    'canonicalExpression',
+    'meaningKo',
+    'speechAct',
+    'breakdownType',
+    'lastOutcome',
+    'scenarioTags',
+    'naturalRecast',
+    'scheduling',
+  ], `learningItems[${index}]`);
+  assertActionSchemaVersion(value);
+  assertSafeIdField(value, 'id');
+  assertRequiredPlainText(value, 'canonicalExpression', 240);
+  assertRequiredPlainText(value, 'meaningKo', 400);
+  assertEnumField(value, 'speechAct', ['answer', 'clarify', 'ask_repeat', 'buy_time', 'repair']);
+  assertEnumField(value, 'breakdownType', [
+    'recall_gap',
+    'listening_gap',
+    'grammar',
+    'word_choice',
+    'pronunciation',
+    'turn_taking',
+  ]);
+  assertEnumField(value, 'lastOutcome', ['independent', 'assisted', 'failed']);
+  if (value.scenarioTags !== undefined) {
+    assertPlainTextArray(value.scenarioTags, 0, 5, 120, 'scenarioTags');
+  }
+  assertOptionalPlainText(value, 'naturalRecast', 240);
+  assertPlainObject(value.scheduling, 'scheduling');
+  assertIntegerField(value.scheduling, 'reps', 0, 10_000);
+  assertIntegerField(value.scheduling, 'lapses', 0, 10_000);
+  assertNumberField(value.scheduling, 'difficulty', 0, 1);
+  assertNumberField(value.scheduling, 'stability', 0, 3650);
+  assertIsoDateField(value.scheduling, 'dueAt');
+
+  return {
+    schemaVersion: ACTION_SCHEMA_VERSION,
+    id: value.id,
+    canonicalExpression: clipString(value.canonicalExpression, 240),
+    meaningKo: clipString(value.meaningKo, 400),
+    speechAct: value.speechAct,
+    breakdownType: value.breakdownType,
+    lastOutcome: value.lastOutcome,
+    scenarioTags: Array.isArray(value.scenarioTags)
+      ? value.scenarioTags.map((tag) => clipString(tag, 120)).filter(Boolean).slice(0, 5)
+      : [],
+    naturalRecast: clipString(value.naturalRecast, 240) || undefined,
+    scheduling: {
+      reps: value.scheduling.reps,
+      lapses: value.scheduling.lapses,
+      difficulty: round3(value.scheduling.difficulty),
+      stability: round3(value.scheduling.stability),
+      dueAt: value.scheduling.dueAt,
+    },
+  };
 }
 
 async function handleCue(input) {
@@ -920,6 +1413,142 @@ function assertOptionalStringArray(record, field, maxItems, maxChars) {
       throw new HttpError(400, 'invalid_request_schema', `${field} must contain bounded strings.`);
     }
   }
+}
+
+function assertActionPrivacySafe(value) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => assertActionPrivacySafe(item));
+    return;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      if (ACTION_FORBIDDEN_FIELDS.has(key.toLowerCase())) {
+        throw new HttpError(400, 'invalid_request_schema', 'Forbidden Action payload field rejected.');
+      }
+      assertActionPrivacySafe(child);
+    }
+    return;
+  }
+
+  if (typeof value !== 'string') return;
+  if (/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(value)) {
+    throw new HttpError(400, 'invalid_request_schema', 'Direct contact identifier rejected.');
+  }
+  if (/\b(?:\+?\d[\s.-]?){8,}\b/.test(value)) {
+    throw new HttpError(400, 'invalid_request_schema', 'Direct contact identifier rejected.');
+  }
+  if (/<[A-Za-z][\s\S]*>/.test(value)) {
+    throw new HttpError(400, 'invalid_request_schema', 'HTML-like content rejected.');
+  }
+}
+
+function assertAllowedFields(record, allowed, field) {
+  const allowedSet = new Set(allowed);
+  for (const key of Object.keys(record)) {
+    if (!allowedSet.has(key)) {
+      throw new HttpError(400, 'invalid_request_schema', `${field}.${key} is not allowed.`);
+    }
+  }
+}
+
+function assertActionSchemaVersion(record) {
+  if (record.schemaVersion !== ACTION_SCHEMA_VERSION) {
+    throw new HttpError(400, 'invalid_request_schema', `schemaVersion must be ${ACTION_SCHEMA_VERSION}.`);
+  }
+}
+
+function assertSafeIdField(record, field) {
+  assertRequiredString(record, field, 180);
+  if (!/^[A-Za-z0-9._:-]+$/.test(record[field])) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a safe identifier.`);
+  }
+}
+
+function assertSafeIdArray(value, minItems, maxItems, field) {
+  assertArrayBounds(value, minItems, maxItems, field);
+  value.forEach((item, index) => {
+    if (typeof item !== 'string' || !/^[A-Za-z0-9._:-]{1,180}$/.test(item)) {
+      throw new HttpError(400, 'invalid_request_schema', `${field}[${index}] must be a safe identifier.`);
+    }
+  });
+}
+
+function assertArrayBounds(value, minItems, maxItems, field) {
+  if (!Array.isArray(value) || value.length < minItems || value.length > maxItems) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must contain ${minItems}-${maxItems} item(s).`);
+  }
+}
+
+function assertEnumField(record, field, values) {
+  if (!values.includes(record[field])) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} has an unsupported value.`);
+  }
+}
+
+function assertIsoDateField(record, field) {
+  assertRequiredString(record, field, 35);
+  if (Number.isNaN(Date.parse(record[field]))) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be an ISO date-time string.`);
+  }
+}
+
+function assertRequiredPlainText(record, field, max) {
+  assertRequiredString(record, field, max);
+  assertActionPrivacySafe(record[field]);
+}
+
+function assertOptionalPlainText(record, field, max) {
+  if (record[field] === undefined || record[field] === null) return;
+  assertRequiredPlainText(record, field, max);
+}
+
+function assertPlainTextArray(value, minItems, maxItems, maxChars, field) {
+  assertArrayBounds(value, minItems, maxItems, field);
+  value.forEach((item, index) => {
+    if (typeof item !== 'string' || !item.trim() || item.length > maxChars) {
+      throw new HttpError(400, 'invalid_request_schema', `${field}[${index}] must be bounded plain text.`);
+    }
+    assertActionPrivacySafe(item);
+  });
+}
+
+function assertIntegerField(record, field, min, max) {
+  const value = record[field];
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be an integer in range.`);
+  }
+}
+
+function assertNumberField(record, field, min, max) {
+  const value = record[field];
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a number in range.`);
+  }
+}
+
+function readActionLimit(url) {
+  const raw = url.searchParams.get('limit');
+  if (raw === null || raw === '') return 5;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 1 || value > 10) {
+    throw new HttpError(400, 'invalid_request_schema', 'limit must be an integer from 1 to 10.');
+  }
+  return value;
+}
+
+function boundedOptionalNumber(value, min, max) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
+    ? value
+    : undefined;
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
 }
 
 function clipArray(value, maxItems, maxChars) {
