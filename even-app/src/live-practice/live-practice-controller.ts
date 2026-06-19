@@ -611,7 +611,12 @@ function updateSoundwaveVolume(volume: number): void {
   }
 }
 
-function handleHintUsageResult(result: { status: 'used' | 'simplified' | 'missed'; hint: string; simplifiedTo?: string }): void {
+function handleHintUsageResult(result: {
+  status: 'used' | 'simplified' | 'missed';
+  hint: string;
+  outcome?: string;
+  simplifiedTo?: string;
+}): void {
   const liveContainer = document.getElementById('live-transcript-container');
   const liveText = document.getElementById('live-transcript-text');
 

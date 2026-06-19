@@ -502,6 +502,58 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     });
   });
 
+  it('counts adapted speech-act cue usage and shows ACK', async () => {
+    const harness = createHarness({
+      chunkResult: {
+        chunk: 'Could you say that again?',
+        source: 'gemini',
+        latencyMs: 8,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    await harness.engine.requestManualCue();
+    harness.recognizers[0]!.emitFinalResult('Sorry, can you repeat it?');
+    await harness.engine.stop();
+
+    expect(harness.hud.events).toContain('showGoodJob');
+    expect(harness.engine.currentAssistMetrics.cue_used_count).toBe(1);
+    expect(harness.hintResults[0]).toMatchObject({
+      hint: 'Could you say that again?',
+      status: 'used',
+      outcome: 'assisted_adapted',
+    });
+    expect(harness.analyses[0]).toMatchObject({
+      totalHints: 1,
+      hintsUsed: 1,
+      hintsMissed: 0,
+    });
+  });
+
+  it('does not count unrelated three-word speech as cue recovery', async () => {
+    const harness = createHarness({
+      chunkResult: {
+        chunk: 'Could you say that again?',
+        source: 'gemini',
+        latencyMs: 8,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    await harness.engine.requestManualCue();
+    harness.recognizers[0]!.emitFinalResult('I maybe tomorrow');
+    await harness.engine.stop();
+
+    expect(harness.hud.events).not.toContain('showGoodJob');
+    expect(harness.engine.currentAssistMetrics.cue_used_count).toBe(0);
+    expect(harness.hintResults).toEqual([]);
+    expect(harness.analyses[0]).toMatchObject({
+      totalHints: 1,
+      hintsUsed: 0,
+      hintsMissed: 1,
+    });
+  });
+
   it('ignores late cue responses after session stop', async () => {
     const deferredCue = deferred<ChunkResult>();
     const harness = createHarness({ pendingChunk: deferredCue.promise });
@@ -711,6 +763,12 @@ function createHarness(options: {
   const chunks: ChunkResult[] = [];
   const logs: SessionLog[] = [];
   const analyses: SessionAnalysis[] = [];
+  const hintResults: Array<{
+    hint: string;
+    status: 'used' | 'missed' | 'simplified';
+    outcome?: string;
+    simplifiedTo?: string;
+  }> = [];
   const liveTranscripts: { text: string; isFinal: boolean }[] = [];
   const hud = new FakeHud();
   let vad!: FakeAudioDetector;
@@ -746,6 +804,9 @@ function createHarness(options: {
     },
     onSessionAnalysis: (analysis) => {
       analyses.push(analysis);
+    },
+    onHintUsageResult: (result) => {
+      hintResults.push(result);
     },
   };
 
@@ -783,6 +844,7 @@ function createHarness(options: {
     chunks,
     logs,
     analyses,
+    hintResults,
     liveTranscripts,
     recognizers,
     recognizerOptions,

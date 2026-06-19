@@ -141,13 +141,6 @@ export async function evaluateSpeech(
 
     if (!transcript && !hint) return null;
 
-    if (hint && transcript) {
-      const englishWordCount = (transcript.match(/[a-zA-Z]{2,}/g) || []).length;
-      if (englishWordCount >= 3) {
-        hint = '';
-      }
-    }
-
     if (hint && req.usedHints?.some((used) => used.toLowerCase() === hint.toLowerCase())) {
       const fresh = await generateChunk(req, signal);
       hint = fresh.chunk || '';

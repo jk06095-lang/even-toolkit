@@ -35,7 +35,7 @@ const H = 288;
 export type HUDMode = 'off' | 'standby' | 'calibration' | 'combat' | 'ambient' | 'debrief';
 export type WearingState = 'wearing' | 'not-wearing' | 'unavailable';
 export type HUDAction = 'resume' | 'end-practice' | 'exit-echo' | 'request-cue' | 'dismiss-cue';
-export type CombatHUDState = 'READY' | 'LISTENING' | 'CUE' | 'PAUSED';
+export type CombatHUDState = 'READY' | 'LISTENING' | 'CUE' | 'ACK' | 'PAUSED';
 
 export function parseWearingState(status: any): WearingState {
   const rawWearing =
@@ -311,6 +311,7 @@ export class HUDController {
   private _combatHudState: CombatHUDState = 'READY';
   private _combatHudDetail = '';
   private _lastCombatFrame = '';
+  private _ackTimeout: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Topic details stay on the phone UI. The G2 live HUD only renders
@@ -321,6 +322,9 @@ export class HUDController {
   }
 
   private async setCombatHudState(state: CombatHUDState, detail = ''): Promise<void> {
+    if (state !== 'ACK') {
+      this.clearAckTimeout();
+    }
     this._mode = 'combat';
     this._combatInitialized = true;
     this._combatHudState = state;
@@ -342,7 +346,24 @@ export class HUDController {
     await this.renderCombatHud();
   }
 
+  private clearAckTimeout(): void {
+    if (this._ackTimeout) {
+      clearTimeout(this._ackTimeout);
+      this._ackTimeout = null;
+    }
+  }
+
   private buildCombatHudFrame(state: CombatHUDState, detail: string): string {
+    if (state === 'ACK') {
+      return [
+        '',
+        '',
+        '       ACK',
+        '',
+        '       OK',
+      ].join('\n');
+    }
+
     if (state === 'CUE') {
       return [
         '',
@@ -416,7 +437,14 @@ export class HUDController {
   }
 
   async showGoodJob(): Promise<void> {
-    // Achievement detail stays on the phone UI and session history.
+    this.clearAckTimeout();
+    await this.setCombatHudState('ACK');
+    this._ackTimeout = setTimeout(() => {
+      this._ackTimeout = null;
+      if (this._combatHudState === 'ACK' && !this._isInterruptMenuVisible) {
+        void this.setCombatHudState('LISTENING');
+      }
+    }, 750);
   }
 
   async showPaused(): Promise<void> {

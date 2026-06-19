@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HUDController, parseWearingState, type HUDAction } from '../src/hud/hud-controller';
 
 function createHudHarness() {
@@ -31,6 +31,10 @@ function createHudHarness() {
 }
 
 describe('HUDController simplified live HUD contract', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('preserves explicit wear sensor states without forcing connected devices to wearing', () => {
     expect(parseWearingState({ connectType: 'connected', isWearing: true })).toBe('wearing');
     expect(parseWearingState({ connectType: 'connected', isWearing: false })).toBe('not-wearing');
@@ -42,7 +46,8 @@ describe('HUDController simplified live HUD contract', () => {
     expect(parseWearingState({ connectType: 'connected', isWearing: null })).toBe('unavailable');
   });
 
-  it('renders only READY, LISTENING, CUE, and PAUSED on the live G2 surface', async () => {
+  it('renders READY, LISTENING, CUE, ACK, and PAUSED on the live G2 surface', async () => {
+    vi.useFakeTimers();
     const { hud, frames } = createHudHarness();
 
     await hud.initCombatDisplay();
@@ -55,7 +60,13 @@ describe('HUDController simplified live HUD contract', () => {
     await hud.showLiveTranscript('raw live transcript should stay on phone');
     await hud.showGrammarFeedback('grammar feedback should stay on phone');
     await hud.showGoodJob();
-    expect(frames).toHaveLength(listeningFrameCount);
+    expect(frames.at(-1)).toContain('ACK');
+    expect(frames.at(-1)).toContain('OK');
+
+    vi.advanceTimersByTime(750);
+    await Promise.resolve();
+    expect(frames.at(-1)).toContain('LISTENING');
+    expect(frames.length).toBe(listeningFrameCount + 2);
 
     await hud.flashChunk('This is a deliberately long cue that should be clipped into a glanceable phrase for G2');
     const cueFrame = frames.at(-1) ?? '';

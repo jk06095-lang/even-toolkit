@@ -12,6 +12,7 @@ import type { VadCalibration } from '../dsp/calibration';
 import { HybridRecognizer, type HybridMode, type HybridRecognizerCallbacks, type HybridRecognizerOptions } from './hybrid-recognizer';
 import { TranscriptStore, type SessionTranscript, type TranscriptStoreOptions } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
+import type { AssistOutcome } from '@toolkit/echo-domain-v2';
 
 // ── Types ──
 
@@ -101,7 +102,12 @@ export interface SessionCallbacks {
   /** Notifies which audio source is active */
   onAudioSource?: (source: string) => void;
   /** Fired when hint usage is resolved (used, missed, or simplified) */
-  onHintUsageResult?: (result: { hint: string; status: 'used' | 'missed' | 'simplified'; simplifiedTo?: string }) => void;
+  onHintUsageResult?: (result: {
+    hint: string;
+    status: 'used' | 'missed' | 'simplified';
+    outcome?: AssistOutcome;
+    simplifiedTo?: string;
+  }) => void;
   /** Fired at session end with full analysis */
   onSessionAnalysis?: (analysis: SessionAnalysis) => void;
   /** Fired when assist mode metrics change */
@@ -798,16 +804,17 @@ export class SessionEngine {
 
         // Check if user used the active hint
         if (this.analyzer?.getActiveHint()) {
-          const checkResult = this.analyzer.checkHintUsage(trimmed);
+          const evaluation = this.analyzer.evaluateActiveHintUsage(trimmed);
           const activeHint = this.analyzer.getActiveHint()!;
 
-          if (checkResult.used) {
+          if (evaluation?.status === 'used') {
             // User successfully used the recommended expression!
-            this.analyzer.resolveActiveHint('used', trimmed);
+            this.analyzer.resolveActiveHint('used', trimmed, evaluation);
             this.transcriptStore?.addHintUsed(activeHint.text, trimmed);
             this.callbacks.onHintUsageResult?.({
               hint: activeHint.text,
               status: 'used',
+              outcome: evaluation.outcome,
             });
             this.assistMetrics.cue_used_count++;
             this.autoDismissStreak = 0;

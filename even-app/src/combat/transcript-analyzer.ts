@@ -6,6 +6,13 @@
  * adaptive difficulty progression based on recent performance.
  */
 
+import type { AssistOutcome, Cue, CueLevelUsed, SpeechAct } from '@toolkit/echo-domain-v2';
+import {
+  evaluateCueObjectOutcome,
+  evaluateCueOutcome,
+  type CueOutcomeEvaluation,
+} from './outcome-evaluator';
+
 // ── Stop-words removed during keyword extraction ──
 
 const STOP_WORDS = new Set([
@@ -39,6 +46,10 @@ export interface ActiveHint {
   status: 'pending' | 'used' | 'missed' | 'simplified';
   /** If this hint was simplified, the original harder hint text. */
   simplifiedFrom?: string;
+  /** Structured cue metadata when available. */
+  cue?: Cue;
+  /** Speech-act inferred or supplied for outcome evaluation. */
+  speechAct?: SpeechAct;
 }
 
 /** A persisted record of a single hint's outcome. */
@@ -55,6 +66,12 @@ export interface HintUsageRecord {
   timestamp: number;
   /** Difficulty level of the hint. */
   difficulty: number;
+  /** ECHO domain v2 outcome for the assisted turn. */
+  outcome: AssistOutcome;
+  /** Cue level used for this outcome, or 0 when no cue was used. */
+  cueLevelUsed: CueLevelUsed;
+  /** Speech act evaluated for this hint. */
+  speechAct: SpeechAct;
 }
 
 /** Result of checking whether the user's speech matched the active hint. */
@@ -161,13 +178,15 @@ export class TranscriptAnalyzer {
    * @param hintText   The expression to suggest to the user.
    * @param difficulty Difficulty level 1–4.
    */
-  setActiveHint(hintText: string, difficulty: number): void {
+  setActiveHint(hintText: string, difficulty: number, cue?: Cue): void {
     this.activeHint = {
       text: hintText,
       keyWords: extractKeyWords(hintText),
       givenAt: Date.now(),
       difficulty,
       status: 'pending',
+      cue,
+      speechAct: cue?.speechAct,
     };
   }
 
@@ -208,22 +227,50 @@ export class TranscriptAnalyzer {
     return { used, matchedWords, matchRatio };
   }
 
+  evaluateActiveHintUsage(transcript: string): CueOutcomeEvaluation | null {
+    if (!this.activeHint) return null;
+
+    if (this.activeHint.cue) {
+      return evaluateCueObjectOutcome(this.activeHint.cue, transcript);
+    }
+
+    return evaluateCueOutcome({
+      phrase: this.activeHint.text,
+      userAttempt: transcript,
+      speechAct: this.activeHint.speechAct,
+      level: clampCueLevel(this.activeHint.difficulty),
+    });
+  }
+
   /**
    * Mark the active hint as used/missed and persist the record.
    *
    * @param status       Outcome — 'used' or 'missed'.
    * @param userResponse Optional: what the user actually said.
    */
-  resolveActiveHint(status: 'used' | 'missed' | 'simplified', detail?: string): void {
+  resolveActiveHint(
+    status: 'used' | 'missed' | 'simplified',
+    detail?: string,
+    evaluation?: CueOutcomeEvaluation,
+  ): void {
     if (!this.activeHint) return;
 
     this.activeHint.status = status;
+    const fallbackEvaluation = evaluateCueOutcome({
+      phrase: this.activeHint.text,
+      userAttempt: status === 'used' ? detail ?? '' : '',
+      speechAct: this.activeHint.speechAct,
+      level: clampCueLevel(this.activeHint.difficulty),
+    });
 
     const record: HintUsageRecord = {
       hint: this.activeHint.text,
       status,
       timestamp: Date.now(),
       difficulty: this.activeHint.difficulty,
+      outcome: evaluation?.outcome ?? fallbackOutcome(status, fallbackEvaluation.outcome),
+      cueLevelUsed: evaluation?.cueLevelUsed ?? fallbackEvaluation.cueLevelUsed,
+      speechAct: evaluation?.speechAct ?? fallbackEvaluation.speechAct,
     };
 
     if (status === 'simplified') {
@@ -358,4 +405,18 @@ export class TranscriptAnalyzer {
   getTranscriptTexts(): string[] {
     return this.utterances.map((u) => u.text);
   }
+}
+
+function clampCueLevel(difficulty: number): 1 | 2 | 3 {
+  const level = Math.max(1, Math.min(3, Math.round(difficulty)));
+  return level as 1 | 2 | 3;
+}
+
+function fallbackOutcome(
+  status: 'used' | 'missed' | 'simplified',
+  usedOutcome: AssistOutcome,
+): AssistOutcome {
+  if (status === 'used') return usedOutcome;
+  if (status === 'simplified') return 'partial';
+  return 'failed';
 }
