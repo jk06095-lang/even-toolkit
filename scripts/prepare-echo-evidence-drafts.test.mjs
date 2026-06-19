@@ -147,6 +147,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(videoShotList, /Root double-tap shows the system exit confirmation dialog/);
   assert.match(videoShotList, /bridge\.shutDownPageContainer\(1\)/);
   assert.match(videoShotList, /Permission denial path shows recoverable phone-side guidance/);
+  assert.match(videoShotList, /Partner turns are translated before learner\/unknown turns/);
+  assert.match(videoShotList, /Low-confidence transcript shows a Korean-translation review warning/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
@@ -163,6 +165,12 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /twoSeparateRecallDaysProven=true/);
   assert.match(fieldRunbook, /calibratedG2ThresholdUsed=true/);
   assert.match(fieldRunbook, /sameDayRepeatNotCountedAsTransfer=true/);
+  assert.match(fieldRunbook, /Conversation Timeline Evidence/);
+  assert.match(fieldRunbook, /translationReview\.partnerTurnsPrioritized=true/);
+  assert.match(fieldRunbook, /translationReview\.lowConfidenceTranslationWarningShown=true/);
+  assert.match(fieldRunbook, /hudBoundary\.g2TranslationHidden=true/);
+  assert.match(fieldRunbook, /partner-turn translation priority/);
+  assert.match(fieldRunbook, /low-confidence translation warnings/);
   assert.match(fieldRunbook, /smoke:action-oauth/);
   assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);

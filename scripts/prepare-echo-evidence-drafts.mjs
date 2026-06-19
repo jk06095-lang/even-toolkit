@@ -388,7 +388,9 @@ video URL.
 | 15 | Root double-tap shows the system exit confirmation dialog | TBD |
 | 16 | Exit ECHO calls bridge.shutDownPageContainer(1) and closes the page container | TBD |
 | 17 | Permission denial path shows recoverable phone-side guidance | TBD |
-| 18 | Phone review shows timeline/details while G2 stays minimal | TBD |
+| 18 | Phone review shows ordered two-speaker timeline/details while G2 stays minimal | TBD |
+| 19 | Partner turns are translated before learner/unknown turns in a mixed pending batch | TBD |
+| 20 | Low-confidence transcript shows a Korean-translation review warning beside the phone timeline turn | TBD |
 
 ## File Requirements
 
@@ -507,6 +509,26 @@ availability:
   capture path, or the documented fallback threshold when calibration evidence
   is legitimately unavailable.
 
+## Conversation Timeline Evidence
+
+The completed #28 hardware QA package must prove the phone-side review surface
+without moving heavy review text onto the glasses:
+
+- G2 Mic, Phone Mic, and import flows each produce ordered \`ConversationTurn\`
+  records with source, timing, finality, language, and confidence-policy
+  metadata.
+- Manual speaker correction persists \`correctedByUser=true\` and is present in
+  the export.
+- \`translationReview.partnerTurnsPrioritized=true\`: when partner, learner, and
+  unknown turns are queued together, partner turns are translated first.
+- \`translationReview.lowConfidenceTranslationWarningShown=true\`: a final turn
+  with STT confidence below 0.7 keeps its Korean translation visible but shows a
+  phone-side warning to review the original text.
+- \`hudBoundary.g2ConversationHistoryHidden=true\`,
+  \`hudBoundary.g2TranslationHidden=true\`, and
+  \`hudBoundary.g2SpeakerLabelsHidden=true\`: G2 stays READY/LISTENING/CUE/ACK/
+  PAUSED only.
+
 ## Evidence Queue
 
 | Issues | Evidence artifact | Completion gate |
@@ -532,8 +554,11 @@ availability:
    exit dialog, permission-denial recovery, and console sanity.
 6. Capture hardware QA evidence for lifecycle, HUD states, Assist, audio source
    separation, delayed proxy behavior, voice runtime, wear status, and
-   conversation timeline boundaries. For Exit ECHO, preserve proof that the
-   app called \`bridge.shutDownPageContainer(1)\` from the root-page exit path.
+   conversation timeline boundaries. For the timeline, prove G2 Mic, Phone Mic,
+   and import segmentation, manual speaker correction persistence,
+   partner-turn translation priority, low-confidence translation warnings, and
+   the phone-only timeline / cue-only G2 HUD boundary. For Exit ECHO, preserve
+   proof that the app called \`bridge.shutDownPageContainer(1)\` from the root-page exit path.
    For Assist, prove silence-only Auto stays
    quiet, a breakdown signal is required before Auto shows a cue, and the 400 ms
    grace window cancels the pending cue when speech resumes. Also prove Auto
@@ -659,6 +684,10 @@ function readBundleMetrics() {
 
 function replaceFieldValues(markdown, values) {
   const lines = markdown.split(/\r?\n/);
+  while (lines.length > 0 && lines[lines.length - 1] === '') {
+    lines.pop();
+  }
+
   return `${lines.map((line) => {
     const match = line.match(/^(-\s+)([^:]+):(.*)$/);
     if (!match) return line;
