@@ -81,6 +81,10 @@ export const WEEK_CONFIGS: Record<number, WeekConfig> = {
   3: { week: 3, silenceThresholdMs: 2000, hintFlashDurationMs: 1500, blackoutProbability: 0,    label: 'Reduced Guidance' },
   4: { week: 4, silenceThresholdMs: 2000, hintFlashDurationMs: 1200, blackoutProbability: 0.4,  label: 'Independent Practice' },
 };
+const AUTO_ASSIST_GRACE_MS = 400;
+const FILLER_WORD_PATTERN = /\b(?:uh|um|erm|hmm|like|maybe|well|so)\b/g;
+const REPEATED_WORD_PATTERN = /\b([a-z']{2,})\b(?:\s+\1\b)+/i;
+const TRAILING_FRAGMENT_PATTERN = /\b(?:i think|i mean|maybe|around|because|and|but|so|if|when|where|what|how|to|for|with)$/i;
 
 export interface SessionLog {
   startTime: number;
@@ -403,6 +407,57 @@ export class SessionEngine {
   private clearDisplayedCue(): void {
     this.cueVisible = false;
     this.activeCueTrigger = null;
+  }
+
+  private latestConversationTurnSpeaker(): SpeakerRole | null {
+    const turns = this.transcriptStore?.getSnapshot().conversationTurns ?? [];
+    return turns[turns.length - 1]?.speaker ?? null;
+  }
+
+  private hasAutoAssistBreakdownSignal(): boolean {
+    const latestSpeaker = this.latestConversationTurnSpeaker();
+    if (latestSpeaker === 'partner') return false;
+
+    return hasRepeatedFillerSignal(this.lastLiveTranscript)
+      || hasIncompleteUtteranceSignal(this.lastLiveTranscript);
+  }
+
+  private scheduleSilenceReturn(delayMs = 1000): void {
+    this.scheduleTimeout(() => {
+      if (this._state === 'silence_detected') {
+        this.setState('listening');
+      }
+    }, delayMs);
+  }
+
+  private scheduleAutoCueAfterGrace(): void {
+    this.scheduleTimeout(() => {
+      void this.generateAutoCueAfterGrace();
+    }, AUTO_ASSIST_GRACE_MS);
+  }
+
+  private async generateAutoCueAfterGrace(): Promise<void> {
+    if (this._state !== 'silence_detected') return;
+    if (this.isGenerating) return;
+    if (this.assistMetrics.auto_assist_paused || this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
+      this.scheduleSilenceReturn();
+      return;
+    }
+    if (!this.hasAutoAssistBreakdownSignal()) {
+      this.scheduleSilenceReturn();
+      return;
+    }
+
+    this.assistMetrics.auto_trigger_count++;
+    this.emitAssistMetrics();
+
+    // Week 4 blackout check
+    if (this.random.next() < this.weekConfig.blackoutProbability) {
+      this.scheduleSilenceReturn();
+      return;
+    }
+
+    await this.generateContextualHint('auto');
   }
 
   private recordSpeech(
@@ -1349,22 +1404,14 @@ export class SessionEngine {
 
       this.setState('silence_detected');
       this.callbacks.onSilenceStart();
-      this.scheduleTimeout(() => {
-        if (this._state === 'silence_detected') {
-          this.setState('listening');
-        }
-      }, 1000);
+      this.scheduleSilenceReturn();
       return;
     }
 
     if (this.assistMetrics.auto_assist_paused || this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
       this.setState('silence_detected');
       this.callbacks.onSilenceStart();
-      this.scheduleTimeout(() => {
-        if (this._state === 'silence_detected') {
-          this.setState('listening');
-        }
-      }, 1000);
+      this.scheduleSilenceReturn();
       return;
     }
 
@@ -1460,21 +1507,11 @@ export class SessionEngine {
 
     this.setState('silence_detected');
     this.callbacks.onSilenceStart();
-    this.assistMetrics.auto_trigger_count++;
-    this.emitAssistMetrics();
-
-    // Week 4 blackout check
-    if (this.random.next() < this.weekConfig.blackoutProbability) {
-      this.scheduleTimeout(() => {
-        if (this._state === 'silence_detected') {
-          this.setState('listening');
-        }
-      }, 1000);
+    if (!this.hasAutoAssistBreakdownSignal()) {
+      this.scheduleSilenceReturn();
       return;
     }
-
-    // Generate a contextual hint using TranscriptAnalyzer data
-    await this.generateContextualHint('auto');
+    this.scheduleAutoCueAfterGrace();
   }
 
   /**
@@ -1610,6 +1647,31 @@ function inferSpeechAct(phrase: string): SpeechAct {
     return 'clarify';
   }
   return 'answer';
+}
+
+function hasRepeatedFillerSignal(text: string): boolean {
+  const normalized = text.toLowerCase().replace(/[^\w'\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return false;
+
+  const fillers = normalized.match(FILLER_WORD_PATTERN) ?? [];
+  return fillers.length >= 2 || REPEATED_WORD_PATTERN.test(normalized);
+}
+
+function hasIncompleteUtteranceSignal(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+
+  if (/[.!?]$/.test(trimmed) && !/\.{2,}$/.test(trimmed)) {
+    return false;
+  }
+  if (/[,:;]$|\.{2,}$/.test(trimmed)) {
+    return true;
+  }
+
+  const normalized = trimmed.toLowerCase().replace(/[^\w'\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!normalized) return false;
+
+  return TRAILING_FRAGMENT_PATTERN.test(normalized);
 }
 
 function mapCueTrigger(trigger: CueTrigger): AssistTrigger {

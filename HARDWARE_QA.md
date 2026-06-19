@@ -258,7 +258,9 @@ Automated coverage added on 2026-06-19:
 - Press `Cue` on the phone and confirm the same manual cue path works in simulator/browser checks.
 - Swipe while a cue is visible and confirm it disappears.
 - Start speaking while a cue is visible and confirm the cue clears immediately.
-- Switch to `Auto`, stay silent past the threshold, and confirm an auto cue appears.
+- Switch to `Auto`, stay silent past the threshold without a recent breakdown signal, and confirm no auto cue appears.
+- In Auto, say a breakdown phrase such as `I think maybe...` or repeated filler words, then stay silent past the threshold and confirm an auto cue appears.
+- In Auto, say a breakdown phrase, cross the silence threshold, start speaking again within the 400 ms grace window, and confirm the pending auto cue is cancelled.
 - Dismiss two auto cues and confirm the phone UI shows `Assist: Auto paused`.
 - Confirm auto cue count never exceeds 3 in one session.
 - Record final Assist metrics under `assist.metrics`: `manual_request_count`,
@@ -271,6 +273,8 @@ Automated coverage added on 2026-06-19:
 Automated coverage added on 2026-06-19:
 
 - `session-engine-core` verifies Manual Assist does not auto-generate cues during silence.
+- `session-engine-core` verifies Auto Assist does not generate from silence alone without a breakdown signal.
+- `session-engine-core` verifies Auto Assist cancels a pending auto cue when speech resumes during the grace window.
 - `session-engine-core` verifies Auto Assist pauses after two dismissed auto cues.
 - `session-engine-core` verifies Auto Assist is capped at three automatic cue generations per session.
 - `hud-controller` verifies active-session G2 cue/dismiss gestures map to `request-cue` and `dismiss-cue`.

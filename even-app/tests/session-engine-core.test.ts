@@ -277,12 +277,58 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     harness.engine.setAssistMode('auto');
     await harness.engine.start(harness.hud);
 
-    harness.clock.advance(2_200);
-    await harness.vad.triggerSilence();
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    await triggerAutoSilence(harness, 2_200);
 
     expect(harness.cueProvider.generateCalls).toBe(0);
     expect(harness.chunks).toEqual([]);
     expect(harness.states).toContain('silence_detected');
+  });
+
+  it('does not auto-generate a cue from silence alone without a breakdown signal', async () => {
+    const harness = createHarness();
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    await triggerAutoSilence(harness);
+
+    expect(harness.cueProvider.generateCalls).toBe(0);
+    expect(harness.chunks).toEqual([]);
+    expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(0);
+  });
+
+  it('cancels Auto Assist during the grace period when speech resumes', async () => {
+    const harness = createHarness();
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    harness.clock.advance(5_200);
+    await harness.vad.triggerSilence();
+    harness.vad.triggerSpeech();
+    harness.clock.advance(500);
+    await Promise.resolve();
+
+    expect(harness.cueProvider.generateCalls).toBe(0);
+    expect(harness.chunks).toEqual([]);
+    expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(0);
+  });
+
+  it('does not auto-generate a cue for partner-marked speech breakdowns', async () => {
+    const harness = createHarness();
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    const latestTurnId = harness.conversationSnapshots.at(-1)?.conversationTurns?.at(-1)?.id;
+    expect(latestTurnId).toBeTruthy();
+    expect(harness.engine.correctConversationTurnSpeaker(latestTurnId!, 'partner')).toBe(true);
+
+    await triggerAutoSilence(harness);
+
+    expect(harness.cueProvider.generateCalls).toBe(0);
+    expect(harness.chunks).toEqual([]);
+    expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(0);
   });
 
   it('pauses Auto Assist after two dismissed auto cues', async () => {
@@ -297,9 +343,8 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     await harness.engine.start(harness.hud);
 
     for (let i = 0; i < 2; i++) {
-      harness.clock.advance(5_200);
-      await harness.vad.triggerSilence();
-      await Promise.resolve();
+      harness.recognizers[0]!.emitFinalResult('I think maybe...');
+      await triggerAutoSilence(harness);
       expect(harness.engine.dismissActiveCue()).toBe(true);
     }
 
@@ -310,8 +355,8 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       auto_assist_paused: true,
     });
 
-    harness.clock.advance(5_200);
-    await harness.vad.triggerSilence();
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    await triggerAutoSilence(harness);
 
     expect(harness.cueProvider.generateCalls).toBe(2);
     expect(harness.chunks.map((chunk) => chunk.chunk)).toEqual([
@@ -333,15 +378,13 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     await harness.engine.start(harness.hud);
 
     for (let i = 0; i < 3; i++) {
-      harness.clock.advance(5_200);
-      await harness.vad.triggerSilence();
-      await Promise.resolve();
+      harness.recognizers[0]!.emitFinalResult('I think maybe...');
+      await triggerAutoSilence(harness);
       harness.clock.advance(2_100);
     }
 
-    harness.clock.advance(5_200);
-    await harness.vad.triggerSilence();
-    await Promise.resolve();
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    await triggerAutoSilence(harness);
 
     expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(3);
     expect(harness.cueProvider.generateCalls).toBe(3);
@@ -958,6 +1001,17 @@ function createHarness(options: {
     recognizers,
     recognizerOptions,
   };
+}
+
+async function triggerAutoSilence(
+  harness: ReturnType<typeof createHarness>,
+  silenceMs = 5_200,
+): Promise<void> {
+  harness.clock.advance(silenceMs);
+  await harness.vad.triggerSilence();
+  harness.clock.advance(500);
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 function createCueProvider(options: {

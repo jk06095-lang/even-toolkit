@@ -143,6 +143,8 @@ data. Only explicit true/false wear sensor tokens are accepted as
 - In Manual Assist, a cue is generated only after an explicit user request from the G2 double click or phone `Cue` button.
 - In Manual Assist, silence is recorded as an event but does not automatically call the cue endpoint.
 - `Auto Assist` is explicit opt-in from the phone UI.
+- Auto Assist does not show a cue from silence alone. It requires a recent breakdown signal such as repeated filler words or an incomplete learner utterance.
+- After silence is detected, Auto Assist waits a 400 ms grace window before requesting a cue. Speech during that window cancels the automatic cue.
 - Auto Assist is capped at 3 automatic interventions per session.
 - Swiping while a cue is visible dismisses it. Two dismissed auto cues pause Auto Assist for the rest of the session.
 - Speech start immediately clears the visible cue from the HUD while preserving local usage tracking for the next final transcript.

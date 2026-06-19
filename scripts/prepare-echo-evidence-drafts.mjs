@@ -378,10 +378,13 @@ video URL.
 | 5 | Manual Assist request shows one short CUE on G2 | TBD |
 | 6 | Swipe/dismiss clears the cue | TBD |
 | 7 | Successful assisted/adapted cue use shows ACK/OK briefly | TBD |
-| 8 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
-| 9 | End Practice returns to READY without duplicate audio capture | TBD |
-| 10 | Exit ECHO shuts down the Even Hub page container | TBD |
-| 11 | Phone review shows timeline/details while G2 stays minimal | TBD |
+| 8 | Auto Assist stays quiet on silence alone | TBD |
+| 9 | Auto Assist shows a cue only after a breakdown phrase plus silence | TBD |
+| 10 | Auto Assist cancels the pending cue when speech resumes within the grace window | TBD |
+| 11 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
+| 12 | End Practice returns to READY without duplicate audio capture | TBD |
+| 13 | Exit ECHO shuts down the Even Hub page container | TBD |
+| 14 | Phone review shows timeline/details while G2 stays minimal | TBD |
 
 ## File Requirements
 
@@ -506,7 +509,9 @@ G2/audio-level recall evidence are also captured.
    and WebSocket reconnect handling or explicit non-use.
 6. Capture hardware QA evidence for lifecycle, HUD states, Assist, audio source
    separation, delayed proxy behavior, voice runtime, wear status, and
-   conversation timeline boundaries.
+   conversation timeline boundaries. For Assist, prove silence-only Auto stays
+   quiet, a breakdown signal is required before Auto shows a cue, and the 400 ms
+   grace window cancels the pending cue when speech resumes.
 7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
 8. Fill final Korean/English case studies, architecture evidence, and the real
    G2 video target.
