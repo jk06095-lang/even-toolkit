@@ -99,6 +99,8 @@ The next server-synced integration boundary now lives under
   idempotency, and privacy guards. This gives the contract a server-backed
   reference path for learner profile reads, session-summary imports, review
   attempts, and roleplay write-back without requiring provider credentials.
+  Set `ECHO_ACTION_STORE_PATH` to persist this bounded Action state across
+  proxy restarts in a local JSON file; unset deployments remain process-local.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.
@@ -110,8 +112,8 @@ session tokens. Run `npm run validate:chatgpt-action` after edits; the same
 check, the local mock smoke test, and the proxy-backed Action route tests are
 included in `npm run verify:all`. The mock and proxy reference routes are
 pre-deployment contract proof only. They do not replace a real OAuth-backed
-Custom GPT Action configuration, production CORS checks, durable per-user
-storage, or G2/audio-level active-recall evidence.
+Custom GPT Action configuration, production CORS checks, managed production
+storage policy, or G2/audio-level active-recall evidence.
 
 The deployment evidence shape is captured in
 `docs/project-echo-chatgpt-action-evidence.template.json`. Final release
@@ -134,8 +136,8 @@ manifest is present.
 
 This is the data foundation, first phone review surface, and server-backed
 reference Action route family for the active-recall loop. Remaining work is to
-deploy and connect it to a real Custom GPT Action with OAuth, replace the
-reference in-memory Action store with durable per-user storage, collect
+deploy and connect it to a real Custom GPT Action with OAuth, choose and review
+the production storage policy beyond the reference file-backed store, collect
 G2/audio-level pronunciation scoring evidence, and capture G2/bridge-based
 recall evidence. The current pronunciation layer is limited to optional browser
 speech confidence; Web Speech-only evidence is explicitly insufficient for

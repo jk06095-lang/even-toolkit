@@ -34,6 +34,11 @@ guards as the provider-bound routes, but they do not require a provider API key.
 These routes intentionally accept only bounded learner profile, review,
 roleplay, and redacted session-summary data. They reject raw transcript/audio
 fields, direct contact identifiers, provider secrets, and HTML-like content.
+Set `ECHO_ACTION_STORE_PATH` to enable the reference file-backed Action store;
+when unset, Action learner/review state remains process-local. The file-backed
+store persists only bounded learner profile, learning-item, review-attempt, and
+summary counters, not raw transcripts, audio, contact identifiers, provider
+keys, or session tokens.
 Production release still requires the OAuth-backed deployed Action evidence in
 `docs/project-echo-chatgpt-action-evidence.completed.json`.
 
@@ -78,6 +83,7 @@ Recommended:
 - `ECHO_PROXY_IDEMPOTENCY_MAX_ENTRIES=1000`
 - `ECHO_PROXY_CIRCUIT_FAILURE_THRESHOLD=5`
 - `ECHO_PROXY_CIRCUIT_COOLDOWN_MS=30000`
+- `ECHO_ACTION_STORE_PATH=/var/lib/project-echo/action-store.json`
 - `ECHO_PROXY_QA_DELAY_MS=0`
 
 QA only:
@@ -191,7 +197,8 @@ bounded schema validation, rate limiting, oversized payload rejection, and safe
 or proxy stdout/stderr logs. It also checks successful response idempotency,
 provider circuit opening against a local stub provider, and the proxy-backed
 Custom GPT Action read/write routes for bounded profile, session import, review
-attempt, roleplay start/result, and privacy rejection behavior. `npm run
+attempt, roleplay start/result, privacy rejection behavior, and optional
+file-backed Action store persistence across proxy restarts. `npm run
 smoke:deploy` performs the corresponding remote deployment checks and expects
 the deployed server to report `configured: true`, `authConfigured: true`,
 `tokenPolicy.configured: true`, `tokenPolicy.signedTokenConfigured: true`, and

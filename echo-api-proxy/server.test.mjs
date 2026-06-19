@@ -3,6 +3,9 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import { once } from 'node:events';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { after, before, test } from 'node:test';
 
@@ -452,6 +455,86 @@ test('ChatGPT Action write routes reject raw transcript and direct contact paylo
     assert.equal(text.includes(sensitiveText), false);
   } finally {
     await proxy.stop();
+  }
+});
+
+test('ChatGPT Action file store persists bounded learner state across proxy restart', async () => {
+  const tempRoot = mkdtempSync(path.join(tmpdir(), 'echo-action-store-'));
+  const storePath = path.join(tempRoot, 'action-store.json');
+  const importedItemId = 'li_persisted_clarify_001';
+  const storeEnv = {
+    GEMINI_API_KEY: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+    ECHO_ACTION_STORE_PATH: storePath,
+  };
+
+  try {
+    const firstProxy = await startProxy(storeEnv);
+    try {
+      const response = await fetch(`${firstProxy.baseUrl}/v1/sessions/import-summary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: allowedOrigin,
+          ...authHeaders(),
+        },
+        body: JSON.stringify({
+          schemaVersion: '2.0.0',
+          sessionId: 'session_persist_001',
+          endedAt: new Date().toISOString(),
+          sessionSummary: 'Imported a bounded learning item for restart persistence.',
+          learningItems: [
+            {
+              schemaVersion: '2.0.0',
+              id: importedItemId,
+              canonicalExpression: 'Could you explain that again?',
+              meaningKo: '상대방에게 다시 설명해 달라고 요청하기',
+              speechAct: 'clarify',
+              breakdownType: 'listening_gap',
+              lastOutcome: 'assisted',
+              scenarioTags: ['support'],
+              naturalRecast: 'Can you explain that one more time?',
+              scheduling: {
+                reps: 0,
+                lapses: 0,
+                difficulty: 0.48,
+                stability: 1,
+                dueAt: new Date(Date.now() - 60_000).toISOString(),
+              },
+            },
+          ],
+        }),
+      });
+      assert.equal(response.status, 200);
+    } finally {
+      await firstProxy.stop();
+    }
+
+    const persistedText = readFileSync(storePath, 'utf8');
+    assert.match(persistedText, /project-echo-action-store-v1/);
+    assert.equal(persistedText.includes(importedItemId), true);
+    assert.equal(persistedText.includes('rawTranscript'), false);
+    assert.equal(persistedText.includes('test@example.com'), false);
+
+    const restartedProxy = await startProxy(storeEnv);
+    try {
+      const profileResponse = await fetch(`${restartedProxy.baseUrl}/v1/learner/profile`, {
+        headers: {
+          Origin: allowedOrigin,
+          ...authHeaders(),
+        },
+      });
+      const profile = await profileResponse.json();
+
+      assert.equal(profileResponse.status, 200);
+      assert.equal(profile.metrics.totalSessions, 1);
+      assert.equal(profile.learningItems.some((item) => item.id === importedItemId), true);
+    } finally {
+      await restartedProxy.stop();
+    }
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
   }
 });
 

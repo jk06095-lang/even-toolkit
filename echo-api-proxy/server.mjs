@@ -1,5 +1,7 @@
 import http from 'node:http';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 
 const PORT = readNumberEnv('PORT', readNumberEnv('ECHO_PROXY_PORT', 8787));
 const MAX_BODY_BYTES = readNumberEnv('ECHO_PROXY_MAX_BODY_BYTES', 6_000_000);
@@ -36,7 +38,9 @@ const providerCircuit = {
   openedUntil: 0,
 };
 const ACTION_SCHEMA_VERSION = '2.0.0';
+const ACTION_STORE_SCHEMA_VERSION = 'project-echo-action-store-v1';
 const ACTION_MAX_LEARNING_ITEMS = 30;
+const ACTION_STORE_PATH = String(process.env.ECHO_ACTION_STORE_PATH || '').trim();
 const actionStores = new Map();
 const ACTION_FORBIDDEN_FIELDS = new Set([
   'rawtranscript',
@@ -68,6 +72,8 @@ class HttpError extends Error {
     this.code = code;
   }
 }
+
+loadActionStoresFromDisk();
 
 const server = http.createServer(async (req, res) => {
   const requestId = randomUUID();
@@ -247,6 +253,7 @@ function handleActionEndpoint(endpoint, body, url, auth) {
       learningItemIds: selectedItems.map((item) => item.id),
       startedAt: new Date().toISOString(),
     });
+    touchActionStore(store);
     return {
       roleplayId,
       scenario: buildRoleplayScenario(selectedItems, body.scenarioPreference),
@@ -706,6 +713,7 @@ function getActionStore(auth) {
   if (!store) {
     store = createActionStore(storeKey);
     actionStores.set(storeKey, store);
+    persistActionStores();
   }
   return store;
 }
@@ -713,6 +721,7 @@ function getActionStore(auth) {
 function createActionStore(storeKey) {
   const now = new Date().toISOString();
   return {
+    storeKey,
     learnerId: `learner_${storeKey}`,
     updatedAt: now,
     profileLocale: 'ko-KR',
@@ -735,6 +744,136 @@ function createActionStore(storeKey) {
     learningItems: seedActionLearningItems(now),
     attempts: [],
     roleplays: new Map(),
+  };
+}
+
+function loadActionStoresFromDisk() {
+  if (!ACTION_STORE_PATH || !existsSync(ACTION_STORE_PATH)) return;
+
+  try {
+    const parsed = JSON.parse(readFileSync(ACTION_STORE_PATH, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || parsed.schemaVersion !== ACTION_STORE_SCHEMA_VERSION) {
+      throw new Error('unsupported action store schema');
+    }
+    if (!Array.isArray(parsed.stores)) {
+      throw new Error('action store payload must include stores array');
+    }
+
+    for (const entry of parsed.stores) {
+      const store = normalizePersistedActionStore(entry);
+      actionStores.set(store.storeKey, store);
+    }
+  } catch (error) {
+    console.warn(`[EchoProxy] action store load skipped: ${error?.message || 'unknown error'}`);
+  }
+}
+
+function persistActionStores() {
+  if (!ACTION_STORE_PATH) return;
+
+  try {
+    const dir = dirname(ACTION_STORE_PATH);
+    if (dir && dir !== '.') {
+      mkdirSync(dir, { recursive: true });
+    }
+    const payload = {
+      schemaVersion: ACTION_STORE_SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      stores: Array.from(actionStores.values()).map(serializeActionStore),
+    };
+    const tempPath = `${ACTION_STORE_PATH}.${process.pid}.tmp`;
+    writeFileSync(tempPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+    renameSync(tempPath, ACTION_STORE_PATH);
+  } catch (error) {
+    console.warn(`[EchoProxy] action store persist skipped: ${error?.message || 'unknown error'}`);
+  }
+}
+
+function normalizePersistedActionStore(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('persisted action store entry must be an object');
+  }
+  if (typeof value.storeKey !== 'string' || !/^[a-f0-9]{16}$/.test(value.storeKey)) {
+    throw new Error('persisted action store entry has invalid storeKey');
+  }
+
+  const now = new Date().toISOString();
+  const metrics = value.metrics && typeof value.metrics === 'object' && !Array.isArray(value.metrics)
+    ? value.metrics
+    : {};
+  const ability = value.ability && typeof value.ability === 'object' && !Array.isArray(value.ability)
+    ? value.ability
+    : {};
+  const learningItems = Array.isArray(value.learningItems)
+    ? value.learningItems
+      .slice(0, ACTION_MAX_LEARNING_ITEMS)
+      .map((item, index) => normalizeActionLearningItem(item, index))
+    : seedActionLearningItems(now);
+
+  return {
+    storeKey: value.storeKey,
+    learnerId: isSafeId(value.learnerId) ? value.learnerId : `learner_${value.storeKey}`,
+    updatedAt: typeof value.updatedAt === 'string' && !Number.isNaN(Date.parse(value.updatedAt))
+      ? value.updatedAt
+      : now,
+    profileLocale: clipString(value.profileLocale, 35) || 'ko-KR',
+    targetLanguage: clipString(value.targetLanguage, 35) || 'en-US',
+    metrics: {
+      conversationRecoveryRate: persistedRate(metrics.conversationRecoveryRate),
+      independentTransferRate: persistedRate(metrics.independentTransferRate),
+      assistedExactRate: persistedRate(metrics.assistedExactRate),
+      activeRecallDueCount: 0,
+      totalSessions: persistedInteger(metrics.totalSessions, 0, 1_000_000),
+    },
+    ability: {
+      recall: persistedRate(ability.recall, 0.5),
+      listening: persistedRate(ability.listening, 0.5),
+      grammar: persistedRate(ability.grammar, 0.5),
+      wordChoice: persistedRate(ability.wordChoice, 0.5),
+      pronunciation: persistedRate(ability.pronunciation, 0.5),
+      turnTaking: persistedRate(ability.turnTaking, 0.5),
+    },
+    learningItems,
+    attempts: normalizePersistedActionAttempts(value.attempts),
+    roleplays: new Map(),
+  };
+}
+
+function normalizePersistedActionAttempts(value) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(-200).flatMap((attempt) => {
+    if (!attempt || typeof attempt !== 'object' || Array.isArray(attempt)) return [];
+    if (!isSafeId(attempt.itemId)) return [];
+    if (!['meaning_to_expression', 'transfer'].includes(attempt.mode)) return [];
+    if (!['again', 'hard', 'good', 'easy'].includes(attempt.grade)) return [];
+    if (typeof attempt.attemptedAt !== 'string' || Number.isNaN(Date.parse(attempt.attemptedAt))) return [];
+    return [{
+      itemId: attempt.itemId,
+      mode: attempt.mode,
+      grade: attempt.grade,
+      attemptedAt: attempt.attemptedAt,
+      semanticScore: boundedOptionalNumber(attempt.semanticScore, 0, 1),
+      pronunciationScore: boundedOptionalNumber(attempt.pronunciationScore, 0, 1),
+    }];
+  });
+}
+
+function serializeActionStore(store) {
+  return {
+    storeKey: store.storeKey,
+    learnerId: store.learnerId,
+    updatedAt: store.updatedAt,
+    profileLocale: store.profileLocale,
+    targetLanguage: store.targetLanguage,
+    metrics: {
+      conversationRecoveryRate: store.metrics.conversationRecoveryRate,
+      independentTransferRate: store.metrics.independentTransferRate,
+      assistedExactRate: store.metrics.assistedExactRate,
+      totalSessions: store.metrics.totalSessions,
+    },
+    ability: store.ability,
+    learningItems: boundedActionLearningItems(store),
+    attempts: store.attempts.slice(-200),
   };
 }
 
@@ -894,6 +1033,7 @@ function countDueActionItems(items) {
 
 function touchActionStore(store) {
   store.updatedAt = new Date().toISOString();
+  persistActionStores();
 }
 
 function normalizeActionLearningItem(value, index) {
@@ -1541,6 +1681,22 @@ function boundedOptionalNumber(value, min, max) {
   return typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
     ? value
     : undefined;
+}
+
+function persistedRate(value, fallback = 0) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1
+    ? round3(value)
+    : fallback;
+}
+
+function persistedInteger(value, min, max) {
+  return Number.isInteger(value) && value >= min && value <= max
+    ? value
+    : min;
+}
+
+function isSafeId(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,180}$/.test(value);
 }
 
 function clamp01(value) {
