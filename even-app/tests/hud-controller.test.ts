@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HUDController, type HUDAction } from '../src/hud/hud-controller';
+import { HUDController, parseWearingState, type HUDAction } from '../src/hud/hud-controller';
 
 function createHudHarness() {
   const hud = new HUDController();
@@ -31,6 +31,17 @@ function createHudHarness() {
 }
 
 describe('HUDController simplified live HUD contract', () => {
+  it('preserves explicit wear sensor states without forcing connected devices to wearing', () => {
+    expect(parseWearingState({ connectType: 'connected', isWearing: true })).toBe('wearing');
+    expect(parseWearingState({ connectType: 'connected', isWearing: false })).toBe('not-wearing');
+    expect(parseWearingState({ connectType: 'connected', wearing: 1 })).toBe('wearing');
+    expect(parseWearingState({ connectType: 'connected', wearing: 0 })).toBe('not-wearing');
+    expect(parseWearingState({ connectType: 'connected', wearStatus: 'wearing' })).toBe('wearing');
+    expect(parseWearingState({ connectType: 'connected', wearStatus: 'not-wearing' })).toBe('not-wearing');
+    expect(parseWearingState({ connectType: 'connected' })).toBe('unavailable');
+    expect(parseWearingState({ connectType: 'connected', isWearing: null })).toBe('unavailable');
+  });
+
   it('renders only READY, LISTENING, CUE, and PAUSED on the live G2 surface', async () => {
     const { hud, frames } = createHudHarness();
 

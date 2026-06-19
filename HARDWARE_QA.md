@@ -201,6 +201,30 @@ Still requires real G2 validation:
 - Confirm the physical G2/phone permission prompts match the automated source
   policy on device.
 
+## Wear status QA
+
+- With the G2 connected and worn, capture the bridge/status payload and confirm
+  `parseWearingState` records `wearing`.
+- With the G2 connected but not worn, capture the bridge/status payload and
+  confirm the phone UI shows `Not wearing`, not `Wearing`.
+- With the G2 connected but no wear sensor field available, confirm the phone UI
+  shows `Wear status unavailable`.
+- Confirm connection alone never forces `wearing`.
+- Record the three cases under `wearingState` in
+  [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json),
+  including input status payloads, parsed state, phone label, and evidence refs.
+
+Automated coverage added on 2026-06-19:
+
+- `hud-controller` verifies boolean, numeric, string, absent, and
+  connected-but-not-wearing status payloads map to `wearing`, `not-wearing`, or
+  `unavailable` without using connection as a forced success state.
+
+Still requires real G2 validation:
+
+- Confirm the physical/simulator status payloads and phone labels match the
+  automated parser behavior.
+
 ## Simplified HUD QA
 
 - Standby screen shows `READY` only.

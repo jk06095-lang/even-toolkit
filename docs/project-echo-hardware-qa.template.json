@@ -8,6 +8,35 @@
     "appVersion": "TBD",
     "bridgeVersion": "TBD"
   },
+  "wearingState": {
+    "connectedWearing": {
+      "inputStatus": {
+        "connectType": "connected",
+        "isWearing": true
+      },
+      "parsedState": "TBD",
+      "phoneLabel": "TBD",
+      "evidenceRef": "TBD"
+    },
+    "connectedNotWearing": {
+      "inputStatus": {
+        "connectType": "connected",
+        "isWearing": false
+      },
+      "parsedState": "TBD",
+      "phoneLabel": "TBD",
+      "evidenceRef": "TBD"
+    },
+    "sensorUnavailable": {
+      "inputStatus": {
+        "connectType": "connected"
+      },
+      "parsedState": "TBD",
+      "phoneLabel": "TBD",
+      "evidenceRef": "TBD"
+    },
+    "connectedDoesNotForceWearing": null
+  },
   "lifecycle": {
     "tenCycleRuns": [
       {

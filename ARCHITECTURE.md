@@ -115,6 +115,13 @@ The core regression suite also covers pausing while cue generation is still in
 flight. That path aborts the active cue request, leaves the engine in `paused`,
 and prevents abort rejections or delayed responses from showing a cue later.
 
+## Wear status
+
+G2 connection state and wear state are separate signals. `parseWearingState`
+preserves `wearing`, `not-wearing`, and `unavailable`; a connected bridge status
+does not force the UI into `wearing` when the sensor reports false or omits wear
+data.
+
 ## Assist modes
 
 - `Manual Assist` is the default for every new practice session.

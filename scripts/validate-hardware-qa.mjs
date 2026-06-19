@@ -4,6 +4,26 @@ import path from 'node:path';
 
 const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'PAUSED'];
 const REQUIRED_DELAYED_PROXY_SCENARIOS = ['endPractice', 'pause', 'exitEcho'];
+const WEARING_STATE_CASES = [
+  {
+    key: 'connectedWearing',
+    parsedState: 'wearing',
+    labelIncludes: 'Wearing',
+    expectedIsWearing: true,
+  },
+  {
+    key: 'connectedNotWearing',
+    parsedState: 'not-wearing',
+    labelIncludes: 'Not wearing',
+    expectedIsWearing: false,
+  },
+  {
+    key: 'sensorUnavailable',
+    parsedState: 'unavailable',
+    labelIncludes: 'Wear status unavailable',
+    expectNoWearSensor: true,
+  },
+];
 const LIFECYCLE_CYCLE_ZERO_METRICS = [
   'activeMicStreamsAfterEnd',
   'activeVadDetectorsAfterEnd',
@@ -332,6 +352,64 @@ function validateManifestRoot(manifestObject) {
   }
 }
 
+function validateWearingState(manifestObject) {
+  if (!validateObject(manifestObject.wearingState, 'wearingState')) return;
+
+  for (const testCase of WEARING_STATE_CASES) {
+    const pointer = `wearingState.${testCase.key}`;
+    const evidence = manifestObject.wearingState[testCase.key];
+    if (!validateObject(evidence, pointer)) continue;
+
+    if (validateObject(evidence.inputStatus, `${pointer}.inputStatus`)) {
+      validateConnectedStatus(evidence.inputStatus, `${pointer}.inputStatus`);
+      if (testCase.expectedIsWearing !== undefined) {
+        validateExpected(
+          evidence.inputStatus,
+          'isWearing',
+          testCase.expectedIsWearing,
+          `${pointer}.inputStatus`,
+        );
+      }
+      if (
+        testCase.expectNoWearSensor
+        && (
+          hasOwn(evidence.inputStatus, 'isWearing')
+          || hasOwn(evidence.inputStatus, 'wearing')
+          || hasOwn(evidence.inputStatus, 'wearStatus')
+          || hasOwn(evidence.inputStatus, 'wearingState')
+        )
+      ) {
+        addError(`${pointer}.inputStatus`, 'must omit wear sensor fields for unavailable evidence');
+      }
+    }
+    validateExpected(evidence, 'parsedState', testCase.parsedState, pointer);
+    validateText(evidence, 'phoneLabel', pointer, {
+      includes: testCase.labelIncludes,
+    });
+    validateEvidenceLink(evidence, 'evidenceRef', pointer);
+  }
+
+  validateExpected(manifestObject.wearingState, 'connectedDoesNotForceWearing', true, 'wearingState');
+}
+
+function validateConnectedStatus(status, pointer) {
+  const fieldPointer = `${pointer}.connectType`;
+  if (!hasOwn(status, 'connectType')) {
+    addError(fieldPointer, 'missing required connected status');
+    return;
+  }
+
+  const value = status.connectType;
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, 'draft connected status remains');
+    return;
+  }
+
+  if (value !== 'connected' && value !== 1) {
+    addError(fieldPointer, 'must be "connected" or 1');
+  }
+}
+
 function validateLifecycle(manifestObject) {
   if (!validateObject(manifestObject.lifecycle, 'lifecycle')) return;
 
@@ -566,6 +644,7 @@ function validateSizePair(metrics, gzipKey, sizeKey, pointer) {
 }
 
 validateManifestRoot(manifest);
+validateWearingState(manifest);
 validateLifecycle(manifest);
 validateHud(manifest);
 validateAssist(manifest);
