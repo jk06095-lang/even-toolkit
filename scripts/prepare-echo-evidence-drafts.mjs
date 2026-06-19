@@ -499,7 +499,11 @@ G2/audio-level recall evidence are also captured.
 3. Record \`${packagePath}\`, its SHA-256, and install notes in the hardware QA
    build-artifact evidence.
 4. Install the same \`.ehpk\` through the Even Hub private or beta path.
-5. Run the 5-minute locked-phone beta/reviewer-parity check.
+5. Run the 5-minute locked-phone beta/reviewer-parity check, including
+   glasses launch after lock, gesture-only core flow, 2-minute idle
+   responsiveness, unlock/use-another-app/re-lock continuity, Android
+   cold-start rebuild from localStorage, foreground audio-capture re-enable,
+   and WebSocket reconnect handling or explicit non-use.
 6. Capture hardware QA evidence for lifecycle, HUD states, Assist, audio source
    separation, delayed proxy behavior, voice runtime, wear status, and
    conversation timeline boundaries.

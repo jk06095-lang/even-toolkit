@@ -145,6 +145,33 @@ test('rejects wear-state evidence that treats connection as wearing', async () =
   assert.match(output, /wearingState\.connectedDoesNotForceWearing: must be true/);
 });
 
+test('rejects background lifecycle evidence without beta lock and cold-start recovery proof', async () => {
+  const fixture = writeCompletedHardwareFixture('background-lifecycle');
+  const invalidLifecycle = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  invalidLifecycle.backgroundLifecycle.lockDurationMinutes = 2;
+  invalidLifecycle.backgroundLifecycle.glassesLaunchRendersAfterLock = false;
+  invalidLifecycle.backgroundLifecycle.androidColdStartRebuildsFromLocalStorage = false;
+  invalidLifecycle.backgroundLifecycle.audioCaptureReenabledAfterForeground = false;
+  invalidLifecycle.backgroundLifecycle.webSocketReconnectHandledOrNotUsed = false;
+  invalidLifecycle.backgroundLifecycle.videoEvidence = 'background-lifecycle-video.mp4';
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-background-lifecycle.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidLifecycle, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /backgroundLifecycle\.lockDurationMinutes: must be >= 5 for beta\/private locked-phone evidence/);
+  assert.match(output, /backgroundLifecycle\.glassesLaunchRendersAfterLock: must be true/);
+  assert.match(output, /backgroundLifecycle\.androidColdStartRebuildsFromLocalStorage: must be true/);
+  assert.match(output, /backgroundLifecycle\.audioCaptureReenabledAfterForeground: must be true/);
+  assert.match(output, /backgroundLifecycle\.webSocketReconnectHandledOrNotUsed: must be true/);
+  assert.match(output, /backgroundLifecycle\.videoEvidence: repo path evidence must point to an existing file/);
+});
+
 test('rejects packaged hardware QA artifact evidence with unverifiable or mismatched SHA-256', async () => {
   const fixture = writeCompletedHardwareFixture('build-artifact-sha');
   const validResult = await runNode([
@@ -228,6 +255,23 @@ function writeCompletedHardwareFixture(name) {
       reviewerParityConfirmed: true,
       lockedPhoneFiveMinuteRun: true,
       evidenceRef: evidence,
+    },
+    backgroundLifecycle: {
+      installedAsBetaOrPrivateBuild: true,
+      lockDurationMinutes: 5,
+      phoneLockedBackgrounded: true,
+      glassesLaunchRendersAfterLock: true,
+      noBlackScreenOrInfiniteSpinner: true,
+      gestureOnlyCoreFlowCompleted: true,
+      everyGestureShowsFeedback: true,
+      aliveAfterTwoMinutesIdle: true,
+      unlockUseAnotherAppRelockUnaffected: true,
+      androidColdStartRebuildsFromLocalStorage: true,
+      audioCaptureReenabledAfterForeground: true,
+      webSocketReconnectHandledOrNotUsed: true,
+      firstPartyAppLaunchAfterExit: true,
+      evidenceRef: evidence,
+      videoEvidence: video,
     },
     wearingState: {
       connectedWearing: {

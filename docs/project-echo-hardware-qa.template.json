@@ -20,6 +20,23 @@
     "lockedPhoneFiveMinuteRun": null,
     "evidenceRef": "TBD"
   },
+  "backgroundLifecycle": {
+    "installedAsBetaOrPrivateBuild": null,
+    "lockDurationMinutes": null,
+    "phoneLockedBackgrounded": null,
+    "glassesLaunchRendersAfterLock": null,
+    "noBlackScreenOrInfiniteSpinner": null,
+    "gestureOnlyCoreFlowCompleted": null,
+    "everyGestureShowsFeedback": null,
+    "aliveAfterTwoMinutesIdle": null,
+    "unlockUseAnotherAppRelockUnaffected": null,
+    "androidColdStartRebuildsFromLocalStorage": null,
+    "audioCaptureReenabledAfterForeground": null,
+    "webSocketReconnectHandledOrNotUsed": null,
+    "firstPartyAppLaunchAfterExit": null,
+    "evidenceRef": "TBD",
+    "videoEvidence": "TBD"
+  },
   "wearingState": {
     "connectedWearing": {
       "inputStatus": {

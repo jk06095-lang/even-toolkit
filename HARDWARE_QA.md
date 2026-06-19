@@ -20,6 +20,12 @@ Final hardware QA must also record `buildArtifact.packagePath` as the exact
 repo-local `.ehpk` installed for the run, a SHA-256 digest that matches that
 file, the packaging command, and confirmation that the same artifact was
 installed through a private or beta build before the physical G2 checks.
+Final background/lifecycle evidence must be captured from a private or beta
+install, not QR/local testing, and must separately prove locked-phone launch,
+gesture-only core flow, 2-minute idle responsiveness, unlock/use-another-app/
+re-lock continuity, Android-style cold-start rebuild from `localStorage`, audio
+capture re-enable after foreground, and WebSocket reconnect handling or explicit
+non-use.
 The final `runDate` must be a valid ISO `YYYY-MM-DD` calendar date.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
@@ -69,6 +75,38 @@ completed manifest.
   package behaves like the reviewer path, not only an unlocked dev session.
 - Preserve install notes, package digest output, and screenshots/logs under
   `buildArtifact.evidenceRef`.
+
+## Background lifecycle and reviewer parity
+
+Official Even review uses a beta-build path for locked-phone testing. QR/local
+testing can be useful before submission, but it cannot prove the locked-phone
+reviewer path because the WebView may die when backgrounded. Capture this
+section only from a private or beta install of the same `.ehpk` digest recorded
+under `buildArtifact`.
+
+- Lock the phone for at least 5 minutes with the Even Realities App
+  backgrounded, then launch ECHO from the glasses and confirm it renders within
+  a reasonable time with no black screen, no infinite spinner, and no stale
+  in-memory-only state.
+- Complete the core glasses flow with G2 or R1 gestures alone while the phone is
+  locked; every press, double press, swipe, and select must show visible
+  feedback.
+- Leave the app idle for at least 2 minutes while locked and confirm it stays
+  responsive without freeze, loop, or crash.
+- Unlock the phone, use another app, re-lock, and confirm the glasses session is
+  unaffected.
+- Treat Android suspend as a cold start: confirm important session/setup state
+  is rebuilt from persisted storage and that audio capture is re-enabled after
+  foreground instead of assuming `audioControl(true)` survived.
+- If a WebSocket is used in the tested build, force a background/relaunch close
+  and confirm reconnect behavior; if no WebSocket is used, record
+  `webSocketReconnectHandledOrNotUsed: true` with notes explaining that ECHO's
+  current provider calls use fetch/proxy requests rather than a live socket.
+- After `EXIT ECHO`, relaunch a first-party app such as Conversate and confirm
+  it starts without restarting the glasses.
+- Record these results under `backgroundLifecycle` in
+  [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json),
+  including `lockDurationMinutes`, an evidence ref, and a video ref.
 
 ## Session lifecycle
 

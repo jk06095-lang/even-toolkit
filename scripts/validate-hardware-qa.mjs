@@ -38,6 +38,20 @@ const LIFECYCLE_EXIT_ZERO_METRICS = [
   'pendingIntervalCount',
   'lateHudUpdatesAfterExit',
 ];
+const BACKGROUND_LIFECYCLE_REQUIRED_TRUE = [
+  'installedAsBetaOrPrivateBuild',
+  'phoneLockedBackgrounded',
+  'glassesLaunchRendersAfterLock',
+  'noBlackScreenOrInfiniteSpinner',
+  'gestureOnlyCoreFlowCompleted',
+  'everyGestureShowsFeedback',
+  'aliveAfterTwoMinutesIdle',
+  'unlockUseAnotherAppRelockUnaffected',
+  'androidColdStartRebuildsFromLocalStorage',
+  'audioCaptureReenabledAfterForeground',
+  'webSocketReconnectHandledOrNotUsed',
+  'firstPartyAppLaunchAfterExit',
+];
 const ASSIST_METRICS = [
   { key: 'manual_request_count', min: 1 },
   { key: 'auto_trigger_count', min: 1 },
@@ -512,6 +526,27 @@ function validateBuildArtifact(manifestObject) {
   validateEvidenceLink(manifestObject.buildArtifact, 'evidenceRef', 'buildArtifact');
 }
 
+function validateBackgroundLifecycle(manifestObject) {
+  if (!validateObject(manifestObject.backgroundLifecycle, 'backgroundLifecycle')) return;
+
+  for (const key of BACKGROUND_LIFECYCLE_REQUIRED_TRUE) {
+    validateExpected(manifestObject.backgroundLifecycle, key, true, 'backgroundLifecycle');
+  }
+  validateNonNegativeNumber(manifestObject.backgroundLifecycle, 'lockDurationMinutes', 'backgroundLifecycle');
+  const lockDurationMinutes = manifestObject.backgroundLifecycle.lockDurationMinutes;
+  if (
+    typeof lockDurationMinutes === 'number'
+    && Number.isFinite(lockDurationMinutes)
+    && lockDurationMinutes < 5
+  ) {
+    addError('backgroundLifecycle.lockDurationMinutes', 'must be >= 5 for beta/private locked-phone evidence');
+  }
+  validateEvidenceLink(manifestObject.backgroundLifecycle, 'evidenceRef', 'backgroundLifecycle');
+  validateEvidenceLink(manifestObject.backgroundLifecycle, 'videoEvidence', 'backgroundLifecycle', {
+    extensions: VIDEO_EXTENSIONS,
+  });
+}
+
 function validatePackageSha256(buildArtifact, packagePath, pointer) {
   const digest = buildArtifact.sha256;
   if (
@@ -898,6 +933,7 @@ function validateSizePair(metrics, gzipKey, sizeKey, pointer) {
 
 validateManifestRoot(manifest);
 validateBuildArtifact(manifest);
+validateBackgroundLifecycle(manifest);
 validateWearingState(manifest);
 validateLifecycle(manifest);
 validateHud(manifest);
