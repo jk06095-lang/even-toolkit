@@ -89,6 +89,7 @@ try {
 
 const errors = [];
 const warnings = [];
+let currentEchoAppVersion = null;
 
 function addError(pointer, message) {
   errors.push(`${pointer}: ${message}`);
@@ -143,6 +144,47 @@ function validateText(object, key, pointer, options = {}) {
   if (options.includes && !value.includes(options.includes)) {
     addError(fieldPointer, `must include ${options.includes}`);
   }
+}
+
+function validateCurrentAppVersion(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    return;
+  }
+
+  if (typeof value !== 'string' || isPlaceholder(value)) {
+    return;
+  }
+
+  const expected = getCurrentEchoAppVersion();
+  if (!expected) {
+    addError('manifest.currentEchoAppVersion', 'could not read even-app/package.json version');
+    return;
+  }
+
+  if (value !== expected) {
+    addError(fieldPointer, `must match even-app/package.json version ${expected}`);
+  }
+}
+
+function getCurrentEchoAppVersion() {
+  if (currentEchoAppVersion !== null) {
+    return currentEchoAppVersion;
+  }
+
+  try {
+    const packagePath = path.resolve(process.cwd(), 'even-app/package.json');
+    const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+    currentEchoAppVersion = typeof packageJson.version === 'string' ? packageJson.version : '';
+  } catch {
+    currentEchoAppVersion = '';
+  }
+  return currentEchoAppVersion;
 }
 
 function validateEvidenceLink(object, key, pointer, options = {}) {
@@ -611,6 +653,7 @@ function validateManifest(manifestObject) {
     validateText(manifestObject.hardware, 'device', 'hardware', { includes: 'G2' });
     validateText(manifestObject.hardware, 'firmwareVersion', 'hardware');
     validateText(manifestObject.hardware, 'appVersion', 'hardware');
+    validateCurrentAppVersion(manifestObject.hardware, 'appVersion', 'hardware');
     validateText(manifestObject.hardware, 'bridgeVersion', 'hardware');
   }
 

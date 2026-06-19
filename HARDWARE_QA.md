@@ -18,6 +18,8 @@ point to a file that exists in the repository; future filenames are not accepted
 as completed evidence.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
+The final `device.appVersion` must match the current `even-app/package.json`
+version so hardware evidence cannot be reused from an older app build.
 
 Official Even Realities
 [simulator docs](https://hub.evenrealities.com/docs/test/simulator) treat the

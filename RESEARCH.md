@@ -79,7 +79,9 @@ extra A/B/C runs for a participant, duplicate or extra condition-order entries,
 condition mode labels that do not match A=`No assistance`, B=`Full sentence
 suggestion`, and C=`3-5 word cue`, missing VAD environment results, missing real
 G2 video evidence, non-link case-study/video references, or README links not
-marked as updated. Case-study links must be `https://` URLs or repo paths such
+marked as updated. The completed manifest's `hardware.appVersion` must match the
+current `even-app/package.json` version so pilot evidence cannot be reused from
+an older build. Case-study links must be `https://` URLs or repo paths such
 as `docs/project-echo-case-study.ko.md`; video evidence must be an `https://`
 URL or a repo path to a video file. Repo-path evidence must point to a file that
 exists in the repository; a future path or filename-only placeholder is not
