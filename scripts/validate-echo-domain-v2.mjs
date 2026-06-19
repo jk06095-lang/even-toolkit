@@ -167,4 +167,38 @@ const missingVersion = {
 };
 assert.equal(validateConversationTurn(missingVersion).ok, false, 'schemaVersion is mandatory for migrations');
 
+const extraTurnField = {
+  ...conversationTurn,
+  rawTranscriptDebug: 'This field is outside the public ConversationTurn contract.',
+};
+const extraTurnFieldResult = validateConversationTurn(extraTurnField);
+assert.equal(extraTurnFieldResult.ok, false, 'runtime guards must reject unknown ConversationTurn fields');
+assert.ok(
+  extraTurnFieldResult.issues.some((entry) => entry.path === 'rawTranscriptDebug'),
+  'unknown ConversationTurn fields should be reported by name',
+);
+
+const extraLearningItemField = {
+  ...learningItem,
+  rawSessionExcerpt: 'This field should not be preserved in imported review JSON.',
+};
+assert.equal(
+  isLearningItem(extraLearningItemField),
+  false,
+  'runtime guards must reject unknown LearningItem fields',
+);
+
+const extraNestedProfileField = {
+  ...learnerProfile,
+  metrics: {
+    ...learnerProfile.metrics,
+    rawTranscriptCount: 1,
+  },
+};
+assert.equal(
+  isLearnerProfile(extraNestedProfileField),
+  false,
+  'runtime guards must reject unknown nested LearnerProfile fields',
+);
+
 console.info('[validate:echo-domain-v2] schemas and runtime guards passed');

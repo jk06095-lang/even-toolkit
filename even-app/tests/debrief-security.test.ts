@@ -121,6 +121,18 @@ describe('debrief import safety', () => {
     }))).toThrow(/direct contact identifiers/);
   });
 
+  it('rejects unknown fields on schema-versioned domain review items', () => {
+    expect(() => parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      learningItems: [
+        makeDomainLearningItem({
+          rawSessionExcerpt: 'This source text is outside the LearningItem contract.',
+        }),
+      ],
+    }))).toThrow(/Invalid learningItems\[0\] domain item/);
+  });
+
   it('rejects invalid ids, enums, and oversized schema-versioned review imports', () => {
     expect(() => parseDebriefJSON(JSON.stringify({
       schemaVersion: '2.0.0',
@@ -200,3 +212,35 @@ describe('debrief import safety', () => {
     }))).toThrow(/No valid bottleneck_chunks/);
   });
 });
+
+function makeDomainLearningItem(extra: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    schemaVersion: '2.0.0',
+    id: 'domain-review-01',
+    canonicalExpression: 'Could you repeat that?',
+    meaningKo: 'Ask someone to repeat.',
+    speechAct: 'ask_repeat',
+    scenarioTags: ['travel'],
+    breakdownType: 'listening_gap',
+    sourceTurnIds: ['turn-1'],
+    cueLevelUsed: 1,
+    lastOutcome: 'assisted',
+    examples: [
+      {
+        id: 'domain-review-01:example:1',
+        scenarioTag: 'travel',
+        learnerTurn: 'Could you repeat that?',
+        targetExpression: 'Could you repeat that?',
+        sourceTurnIds: ['turn-1'],
+      },
+    ],
+    scheduling: {
+      reps: 0,
+      lapses: 0,
+      difficulty: 0.5,
+      stability: 1,
+      dueAt: '2026-06-20T00:00:00.000Z',
+    },
+    ...extra,
+  };
+}

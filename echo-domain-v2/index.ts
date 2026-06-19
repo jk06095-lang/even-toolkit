@@ -189,6 +189,101 @@ const breakdownTypes = [
   'pronunciation',
   'turn_taking',
 ] as const;
+const assistDecisionFields = ['action', 'confidence', 'trigger', 'maxCueLevel'] as const;
+const conversationTurnFields = [
+  'schemaVersion',
+  'id',
+  'sessionId',
+  'speaker',
+  'startedAt',
+  'endedAt',
+  'source',
+  'language',
+  'transcript',
+  'translationKo',
+  'confidence',
+  'isFinal',
+  'correctedByUser',
+  'piiFlags',
+] as const;
+const cueFields = [
+  'schemaVersion',
+  'cueId',
+  'speechAct',
+  'level',
+  'phrase',
+  'meaningKo',
+  'alternatives',
+  'expiresAfterMs',
+  'targetTurnId',
+] as const;
+const assistEpisodeFields = [
+  'schemaVersion',
+  'id',
+  'sessionId',
+  'targetTurnId',
+  'trigger',
+  'decision',
+  'cueId',
+  'cueLevelUsed',
+  'speechAct',
+  'requestedAt',
+  'shownAt',
+  'acknowledgedAt',
+  'resolvedAt',
+  'outcome',
+  'userAttempt',
+  'acceptedPhrase',
+  'latencyMs',
+] as const;
+const dialogueExampleFields = [
+  'id',
+  'scenarioTag',
+  'partnerTurn',
+  'learnerTurn',
+  'meaningKo',
+  'targetExpression',
+  'sourceTurnIds',
+] as const;
+const learningItemFields = [
+  'schemaVersion',
+  'id',
+  'canonicalExpression',
+  'meaningKo',
+  'speechAct',
+  'scenarioTags',
+  'breakdownType',
+  'sourceTurnIds',
+  'userAttempt',
+  'naturalRecast',
+  'cueLevelUsed',
+  'lastOutcome',
+  'examples',
+  'scheduling',
+] as const;
+const learningScheduleFields = ['reps', 'lapses', 'difficulty', 'stability', 'dueAt'] as const;
+const learnerProfileFields = [
+  'schemaVersion',
+  'id',
+  'learnerId',
+  'createdAt',
+  'updatedAt',
+  'profileLocale',
+  'targetLanguage',
+  'privacyMode',
+  'metrics',
+  'ability',
+  'learningItems',
+  'recentAssistEpisodeIds',
+] as const;
+const learnerMetricFields = [
+  'conversationRecoveryRate',
+  'independentTransferRate',
+  'assistedExactRate',
+  'activeRecallDueCount',
+  'totalSessions',
+] as const;
+const learnerAbilityFields = ['recall', 'listening', 'grammar', 'wordChoice', 'pronunciation', 'turnTaking'] as const;
 
 function plainTextSchema(maxLength: number): JsonSchema {
   return {
@@ -495,6 +590,20 @@ function asRecord(value: unknown, path: string, issues: ValidationIssue[]): Reco
   return value as Record<string, unknown>;
 }
 
+function validateKnownFields(
+  record: Record<string, unknown>,
+  allowedFields: readonly string[],
+  issues: ValidationIssue[],
+  pathPrefix = '',
+): void {
+  const allowed = new Set(allowedFields);
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) {
+      issues.push(issue(pathPrefix ? `${pathPrefix}.${key}` : key, 'Unknown field is not allowed.'));
+    }
+  }
+}
+
 function validateSchemaVersion(record: Record<string, unknown>, issues: ValidationIssue[]): void {
   if (record.schemaVersion !== ECHO_DOMAIN_V2_SCHEMA_VERSION) {
     issues.push(issue('schemaVersion', `Expected ${ECHO_DOMAIN_V2_SCHEMA_VERSION}.`));
@@ -631,6 +740,7 @@ export function validateAssistDecision(value: unknown, path = 'assistDecision'):
   const record = asRecord(value, path, issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, assistDecisionFields, issues);
   validateEnumField(record, 'action', assistActions, issues);
   validateNumberField(record, 'confidence', issues, { required: true, min: 0, max: 1 });
   validateEnumField(record, 'trigger', assistTriggers, issues);
@@ -644,6 +754,7 @@ export function validateConversationTurn(value: unknown): ValidationResult {
   const record = asRecord(value, 'conversationTurn', issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, conversationTurnFields, issues);
   validateSchemaVersion(record, issues);
   validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
   validateStringField(record, 'sessionId', issues, { required: true, maxLength: 128 });
@@ -675,6 +786,7 @@ export function validateCue(value: unknown): ValidationResult {
   const record = asRecord(value, 'cue', issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, cueFields, issues);
   validateSchemaVersion(record, issues);
   validateStringField(record, 'cueId', issues, { required: true, maxLength: 128 });
   validateEnumField(record, 'speechAct', speechActs, issues);
@@ -698,6 +810,7 @@ export function validateAssistEpisode(value: unknown): ValidationResult {
   const record = asRecord(value, 'assistEpisode', issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, assistEpisodeFields, issues);
   validateSchemaVersion(record, issues);
   validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
   validateStringField(record, 'sessionId', issues, { required: true, maxLength: 128 });
@@ -726,6 +839,7 @@ function validateDialogueExample(value: unknown, path: string): ValidationResult
   const record = asRecord(value, path, issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, dialogueExampleFields, issues, path);
   validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
   validateStringField(record, 'scenarioTag', issues, { required: true, maxLength: 120, noHtml: true });
   validateStringField(record, 'partnerTurn', issues, { maxLength: 1000, noHtml: true });
@@ -742,6 +856,7 @@ export function validateLearningItem(value: unknown): ValidationResult {
   const record = asRecord(value, 'learningItem', issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, learningItemFields, issues);
   validateSchemaVersion(record, issues);
   validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
   validateStringField(record, 'canonicalExpression', issues, { required: true, maxLength: 240, noHtml: true });
@@ -767,6 +882,7 @@ export function validateLearningItem(value: unknown): ValidationResult {
 
   const scheduling = asRecord(record.scheduling, 'scheduling', issues);
   if (scheduling) {
+    validateKnownFields(scheduling, learningScheduleFields, issues, 'scheduling');
     validateNumberField(scheduling, 'reps', issues, { required: true, min: 0, integer: true });
     validateNumberField(scheduling, 'lapses', issues, { required: true, min: 0, integer: true });
     validateNumberField(scheduling, 'difficulty', issues, { required: true, min: 0, max: 1 });
@@ -782,6 +898,7 @@ export function validateLearnerProfile(value: unknown): ValidationResult {
   const record = asRecord(value, 'learnerProfile', issues);
   if (!record) return result(issues);
 
+  validateKnownFields(record, learnerProfileFields, issues);
   validateSchemaVersion(record, issues);
   validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
   validateStringField(record, 'learnerId', issues, { required: true, maxLength: 128 });
@@ -798,6 +915,7 @@ export function validateLearnerProfile(value: unknown): ValidationResult {
 
   const metrics = asRecord(record.metrics, 'metrics', issues);
   if (metrics) {
+    validateKnownFields(metrics, learnerMetricFields, issues, 'metrics');
     validateNumberField(metrics, 'conversationRecoveryRate', issues, { min: 0, max: 1 });
     validateNumberField(metrics, 'independentTransferRate', issues, { min: 0, max: 1 });
     validateNumberField(metrics, 'assistedExactRate', issues, { min: 0, max: 1 });
@@ -807,6 +925,7 @@ export function validateLearnerProfile(value: unknown): ValidationResult {
 
   const ability = asRecord(record.ability, 'ability', issues);
   if (ability) {
+    validateKnownFields(ability, learnerAbilityFields, issues, 'ability');
     for (const field of ['recall', 'listening', 'grammar', 'wordChoice', 'pronunciation', 'turnTaking']) {
       validateNumberField(ability, field, issues, { required: true, min: 0, max: 1 });
     }

@@ -39,7 +39,9 @@ Imported Review JSON now has a schema-versioned ECHO path. The preferred import
 shape uses `schemaVersion: "2.0.0"`, `importKind: "echo_review_items"`, and
 stable item IDs. Imported records are normalized into the same `LearningItem`
 contract used by session-mined evidence, then mirrored into the active-recall
-queue. The older `session_date` / `fsi_stress_level` /
+queue. The v2 runtime guard is a closed contract: unknown fields such as raw
+transcript/debug excerpts are rejected instead of being preserved silently. The
+older `session_date` / `fsi_stress_level` /
 `bottleneck_chunks.interval` report is still accepted, but it is treated as a
 legacy migration path and converted into conservative `LearningItem` records
 without revealing the saved English phrase in the recall prompt.
