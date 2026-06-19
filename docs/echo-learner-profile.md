@@ -29,7 +29,11 @@ The review state is stored separately from the original session evidence so it
 can survive Android WebView relaunches and still be rebuilt from saved
 transcripts if local review state is missing. Grades adjust `reps`, `lapses`,
 `difficulty`, `stability`, `dueAt`, and transfer-check progress without marking
-an immediate cue repeat as mastery.
+an immediate cue repeat as mastery. Each attempt also records `captureSource`
+as `typed`, `phone_web_speech`, or future `g2_bridge` evidence so browser-only
+voice attempts cannot be mistaken for G2/audio-level pronunciation proof.
+Legacy stored attempts without the field are migrated on load: Web Speech
+confidence maps to `phone_web_speech`, and all other attempts map to `typed`.
 
 Imported Review JSON now has a schema-versioned ECHO path. The preferred import
 shape uses `schemaVersion: "2.0.0"`, `importKind: "echo_review_items"`, and

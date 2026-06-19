@@ -5,6 +5,7 @@ import { loadImportedLearningItemsForRecall } from '../debrief/json-parser';
 
 export type ActiveRecallGrade = 'again' | 'hard' | 'good' | 'easy';
 export type ActiveRecallPromptMode = 'meaning_to_expression' | 'transfer';
+export type ActiveRecallCaptureSource = 'typed' | 'phone_web_speech' | 'g2_bridge';
 
 export interface ActiveRecallReviewState {
   itemId: string;
@@ -48,6 +49,7 @@ export interface ActiveRecallAttempt {
   id: string;
   itemId: string;
   mode: ActiveRecallPromptMode;
+  captureSource: ActiveRecallCaptureSource;
   grade: ActiveRecallGrade;
   prompt: string;
   expectedExpression: string;
@@ -86,6 +88,7 @@ export interface RecordActiveRecallAttemptOptions {
   now?: () => Date;
   mode?: ActiveRecallPromptMode;
   pronunciationConfidence?: number;
+  captureSource?: ActiveRecallCaptureSource;
 }
 
 const STORAGE_KEY = 'echo_active_recall_reviews';
@@ -199,10 +202,13 @@ export function recordActiveRecallAttempt(
   const evaluation = evaluateActiveRecallAttempt(item, userAttempt, {
     pronunciationConfidence: options.pronunciationConfidence,
   });
+  const captureSource = options.captureSource ??
+    (options.pronunciationConfidence !== undefined ? 'phone_web_speech' : 'typed');
   const attempt: ActiveRecallAttempt = {
     id: `${item.id}:attempt:${now.getTime()}`,
     itemId: item.id,
     mode,
+    captureSource,
     grade,
     prompt: prompt.prompt,
     expectedExpression: sanitizePlainText(item.canonicalExpression, 240),
@@ -424,7 +430,10 @@ function normalizeSnapshot(value: unknown): ActiveRecallStoreSnapshot {
     version: '1.0.0',
     states,
     attempts: Array.isArray(value.attempts)
-      ? value.attempts.filter(isActiveRecallAttempt).slice(-MAX_ATTEMPTS)
+      ? value.attempts
+        .map(normalizeActiveRecallAttempt)
+        .filter((attempt): attempt is ActiveRecallAttempt => attempt !== null)
+        .slice(-MAX_ATTEMPTS)
       : [],
   };
 }
@@ -449,11 +458,31 @@ function isReviewState(value: unknown): value is ActiveRecallReviewState {
     typeof value.transferSuccessCount === 'number';
 }
 
+function normalizeActiveRecallAttempt(value: unknown): ActiveRecallAttempt | null {
+  if (!isRecord(value)) return null;
+  const captureSource = isCaptureSource(value.captureSource)
+    ? value.captureSource
+    : inferLegacyCaptureSource(value.evaluation);
+  const attempt = {
+    ...value,
+    captureSource,
+  };
+  return isActiveRecallAttempt(attempt) ? attempt : null;
+}
+
+function inferLegacyCaptureSource(evaluation: unknown): ActiveRecallCaptureSource {
+  if (isRecord(evaluation) && evaluation.pronunciationSource === 'web_speech_confidence') {
+    return 'phone_web_speech';
+  }
+  return 'typed';
+}
+
 function isActiveRecallAttempt(value: unknown): value is ActiveRecallAttempt {
   return isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.itemId === 'string' &&
     isPromptMode(value.mode) &&
+    isCaptureSource(value.captureSource) &&
     isGrade(value.grade) &&
     typeof value.prompt === 'string' &&
     typeof value.expectedExpression === 'string' &&
@@ -482,6 +511,10 @@ function isAttemptEvaluation(value: unknown): value is ActiveRecallAttemptEvalua
 
 function isPromptMode(value: unknown): value is ActiveRecallPromptMode {
   return value === 'meaning_to_expression' || value === 'transfer';
+}
+
+function isCaptureSource(value: unknown): value is ActiveRecallCaptureSource {
+  return value === 'typed' || value === 'phone_web_speech' || value === 'g2_bridge';
 }
 
 function isGrade(value: unknown): value is ActiveRecallGrade {

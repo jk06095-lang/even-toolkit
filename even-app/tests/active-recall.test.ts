@@ -71,6 +71,7 @@ describe('active recall learning loop', () => {
 
     expect(attempt).toMatchObject({
       grade: 'again',
+      captureSource: 'typed',
       userAttempt: 'I maybe tomorrow [redacted-email]',
       dueAtBefore: item!.dueAt,
       evaluation: {
@@ -160,6 +161,7 @@ describe('active recall learning loop', () => {
       pronunciationScore: 0.76,
       pronunciationSource: 'web_speech_confidence',
     });
+    expect(loadActiveRecallSnapshot().attempts.at(-1)?.captureSource).toBe('phone_web_speech');
 
     const nextTransferPrompt = createActiveRecallPrompt(
       item!.learningItem,
@@ -238,6 +240,59 @@ describe('active recall learning loop', () => {
     });
     expect(queue[0]?.prompt.prompt).toContain('다시 말해 달라고 요청하기');
     expect(queue[0]?.prompt.prompt).not.toContain('Could you repeat that?');
+  });
+
+  it('migrates legacy active-recall attempts to explicit capture sources', () => {
+    localStorage.setItem('echo_active_recall_reviews', JSON.stringify({
+      version: '1.0.0',
+      states: {},
+      attempts: [
+        {
+          id: 'typed-legacy',
+          itemId: 'item-1',
+          mode: 'meaning_to_expression',
+          grade: 'good',
+          prompt: 'Recall this in English.',
+          expectedExpression: 'Could you repeat that?',
+          userAttempt: 'Could you repeat that?',
+          attemptedAt: dueNow.toISOString(),
+          dueAtBefore: dueNow.toISOString(),
+          dueAtAfter: dueNow.toISOString(),
+        },
+        {
+          id: 'voice-legacy',
+          itemId: 'item-1',
+          mode: 'meaning_to_expression',
+          grade: 'easy',
+          prompt: 'Recall this in English.',
+          expectedExpression: 'Could you repeat that?',
+          userAttempt: 'Could you repeat that?',
+          attemptedAt: dueNow.toISOString(),
+          dueAtBefore: dueNow.toISOString(),
+          dueAtAfter: dueNow.toISOString(),
+          evaluation: {
+            semanticScore: 1,
+            coverage: 1,
+            precision: 1,
+            recommendedGrade: 'easy',
+            matchedKeywords: ['repeat'],
+            missingKeywords: [],
+            note: 'Near-exact recall.',
+            pronunciationScore: 0.84,
+            pronunciationSource: 'web_speech_confidence',
+            pronunciationNote: 'Browser speech confidence only; not a full pronunciation assessment.',
+          },
+        },
+      ],
+    }));
+
+    expect(loadActiveRecallSnapshot().attempts.map((attempt) => ({
+      id: attempt.id,
+      captureSource: attempt.captureSource,
+    }))).toEqual([
+      { id: 'typed-legacy', captureSource: 'typed' },
+      { id: 'voice-legacy', captureSource: 'phone_web_speech' },
+    ]);
   });
 });
 

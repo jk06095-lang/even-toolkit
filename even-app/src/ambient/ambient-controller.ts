@@ -9,6 +9,7 @@ import {
   recordActiveRecallAttempt,
   type ActiveRecallGrade,
   type ActiveRecallAttemptEvaluation,
+  type ActiveRecallCaptureSource,
   type ActiveRecallQueueItem,
 } from '../learning/active-recall';
 import {
@@ -139,6 +140,7 @@ function updatePendingList(items: PendingItem[]): void {
 let currentRecallItem: ActiveRecallQueueItem | null = null;
 let recallSpeechCapture: ActiveRecallSpeechCapture | null = null;
 let currentVoiceAttemptConfidence: number | undefined;
+let currentAttemptCaptureSource: ActiveRecallCaptureSource = 'typed';
 
 function renderActiveRecallPanel(statusMessage = ''): void {
   const promptEl = document.getElementById('active-recall-prompt');
@@ -162,6 +164,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   if (statusEl) statusEl.textContent = statusMessage;
   if (speechStatusEl) speechStatusEl.textContent = '';
   currentVoiceAttemptConfidence = undefined;
+  currentAttemptCaptureSource = 'typed';
   answerEl.style.display = 'none';
   if (evaluationEl) evaluationEl.textContent = '';
   if (gradeRow) gradeRow.style.display = 'none';
@@ -254,6 +257,7 @@ function startActiveRecallSpeech(): void {
       if (attemptEl) {
         attemptEl.value = mergeAttemptText(attemptEl.value, text);
       }
+      currentAttemptCaptureSource = 'phone_web_speech';
       currentVoiceAttemptConfidence = combineConfidence(currentVoiceAttemptConfidence, confidence);
       setSpeechStatus(
         currentVoiceAttemptConfidence === undefined
@@ -312,6 +316,7 @@ function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
     attemptEl?.value ?? '',
     {
       mode: currentRecallItem.prompt.mode,
+      captureSource: currentAttemptCaptureSource,
       pronunciationConfidence: currentVoiceAttemptConfidence,
     },
   );
