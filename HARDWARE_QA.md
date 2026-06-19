@@ -147,6 +147,7 @@ Still requires real G2 validation:
 - With `Save transcripts` off, complete a session and confirm `echo_transcripts` and `echo_transcript_buffer` do not contain raw utterance text.
 - Confirm `echo_session_events` contains only counts/flags and no utterance, hint, audio, or request body text.
 - Confirm `Export my data` includes privacy-safe QA telemetry such as cue latency p50/p95, assist counts, audio source, and VAD calibration fields without raw utterance or cue text when transcript saving is off.
+- Confirm the first-run retention selector defaults to `Delete after session`.
 - Enable `Save transcripts`, complete a session, and confirm a saved session appears in Review.
 - Test each retention option: `Delete after session`, `1 day`, `7 days`, and `Until deleted`.
 - Confirm `Delete current session`, per-session `Delete`, `Delete all transcripts`, per-session `Export`, and `Export my data` work from Review.

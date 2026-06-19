@@ -42,6 +42,12 @@ describe('transcript privacy controls', () => {
 
   it('defaults microphone, cloud processing, and transcript saving to off', () => {
     expect(loadPrivacySettings()).toEqual(DEFAULT_PRIVACY_SETTINGS);
+    expect(DEFAULT_PRIVACY_SETTINGS).toMatchObject({
+      useMicrophone: false,
+      allowCloudProcessing: false,
+      saveTranscripts: false,
+      transcriptRetention: 'immediate',
+    });
   });
 
   it('does not persist raw transcript text without explicit save opt-in', () => {
@@ -151,6 +157,19 @@ describe('transcript privacy controls', () => {
     expect(store.finalize()).toBeNull();
     expect(localStorage.getItem('echo_transcripts')).toBeNull();
     expect(sessionStorage.getItem('echo_transcript_buffer')).toBeNull();
+  });
+
+  it('uses delete-after-session retention when TranscriptStore is constructed without a retention policy', () => {
+    const store = new TranscriptStore(3, 'Default Retention Topic', 'travel', {
+      saveRawTranscript: true,
+      now: () => now,
+    });
+
+    store.addSpeech('default retention sentence', 'live_final');
+
+    expect(store.metadata.retentionPolicy).toBe('immediate');
+    expect(store.finalize()).toBeNull();
+    expect(localStorage.getItem('echo_transcripts')).toBeNull();
   });
 
   it('prunes saved transcripts by retention policy', () => {

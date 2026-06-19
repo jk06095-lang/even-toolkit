@@ -30,6 +30,8 @@ transcription events and text length, but not learner utterance text.
 `Privacy Settings` gate microphone use, ECHO API proxy calls, raw transcript
 saving, and transcript retention. The defaults are microphone off, cloud
 processing off, and transcript saving off.
+The default retention policy is `Delete after session`, so even explicit
+transcript-saving opt-in starts from the shortest retention window.
 
 Raw transcript text is stored by `TranscriptStore` only when `Save transcripts`
 is enabled. Event analytics are stored separately in `echo_session_events` as

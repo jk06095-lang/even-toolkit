@@ -143,7 +143,7 @@ export class TranscriptStore {
   ) {
     this.now = options.now ?? (() => Date.now());
     this.saveRawTranscript = options.saveRawTranscript === true;
-    this.retentionPolicy = options.retentionPolicy ?? '7d';
+    this.retentionPolicy = options.retentionPolicy ?? 'immediate';
 
     const now = this.now();
     const dateStr = new Date(now).toISOString().replace(/[:.]/g, '-').slice(0, 19);

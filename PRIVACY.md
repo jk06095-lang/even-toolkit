@@ -15,7 +15,7 @@ settings card.
   kept only in memory for the active interaction and is not written to
   `sessionStorage` or `localStorage`.
 - Transcript retention choices are `Delete after session`, `1 day`, `7 days`,
-  and `Until deleted`.
+  and `Until deleted`. The default retention selector is `Delete after session`.
 - Transcript export remains local until the user downloads or shares the file.
 
 ## Raw Transcript Storage

@@ -14,7 +14,7 @@ export const DEFAULT_PRIVACY_SETTINGS: PrivacySettings = {
   useMicrophone: false,
   allowCloudProcessing: false,
   saveTranscripts: false,
-  transcriptRetention: '7d',
+  transcriptRetention: 'immediate',
   updatedAt: 0,
 };
 
