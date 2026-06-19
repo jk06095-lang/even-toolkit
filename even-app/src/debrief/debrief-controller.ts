@@ -1,5 +1,5 @@
 import { TranscriptStore } from '../combat/transcript-store';
-import { downloadExportJSON } from '../combat/transcript-export';
+import { downloadCustomGptHandoffFiles, downloadExportJSON } from '../combat/transcript-export';
 import { buildConversationTimelineRows } from '../combat/conversation-timeline';
 import {
   processPendingConversationTranslations,
@@ -124,6 +124,24 @@ function renderSessionExportList(): void {
     });
   });
 
+  listEl.querySelectorAll('[data-export-gpt-session]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const sessionId = (btn as HTMLElement).dataset.exportGptSession;
+      if (!sessionId) return;
+
+      try {
+        const sessionData = TranscriptStore.getById(sessionId);
+        if (!sessionData) throw new Error('Saved session not found');
+
+        downloadCustomGptHandoffFiles(sessionData);
+        setSessionExportStatus('Custom GPT files downloaded.', 'success');
+      } catch (err) {
+        console.error('[Custom GPT Export] Failed:', err);
+        setSessionExportStatus(`Custom GPT export failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      }
+    });
+  });
+
   listEl.querySelectorAll('[data-delete-session]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const sessionId = (btn as HTMLElement).dataset.deleteSession;
@@ -212,6 +230,14 @@ function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
   exportButton.dataset.exportSession = summary.sessionId;
   exportButton.textContent = 'Export';
 
+  const gptButton = document.createElement('button');
+  gptButton.className = 'btn';
+  gptButton.style.padding = '4px 12px';
+  gptButton.style.fontSize = '12px';
+  gptButton.style.minWidth = 'auto';
+  gptButton.dataset.exportGptSession = summary.sessionId;
+  gptButton.textContent = 'GPT Export';
+
   const deleteButton = document.createElement('button');
   deleteButton.className = 'btn btn-neutral';
   deleteButton.style.padding = '4px 12px';
@@ -220,7 +246,7 @@ function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
   deleteButton.dataset.deleteSession = summary.sessionId;
   deleteButton.textContent = 'Delete';
 
-  actions.append(exportButton, deleteButton);
+  actions.append(exportButton, gptButton, deleteButton);
   item.append(content, actions);
   return item;
 }

@@ -82,6 +82,12 @@ export interface GenerateExportOptions {
   signal?: AbortSignal;
 }
 
+export interface DownloadFileDescriptor {
+  fileName: string;
+  mimeType: string;
+  content: string;
+}
+
 // ── Stage Builders ──
 
 function buildStage1(session: SessionTranscript): ExportStage1 {
@@ -254,6 +260,30 @@ export function generateCustomGptHandoffFiles(
   return buildCustomGptHandoffFiles(session);
 }
 
+export function createCustomGptHandoffDownloadFiles(
+  session: SessionTranscript,
+): DownloadFileDescriptor[] {
+  const handoff = generateCustomGptHandoffFiles(session);
+  return [
+    {
+      fileName: handoff.profileFileName,
+      mimeType: 'application/json',
+      content: `${JSON.stringify(handoff.profileJson, null, 2)}\n`,
+    },
+    {
+      fileName: handoff.instructionsFileName,
+      mimeType: 'text/markdown',
+      content: `${handoff.instructionsMarkdown.trim()}\n`,
+    },
+  ];
+}
+
+export function downloadCustomGptHandoffFiles(session: SessionTranscript): void {
+  for (const file of createCustomGptHandoffDownloadFiles(session)) {
+    downloadTextFile(file);
+  }
+}
+
 /**
  * Generate and trigger a file download of the export JSON.
  */
@@ -262,13 +292,20 @@ export async function downloadExportJSON(
   options: GenerateExportOptions = {},
 ): Promise<void> {
   const exportData = await generateExportJSON(session, options);
-  const jsonStr = JSON.stringify(exportData, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json' });
+  downloadTextFile({
+    fileName: `${session.sessionId}_handoff.json`,
+    mimeType: 'application/json',
+    content: JSON.stringify(exportData, null, 2),
+  });
+}
+
+function downloadTextFile(file: DownloadFileDescriptor): void {
+  const blob = new Blob([file.content], { type: file.mimeType });
   const url = URL.createObjectURL(blob);
 
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${session.sessionId}_handoff.json`;
+  a.download = file.fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -54,6 +54,11 @@ advance to the next generated scenario.
 - `echo_learner_profile.json`
 - `echo_tutor_instructions.md`
 
+Saved sessions in the Review screen expose a `GPT Export` action that downloads
+both files for manual Custom GPT Knowledge / instruction setup. This export is
+separate from the full session handoff JSON so learners can share a bounded
+profile without uploading raw transcript history.
+
 The JSON profile is intended for manual Knowledge upload. It excludes full raw
 transcript export and keeps only bounded, redacted learning snippets. Email-like
 and phone-like values are replaced before profile generation.

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionTranscript } from '../src/combat/transcript-store';
 import { ECHO_DOMAIN_V2_SCHEMA_VERSION } from '@toolkit/echo-domain-v2';
 
@@ -30,15 +30,34 @@ vi.mock('../src/services/echo-api', () => ({
   }),
 }));
 
-import { generateExportJSON } from '../src/combat/transcript-export';
+import {
+  createCustomGptHandoffDownloadFiles,
+  downloadCustomGptHandoffFiles,
+  generateExportJSON,
+} from '../src/combat/transcript-export';
 
 describe('transcript export session-analysis guards', () => {
+  const originalDocument = globalThis.document;
+  const originalUrl = globalThis.URL;
+
   beforeEach(() => {
     echoApiMock.configured = true;
     echoApiMock.requests = [];
     echoApiMock.resolve = null;
     echoApiMock.reject = null;
     echoApiMock.rejectOnAbort = true;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'document', {
+      value: originalDocument,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, 'URL', {
+      value: originalUrl,
+      configurable: true,
+    });
+    vi.restoreAllMocks();
   });
 
   it('adds scoped request metadata to session-analysis proxy calls', async () => {
@@ -180,6 +199,65 @@ describe('transcript export session-analysis guards', () => {
       confidence: 0.84,
       correctedByUser: true,
     });
+  });
+
+  it('creates privacy-safe Custom GPT handoff download files', () => {
+    const session = makeSession();
+    session.assistEpisodes![0]!.userAttempt = 'Reach me at test@example.com or +1 555 123 4567';
+    const files = createCustomGptHandoffDownloadFiles(session);
+
+    expect(files.map((file) => file.fileName)).toEqual([
+      'echo_learner_profile.json',
+      'echo_tutor_instructions.md',
+    ]);
+    expect(files[0]?.mimeType).toBe('application/json');
+    expect(files[1]?.mimeType).toBe('text/markdown');
+
+    const profile = JSON.parse(files[0]!.content);
+    expect(profile.schemaVersion).toBe(ECHO_DOMAIN_V2_SCHEMA_VERSION);
+    expect(profile.privacyMode).toBe('local_only');
+    expect(files[1]?.content).toContain('Project ECHO Tutor Instructions');
+    expect(`${files[0]?.content}\n${files[1]?.content}`).not.toContain('test@example.com');
+    expect(`${files[0]?.content}\n${files[1]?.content}`).not.toContain('+1 555');
+  });
+
+  it('downloads the two manual Custom GPT files for a saved session handoff', () => {
+    const clickedDownloads: string[] = [];
+    const appended: unknown[] = [];
+
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        body: {
+          appendChild: (element: unknown) => appended.push(element),
+          removeChild: () => undefined,
+        },
+        createElement: () => ({
+          href: '',
+          download: '',
+          click() {
+            clickedDownloads.push(this.download);
+          },
+        }),
+      },
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, 'URL', {
+      value: {
+        createObjectURL: vi.fn(() => 'blob:echo-custom-gpt'),
+        revokeObjectURL: vi.fn(),
+      },
+      configurable: true,
+    });
+
+    downloadCustomGptHandoffFiles(makeSession());
+
+    expect(clickedDownloads).toEqual([
+      'echo_learner_profile.json',
+      'echo_tutor_instructions.md',
+    ]);
+    expect(appended).toHaveLength(2);
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
   });
 
   it('ignores aborted delayed session-analysis responses and returns fallback handoff', async () => {
