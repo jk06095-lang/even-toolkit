@@ -280,14 +280,27 @@ function validateOauth() {
   validateHttpsUrl(manifest.oauth, 'tokenUrl', 'oauth', `${expectedBaseUrl}/oauth/token`);
   validateScopes();
   validateText(manifest.oauth, 'tokenStorageBoundary', 'oauth');
-  if (
-    !(allowDraft && isPlaceholder(manifest.oauth.tokenStorageBoundary))
-    && !/(server|secret|oauth|issuer|encrypted)/i.test(String(manifest.oauth.tokenStorageBoundary ?? ''))
-  ) {
-    addError('oauth.tokenStorageBoundary', 'must describe a server-side OAuth token boundary');
-  }
+  validateTokenStorageBoundary();
   validateExpected(manifest.oauth, 'providerSecretsInGpt', false, 'oauth');
   validateEvidenceLink(manifest.oauth, 'evidenceRef', 'oauth');
+}
+
+function validateTokenStorageBoundary() {
+  const value = manifest.oauth?.tokenStorageBoundary;
+  if (allowDraft && isPlaceholder(value)) return;
+  if (typeof value !== 'string') return;
+
+  if (!/(server|proxy|oauth|issuer|secret manager)/i.test(value)) {
+    addError('oauth.tokenStorageBoundary', 'must describe a server-side OAuth token boundary');
+  }
+
+  if (!/(hash|fingerprint|encrypted|secret manager|not stored raw|no raw|without raw|opaque)/i.test(value)) {
+    addError('oauth.tokenStorageBoundary', 'must describe non-raw token storage such as hashed fingerprints, encrypted storage, or secret-manager-only storage');
+  }
+
+  if (/\bstores?\s+(?:raw|plain(?:text)?)\b/i.test(value)) {
+    addError('oauth.tokenStorageBoundary', 'must not claim raw or plaintext token storage');
+  }
 }
 
 function validateScopes() {

@@ -140,6 +140,9 @@ The deployment evidence shape is captured in
 evidence must be copied to
 `docs/project-echo-chatgpt-action-evidence.completed.json` and pass
 `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json`.
+Final evidence must describe a non-raw OAuth token storage boundary, such as
+hashed fingerprints, encrypted storage, or secret-manager-only storage; raw or
+plaintext bearer-token storage is rejected.
 Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
 `docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
 current Action API base URL and contract version prefilled. The generated file

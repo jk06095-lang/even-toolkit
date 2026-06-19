@@ -27,6 +27,10 @@ const steps = [
     args: ['run', 'validate:chatgpt-action-template'],
   },
   {
+    label: 'Project ECHO ChatGPT Action evidence validator tests',
+    args: ['run', 'test:chatgpt-action-evidence'],
+  },
+  {
     label: 'Project ECHO pilot evidence template',
     args: ['run', 'validate:pilot-template'],
   },
