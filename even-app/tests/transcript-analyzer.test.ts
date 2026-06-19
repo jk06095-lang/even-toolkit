@@ -51,4 +51,33 @@ describe('TranscriptAnalyzer outcome records', () => {
       successRate: 0,
     });
   });
+
+  it('uses the shared outcome evaluator for compatibility hint checks', () => {
+    const analyzer = new TranscriptAnalyzer(2);
+    analyzer.setActiveHint('Could you say that again?', 2);
+
+    expect(analyzer.checkHintUsage('Sorry, can you repeat it?')).toMatchObject({
+      used: true,
+    });
+
+    expect(analyzer.evaluateActiveHintUsage('Sorry, can you repeat it?')).toMatchObject({
+      status: 'used',
+      outcome: 'assisted_adapted',
+      speechAct: 'ask_repeat',
+    });
+  });
+
+  it('does not treat unrelated short speech as a used hint', () => {
+    const analyzer = new TranscriptAnalyzer(2);
+    analyzer.setActiveHint('Could you say that again?', 2);
+
+    expect(analyzer.checkHintUsage('I maybe tomorrow')).toMatchObject({
+      used: false,
+    });
+
+    expect(analyzer.evaluateActiveHintUsage('I maybe tomorrow')).toMatchObject({
+      status: 'missed',
+      outcome: 'failed',
+    });
+  });
 });

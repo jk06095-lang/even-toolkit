@@ -74,13 +74,13 @@ export interface HintUsageRecord {
   speechAct: SpeechAct;
 }
 
-/** Result of checking whether the user's speech matched the active hint. */
+/** Summary of the shared cue outcome evaluation for the active hint. */
 export interface HintCheckResult {
-  /** Whether the hint is considered "used" (≥ 2 keyword matches). */
+  /** Whether the shared evaluator considers the cue successfully used. */
   used: boolean;
-  /** Which keywords were found in the user's speech. */
+  /** Which cue keywords were found by the shared evaluator. */
   matchedWords: string[];
-  /** Ratio of matched keywords to total keywords (0–1). */
+  /** Ratio of matched keywords to total cue keywords (0–1). */
   matchRatio: number;
 }
 
@@ -191,40 +191,24 @@ export class TranscriptAnalyzer {
   }
 
   /**
-   * Check if the user's recent speech contains the active hint's key
-   * expressions.
-   *
-   * Uses local keyword matching:
-   * - Extract content words from the hint (stop-words removed).
-   * - Compare against the provided transcript (case-insensitive).
-   * - If ≥ 2 keywords match the hint is considered "used".
+   * Check whether the user's recent speech satisfies the active hint.
+   * This is a compatibility wrapper around the shared cue outcome evaluator so
+   * the app does not maintain a second success rule for the same cue.
    *
    * @param transcript The user's recent speech to evaluate.
    * @returns {@link HintCheckResult} with match details.
    */
   checkHintUsage(transcript: string): HintCheckResult {
-    if (!this.activeHint || this.activeHint.keyWords.length === 0) {
+    const evaluation = this.evaluateActiveHintUsage(transcript);
+    if (!evaluation) {
       return { used: false, matchedWords: [], matchRatio: 0 };
     }
 
-    const lowerTranscript = transcript.toLowerCase();
-    const transcriptWords = new Set(
-      lowerTranscript.replace(/[^\w\s']/g, '').split(/\s+/)
-    );
-
-    const matchedWords: string[] = [];
-    for (const kw of this.activeHint.keyWords) {
-      // Check both as a standalone word and as a substring (handles conjugation edge cases)
-      if (transcriptWords.has(kw) || lowerTranscript.includes(kw)) {
-        matchedWords.push(kw);
-      }
-    }
-
-    const totalKeyWords = this.activeHint.keyWords.length;
-    const matchRatio = totalKeyWords > 0 ? matchedWords.length / totalKeyWords : 0;
-    const used = matchedWords.length >= 2;
-
-    return { used, matchedWords, matchRatio };
+    return {
+      used: evaluation.status === 'used',
+      matchedWords: evaluation.matchedWords,
+      matchRatio: evaluation.matchRatio,
+    };
   }
 
   evaluateActiveHintUsage(transcript: string): CueOutcomeEvaluation | null {
