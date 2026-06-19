@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'ACK', 'PAUSED'];
@@ -287,6 +288,22 @@ function validateEvidenceLink(object, key, pointer, options = {}) {
   }
 }
 
+function validateRepoEvidenceFile(object, key, pointer, options = {}) {
+  const fieldPointer = `${pointer}.${key}`;
+  const value = object?.[key];
+  validateEvidenceLink(object, key, pointer, options);
+
+  if (allowDraft && (value === null || isPlaceholder(value))) return null;
+  if (typeof value !== 'string' || isPlaceholder(value)) return null;
+
+  if (/^https:\/\//i.test(value.trim())) {
+    addError(fieldPointer, 'must be a repo-local file path so the artifact can be verified');
+    return null;
+  }
+
+  return resolveRepoEvidencePath(value, fieldPointer);
+}
+
 function looksLikeEvidenceTarget(value, extensions) {
   const trimmed = String(value ?? '').trim();
   if (/^https:\/\/\S+$/i.test(trimmed)) return true;
@@ -303,12 +320,21 @@ function looksLikeEvidenceTarget(value, extensions) {
 function evidenceTargetExists(value) {
   const trimmed = String(value ?? '').trim();
   if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  return Boolean(resolveRepoEvidencePath(trimmed));
+}
+
+function resolveRepoEvidencePath(value, pointer = null) {
+  const trimmed = String(value ?? '').trim();
   const resolvedPath = path.resolve(process.cwd(), trimmed);
   const repoRoot = `${process.cwd()}${path.sep}`;
   if (resolvedPath !== process.cwd() && !resolvedPath.startsWith(repoRoot)) {
-    return false;
+    if (pointer) addError(pointer, 'repo path evidence must stay inside the repository');
+    return null;
   }
-  return existsSync(resolvedPath);
+  if (!existsSync(resolvedPath)) {
+    return null;
+  }
+  return resolvedPath;
 }
 
 function validateExpected(object, key, expected, pointer) {
@@ -469,10 +495,11 @@ function validateManifestRoot(manifestObject) {
 function validateBuildArtifact(manifestObject) {
   if (!validateObject(manifestObject.buildArtifact, 'buildArtifact')) return;
 
-  validateEvidenceLink(manifestObject.buildArtifact, 'packagePath', 'buildArtifact', {
+  const packagePath = validateRepoEvidenceFile(manifestObject.buildArtifact, 'packagePath', 'buildArtifact', {
     extensions: PACKAGE_EXTENSIONS,
   });
   validateSha256(manifestObject.buildArtifact, 'sha256', 'buildArtifact');
+  validatePackageSha256(manifestObject.buildArtifact, packagePath, 'buildArtifact');
   validateText(manifestObject.buildArtifact, 'packCommand', 'buildArtifact', {
     includes: 'pack',
   });
@@ -483,6 +510,23 @@ function validateBuildArtifact(manifestObject) {
   validateExpected(manifestObject.buildArtifact, 'reviewerParityConfirmed', true, 'buildArtifact');
   validateExpected(manifestObject.buildArtifact, 'lockedPhoneFiveMinuteRun', true, 'buildArtifact');
   validateEvidenceLink(manifestObject.buildArtifact, 'evidenceRef', 'buildArtifact');
+}
+
+function validatePackageSha256(buildArtifact, packagePath, pointer) {
+  const digest = buildArtifact.sha256;
+  if (
+    !packagePath
+    || allowDraft
+    || typeof digest !== 'string'
+    || !SHA256_PATTERN.test(digest.trim())
+  ) {
+    return;
+  }
+
+  const actualDigest = createHash('sha256').update(readFileSync(packagePath)).digest('hex');
+  if (actualDigest !== digest.toLowerCase()) {
+    addError(`${pointer}.sha256`, 'must match the SHA-256 digest of buildArtifact.packagePath');
+  }
 }
 
 function validateWearingState(manifestObject) {

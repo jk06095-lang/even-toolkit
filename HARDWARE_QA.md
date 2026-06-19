@@ -17,9 +17,9 @@ status text such as `done` is not accepted as evidence. Repo-path evidence must
 point to a file that exists in the repository; future filenames are not accepted
 as completed evidence.
 Final hardware QA must also record `buildArtifact.packagePath` as the exact
-`.ehpk` installed for the run, a 64-character SHA-256 digest, the packaging
-command, and confirmation that the same artifact was installed through a
-private or beta build before the physical G2 checks.
+repo-local `.ehpk` installed for the run, a SHA-256 digest that matches that
+file, the packaging command, and confirmation that the same artifact was
+installed through a private or beta build before the physical G2 checks.
 The final `runDate` must be a valid ISO `YYYY-MM-DD` calendar date.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
@@ -55,8 +55,9 @@ completed manifest.
 
 - Run `cd even-app && npm run verify` to build, bundle-check, and package
   `echo.ehpk`.
-- Record the exact package path in `buildArtifact.packagePath`.
-- Record the SHA-256 digest in `buildArtifact.sha256`.
+- Record the exact repo-local package path in `buildArtifact.packagePath`.
+- Record the SHA-256 digest in `buildArtifact.sha256`; final validation hashes
+  `buildArtifact.packagePath` and rejects mismatches.
 - Record the packaging command in `buildArtifact.packCommand`.
 - Confirm `sourceAppJson` is `even-app/app.json` and `sourceDistDir` is
   `even-app/dist`.
