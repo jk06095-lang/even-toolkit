@@ -150,9 +150,12 @@ test('rejects background lifecycle evidence without beta lock and cold-start rec
   const invalidLifecycle = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
   invalidLifecycle.backgroundLifecycle.lockDurationMinutes = 2;
   invalidLifecycle.backgroundLifecycle.glassesLaunchRendersAfterLock = false;
+  invalidLifecycle.backgroundLifecycle.rootDoubleTapSystemExitDialogShown = false;
+  invalidLifecycle.backgroundLifecycle.permissionDenialPathVerified = false;
   invalidLifecycle.backgroundLifecycle.androidColdStartRebuildsFromLocalStorage = false;
   invalidLifecycle.backgroundLifecycle.audioCaptureReenabledAfterForeground = false;
   invalidLifecycle.backgroundLifecycle.webSocketReconnectHandledOrNotUsed = false;
+  invalidLifecycle.backgroundLifecycle.consoleSanityChecked = false;
   invalidLifecycle.backgroundLifecycle.videoEvidence = 'background-lifecycle-video.mp4';
 
   const invalidPath = path.join(tmpRoot, 'hardware-invalid-background-lifecycle.json');
@@ -166,10 +169,32 @@ test('rejects background lifecycle evidence without beta lock and cold-start rec
   const output = combinedOutput(result);
   assert.match(output, /backgroundLifecycle\.lockDurationMinutes: must be >= 5 for beta\/private locked-phone evidence/);
   assert.match(output, /backgroundLifecycle\.glassesLaunchRendersAfterLock: must be true/);
+  assert.match(output, /backgroundLifecycle\.rootDoubleTapSystemExitDialogShown: must be true/);
+  assert.match(output, /backgroundLifecycle\.permissionDenialPathVerified: must be true/);
   assert.match(output, /backgroundLifecycle\.androidColdStartRebuildsFromLocalStorage: must be true/);
   assert.match(output, /backgroundLifecycle\.audioCaptureReenabledAfterForeground: must be true/);
   assert.match(output, /backgroundLifecycle\.webSocketReconnectHandledOrNotUsed: must be true/);
+  assert.match(output, /backgroundLifecycle\.consoleSanityChecked: must be true/);
   assert.match(output, /backgroundLifecycle\.videoEvidence: repo path evidence must point to an existing file/);
+});
+
+test('rejects Exit ECHO evidence without the explicit system shutdown call proof', async () => {
+  const fixture = writeCompletedHardwareFixture('exit-echo-shutdown');
+  const invalidExit = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  invalidExit.lifecycle.exitEchoRun.shutDownPageContainerCalled = false;
+  invalidExit.lifecycle.exitEchoRun.shutdownTarget = 0;
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-exit-echo.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidExit, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /lifecycle\.exitEchoRun\.shutdownTarget: must be 1/);
+  assert.match(output, /lifecycle\.exitEchoRun\.shutDownPageContainerCalled: must be true/);
 });
 
 test('rejects packaged hardware QA artifact evidence with unverifiable or mismatched SHA-256', async () => {
@@ -264,12 +289,15 @@ function writeCompletedHardwareFixture(name) {
       noBlackScreenOrInfiniteSpinner: true,
       gestureOnlyCoreFlowCompleted: true,
       everyGestureShowsFeedback: true,
+      rootDoubleTapSystemExitDialogShown: true,
+      permissionDenialPathVerified: true,
       aliveAfterTwoMinutesIdle: true,
       unlockUseAnotherAppRelockUnaffected: true,
       androidColdStartRebuildsFromLocalStorage: true,
       audioCaptureReenabledAfterForeground: true,
       webSocketReconnectHandledOrNotUsed: true,
       firstPartyAppLaunchAfterExit: true,
+      consoleSanityChecked: true,
       evidenceRef: evidence,
       videoEvidence: video,
     },
@@ -313,6 +341,7 @@ function writeCompletedHardwareFixture(name) {
       exitEchoRun: {
         exitFromActiveSession: true,
         shutdownTarget: 1,
+        shutDownPageContainerCalled: true,
         statusListenersCleared: true,
         audioCaptureStopped: true,
         lateResponsesIgnored: true,

@@ -44,7 +44,8 @@ The hardware QA manifest must identify the exact repo-local `.ehpk` package
 path and matching SHA-256 digest used for the real G2 run, and must include
 private/beta locked-phone background lifecycle evidence, Android cold-start
 rebuild evidence, foreground audio-capture re-enable evidence, WebSocket
-reconnect handling or explicit non-use evidence,
+reconnect handling or explicit non-use evidence, root-page system-exit dialog
+evidence, permission-denial path evidence, console sanity evidence,
 phone-only conversation timeline evidence for the G2 Mic, Phone Mic, and import
 flows plus G2 HUD evidence for `READY`, `LISTENING`, `CUE`, `ACK`, and
 `PAUSED`.

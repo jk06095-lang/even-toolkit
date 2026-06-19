@@ -25,7 +25,8 @@ install, not QR/local testing, and must separately prove locked-phone launch,
 gesture-only core flow, 2-minute idle responsiveness, unlock/use-another-app/
 re-lock continuity, Android-style cold-start rebuild from `localStorage`, audio
 capture re-enable after foreground, and WebSocket reconnect handling or explicit
-non-use.
+non-use. It must also record the reviewer-parity root-page double-tap system
+exit dialog, permission-denial path, and console sanity check.
 The final `runDate` must be a valid ISO `YYYY-MM-DD` calendar date.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
@@ -102,6 +103,14 @@ under `buildArtifact`.
   and confirm reconnect behavior; if no WebSocket is used, record
   `webSocketReconnectHandledOrNotUsed: true` with notes explaining that ECHO's
   current provider calls use fetch/proxy requests rather than a live socket.
+- From the root page, double-tap and confirm the system exit confirmation dialog
+  appears through the official Even shutdown path, not a custom replacement.
+- Deny a requested permission in the review-like install path and confirm the
+  app shows a recoverable phone-side state instead of a black screen or silent
+  fallback.
+- Capture a console/log sanity pass for the same package digest: no uncaught
+  errors, no raw transcript/audio payloads, no provider keys, and no session
+  tokens.
 - After `EXIT ECHO`, relaunch a first-party app such as Conversate and confirm
   it starts without restarting the glasses.
 - Record these results under `backgroundLifecycle` in
@@ -137,7 +146,8 @@ under `buildArtifact`.
 
 - Runs the same practice cleanup.
 - Does not return to standby first.
-- Calls Even Hub page shutdown with exit target `1`.
+- Calls `bridge.shutDownPageContainer(1)` through the Even Hub shutdown path,
+  not only a custom in-app exit state.
 - Clears HUD event/status listeners.
 - Leaves no active audio capture.
 
@@ -162,7 +172,9 @@ Automated coverage added on 2026-06-19:
 Still requires real G2 validation:
 
 - Confirm `END PRACTICE` returns glasses to `READY` standby after physical G2 audio capture stops.
-- Confirm `EXIT ECHO` calls Even Hub shutdown target `1`, clears status/audio subscriptions, and leaves no active hardware capture.
+- Confirm `EXIT ECHO` calls `bridge.shutDownPageContainer(1)`, shows the
+  system exit confirmation dialog from the root page, clears status/audio
+  subscriptions, and leaves no active hardware capture.
 - Confirm `EXIT ECHO` records zero active audio captures, zero pending timeouts,
   zero pending intervals, and zero late HUD updates after shutdown.
 - Capture the 10-cycle hardware notes under issue #10.

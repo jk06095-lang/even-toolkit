@@ -28,12 +28,15 @@
     "noBlackScreenOrInfiniteSpinner": null,
     "gestureOnlyCoreFlowCompleted": null,
     "everyGestureShowsFeedback": null,
+    "rootDoubleTapSystemExitDialogShown": null,
+    "permissionDenialPathVerified": null,
     "aliveAfterTwoMinutesIdle": null,
     "unlockUseAnotherAppRelockUnaffected": null,
     "androidColdStartRebuildsFromLocalStorage": null,
     "audioCaptureReenabledAfterForeground": null,
     "webSocketReconnectHandledOrNotUsed": null,
     "firstPartyAppLaunchAfterExit": null,
+    "consoleSanityChecked": null,
     "evidenceRef": "TBD",
     "videoEvidence": "TBD"
   },
@@ -222,6 +225,7 @@
     "exitEchoRun": {
       "exitFromActiveSession": null,
       "shutdownTarget": null,
+      "shutDownPageContainerCalled": null,
       "statusListenersCleared": null,
       "audioCaptureStopped": null,
       "lateResponsesIgnored": null,

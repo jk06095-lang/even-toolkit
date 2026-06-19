@@ -45,12 +45,15 @@ const BACKGROUND_LIFECYCLE_REQUIRED_TRUE = [
   'noBlackScreenOrInfiniteSpinner',
   'gestureOnlyCoreFlowCompleted',
   'everyGestureShowsFeedback',
+  'rootDoubleTapSystemExitDialogShown',
+  'permissionDenialPathVerified',
   'aliveAfterTwoMinutesIdle',
   'unlockUseAnotherAppRelockUnaffected',
   'androidColdStartRebuildsFromLocalStorage',
   'audioCaptureReenabledAfterForeground',
   'webSocketReconnectHandledOrNotUsed',
   'firstPartyAppLaunchAfterExit',
+  'consoleSanityChecked',
 ];
 const ASSIST_METRICS = [
   { key: 'manual_request_count', min: 1 },
@@ -653,6 +656,7 @@ function validateLifecycle(manifestObject) {
     const run = manifestObject.lifecycle.exitEchoRun;
     validateExpected(run, 'exitFromActiveSession', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'shutdownTarget', 1, 'lifecycle.exitEchoRun');
+    validateExpected(run, 'shutDownPageContainerCalled', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'statusListenersCleared', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'audioCaptureStopped', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'lateResponsesIgnored', true, 'lifecycle.exitEchoRun');

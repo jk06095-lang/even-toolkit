@@ -143,9 +143,15 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(videoShotList, /project-echo-real-g2-video/);
   assert.match(videoShotList, /G2 shows READY/);
   assert.match(videoShotList, /shows ACK\/OK briefly/);
+  assert.match(videoShotList, /Root double-tap shows the system exit confirmation dialog/);
+  assert.match(videoShotList, /bridge\.shutDownPageContainer\(1\)/);
+  assert.match(videoShotList, /Permission denial path shows recoverable phone-side guidance/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
+  assert.match(fieldRunbook, /permission-denial recovery/);
+  assert.match(fieldRunbook, /console sanity/);
+  assert.match(fieldRunbook, /bridge\.shutDownPageContainer\(1\)/);
   assert.match(fieldRunbook, /ECHO_PROXY_SMOKE_SESSION_TOKEN/);
   assert.match(fieldRunbook, new RegExp(`ECHO_PROXY_SMOKE_EVIDENCE_OUT=${escapeRegExp(repoRelative(proxySmokePath))}`));
   assert.match(fieldRunbook, new RegExp(`npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence ${escapeRegExp(repoRelative(proxySmokePath))}`));

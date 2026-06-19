@@ -385,8 +385,10 @@ video URL.
 | 12 | Level 3/full-structure cue appears only after an explicit Manual Assist request | TBD |
 | 13 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
 | 14 | End Practice returns to READY without duplicate audio capture | TBD |
-| 15 | Exit ECHO shuts down the Even Hub page container | TBD |
-| 16 | Phone review shows timeline/details while G2 stays minimal | TBD |
+| 15 | Root double-tap shows the system exit confirmation dialog | TBD |
+| 16 | Exit ECHO calls bridge.shutDownPageContainer(1) and closes the page container | TBD |
+| 17 | Permission denial path shows recoverable phone-side guidance | TBD |
+| 18 | Phone review shows timeline/details while G2 stays minimal | TBD |
 
 ## File Requirements
 
@@ -522,10 +524,13 @@ availability:
    glasses launch after lock, gesture-only core flow, 2-minute idle
    responsiveness, unlock/use-another-app/re-lock continuity, Android
    cold-start rebuild from localStorage, foreground audio-capture re-enable,
-   and WebSocket reconnect handling or explicit non-use.
+   WebSocket reconnect handling or explicit non-use, root double-tap system
+   exit dialog, permission-denial recovery, and console sanity.
 6. Capture hardware QA evidence for lifecycle, HUD states, Assist, audio source
    separation, delayed proxy behavior, voice runtime, wear status, and
-   conversation timeline boundaries. For Assist, prove silence-only Auto stays
+   conversation timeline boundaries. For Exit ECHO, preserve proof that the
+   app called \`bridge.shutDownPageContainer(1)\` from the root-page exit path.
+   For Assist, prove silence-only Auto stays
    quiet, a breakdown signal is required before Auto shows a cue, and the 400 ms
    grace window cancels the pending cue when speech resumes. Also prove Auto
    and speech-evaluation cues stay at level 2 or lower, while level 3/full
