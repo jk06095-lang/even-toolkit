@@ -82,6 +82,8 @@ evidence must be an `https://` URL or a repo path to a video file.
 VAD calibration evidence must also be internally consistent: speech floor above
 noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.
+Each final A/B/C aggregate must include `sampleSize`, and that value must match
+the number of participant runs recorded for the same condition.
 
 ## UX Metrics
 

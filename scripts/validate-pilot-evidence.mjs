@@ -233,6 +233,45 @@ function validateMetricGroup(object, metrics, pointer) {
   }
 }
 
+function validateAggregateSampleSize(conditionAggregate, condition, pointer, participants) {
+  const fieldPointer = `${pointer}.sampleSize`;
+  if (!hasOwn(conditionAggregate, 'sampleSize')) {
+    addError(fieldPointer, 'missing required sample size');
+    return;
+  }
+
+  const value = conditionAggregate.sampleSize;
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, 'draft sample size is not filled yet');
+    return;
+  }
+
+  if (!Number.isInteger(value)) {
+    addError(fieldPointer, 'must be an integer');
+    return;
+  }
+
+  if (value < 5) {
+    addError(fieldPointer, 'must be >= 5');
+  }
+
+  const runCount = countParticipantRunsForCondition(participants, condition);
+  if (runCount !== null && value !== runCount) {
+    addError(fieldPointer, `must equal participant run count ${runCount}`);
+  }
+}
+
+function countParticipantRunsForCondition(participants, condition) {
+  if (!Array.isArray(participants)) return null;
+
+  let count = 0;
+  for (const participant of participants) {
+    if (!participant || !Array.isArray(participant.runs)) continue;
+    count += participant.runs.filter((run) => run && run.condition === condition).length;
+  }
+  return count;
+}
+
 function requireConditionSet(values, pointer) {
   if (!Array.isArray(values)) {
     addError(pointer, 'expected an array');
@@ -308,6 +347,7 @@ function validateAggregate(manifestObject) {
     if (!validateObject(conditionAggregate, conditionPointer)) {
       continue;
     }
+    validateAggregateSampleSize(conditionAggregate, condition, conditionPointer, manifestObject.participants);
     validateMetricGroup(conditionAggregate.systemMetrics, SYSTEM_METRICS, `${conditionPointer}.systemMetrics`);
     validateMetricGroup(conditionAggregate.uxMetrics, UX_METRICS, `${conditionPointer}.uxMetrics`);
     validateText(conditionAggregate, 'decision', conditionPointer);

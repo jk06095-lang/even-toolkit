@@ -570,6 +570,7 @@
   "aggregate": {
     "conditions": {
       "A": {
+        "sampleSize": null,
         "systemMetrics": {
           "g2MicSuccessRate": null,
           "phoneFallbackRate": null,
@@ -595,6 +596,7 @@
         "decision": "TBD"
       },
       "B": {
+        "sampleSize": null,
         "systemMetrics": {
           "g2MicSuccessRate": null,
           "phoneFallbackRate": null,
@@ -620,6 +622,7 @@
         "decision": "TBD"
       },
       "C": {
+        "sampleSize": null,
         "systemMetrics": {
           "g2MicSuccessRate": null,
           "phoneFallbackRate": null,
