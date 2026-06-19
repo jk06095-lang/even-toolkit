@@ -201,6 +201,31 @@ describe('active recall learning loop', () => {
     expect(nextTransferPrompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
   });
 
+  it('records G2 bridge recall attempts without browser pronunciation scores', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    const attempt = recordActiveRecallAttempt(
+      item!.learningItem,
+      'good',
+      'Could you repeat that?',
+      {
+        now: () => dueNow,
+        captureSource: 'g2_bridge',
+      },
+    );
+
+    expect(attempt.captureSource).toBe('g2_bridge');
+    expect(attempt.evaluation?.pronunciationScore).toBeUndefined();
+    expect(attempt.evaluation?.pronunciationSource).toBeUndefined();
+    expect(loadActiveRecallSnapshot().attempts.at(-1)).toMatchObject({
+      captureSource: 'g2_bridge',
+      grade: 'good',
+    });
+  });
+
   it('builds source-remix transfer scenarios when partner context exists', () => {
     const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
       now: () => dueNow,

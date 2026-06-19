@@ -60,6 +60,12 @@ gated behind the existing microphone and cloud-processing privacy settings and
 falls back to typed attempts when Web Speech is unavailable or the page is not
 running on HTTPS / localhost.
 
+The Echo Reminders review surface now keeps voice sources explicit: Phone Voice
+uses browser Web Speech, while G2 Voice uses the connected G2 bridge microphone
+and the ECHO API proxy transcription path. G2 Voice attempts are saved with
+`captureSource: "g2_bridge"` and do not reuse browser speech confidence as a
+pronunciation score.
+
 When Web Speech supplies a final-result confidence value, active recall stores
 it as an optional `pronunciationScore` with source `web_speech_confidence`.
 The app does not invent pronunciation scores for typed attempts or speech
@@ -176,7 +182,8 @@ reference Action route family for the active-recall loop. Remaining work is to
 deploy and connect it to a real Custom GPT Action, capture the live OAuth
 authorization and token exchange evidence against the deployed callback, choose
 and review the production storage policy beyond the reference file-backed
-store, collect G2/audio-level pronunciation scoring evidence, and capture
-G2/bridge-based recall evidence. The current pronunciation layer is limited to
-optional browser speech confidence; Web Speech-only evidence is explicitly
-insufficient for closing the G2/audio-level requirement.
+store, and collect completed hardware evidence for G2 bridge active-recall
+capture plus G2/audio-level pronunciation scoring. The app can now label
+G2 bridge recall attempts distinctly, but the current pronunciation layer is
+still limited to optional browser speech confidence; Web Speech-only evidence
+is explicitly insufficient for closing the G2/audio-level requirement.

@@ -62,7 +62,8 @@ export function renderAmbientView(): string {
             placeholder="Say it aloud first. Optionally type what you said."
           ></textarea>
           <div class="active-recall-speech-row">
-            <button class="btn btn-default" id="btn-recall-speech-start">Start Voice</button>
+            <button class="btn btn-default" id="btn-recall-phone-speech-start">Phone Voice</button>
+            <button class="btn btn-default" id="btn-recall-g2-speech-start">G2 Voice</button>
             <button class="btn btn-danger" id="btn-recall-speech-stop" disabled>Stop Voice</button>
           </div>
           <div class="active-recall-speech-status text-detail" id="active-recall-speech-status"></div>

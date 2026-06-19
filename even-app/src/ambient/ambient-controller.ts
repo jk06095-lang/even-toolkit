@@ -13,6 +13,7 @@ import {
   type ActiveRecallQueueItem,
 } from '../learning/active-recall';
 import {
+  ActiveRecallBridgeSpeechCapture,
   ActiveRecallSpeechCapture,
   type ActiveRecallSpeechStatus,
 } from '../learning/active-recall-speech';
@@ -33,7 +34,10 @@ export function bindAmbientEvents(context: AmbientControllerContext): void {
     renderImportedReviewItems();
   });
   document.getElementById('btn-recall-reveal')?.addEventListener('click', () => revealActiveRecallAnswer());
-  document.getElementById('btn-recall-speech-start')?.addEventListener('click', () => startActiveRecallSpeech());
+  document.getElementById('btn-recall-phone-speech-start')?.addEventListener('click', () => startActiveRecallPhoneSpeech());
+  document.getElementById('btn-recall-g2-speech-start')?.addEventListener('click', () => {
+    void startActiveRecallG2Speech(context);
+  });
   document.getElementById('btn-recall-speech-stop')?.addEventListener('click', () => stopActiveRecallSpeech());
   document.querySelectorAll('[data-recall-grade]').forEach((button) => {
     button.addEventListener('click', () => {
@@ -138,7 +142,7 @@ function updatePendingList(items: PendingItem[]): void {
 }
 
 let currentRecallItem: ActiveRecallQueueItem | null = null;
-let recallSpeechCapture: ActiveRecallSpeechCapture | null = null;
+let recallSpeechCapture: { stop: () => void | Promise<void> } | null = null;
 let currentVoiceAttemptConfidence: number | undefined;
 let currentAttemptCaptureSource: ActiveRecallCaptureSource = 'typed';
 
@@ -176,7 +180,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
     metaEl.textContent = '';
     attemptEl.disabled = true;
     if (revealButton) revealButton.disabled = true;
-    setSpeechButtons(false);
+    setSpeechButtons(false, false);
     if (emptyEl) emptyEl.style.display = 'block';
     return;
   }
@@ -235,7 +239,7 @@ function renderImportedReviewItems(): void {
   }));
 }
 
-function startActiveRecallSpeech(): void {
+function startActiveRecallPhoneSpeech(): void {
   if (!currentRecallItem) return;
   const settings = loadPrivacySettings();
   if (!settings.useMicrophone) {
@@ -243,13 +247,13 @@ function startActiveRecallSpeech(): void {
     return;
   }
   if (!settings.allowCloudProcessing) {
-    setSpeechStatus('Enable cloud processing before Web Speech voice recall.');
+    setSpeechStatus('Enable cloud processing before Phone Voice recall.');
     return;
   }
 
   stopActiveRecallSpeech();
   const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
-  recallSpeechCapture = new ActiveRecallSpeechCapture({
+  const capture = new ActiveRecallSpeechCapture({
     onInterim: (text) => {
       setSpeechStatus(`Listening: ${text}`);
     },
@@ -275,8 +279,57 @@ function startActiveRecallSpeech(): void {
       setSpeechStatus(`Voice capture failed: ${message}`);
     },
   });
+  recallSpeechCapture = capture;
 
-  const result = recallSpeechCapture.start();
+  const result = capture.start();
+  if (!result.ok) {
+    setSpeechStatus(statusMessageForSpeechStartReason(result.reason));
+    recallSpeechCapture = null;
+    setSpeechButtons(false, Boolean(currentRecallItem));
+  }
+}
+
+async function startActiveRecallG2Speech(context: AmbientControllerContext): Promise<void> {
+  if (!currentRecallItem) return;
+  const settings = loadPrivacySettings();
+  if (!settings.useMicrophone) {
+    setSpeechStatus('Enable microphone in Live Practice privacy settings before G2 Voice recall.');
+    return;
+  }
+  if (!settings.allowCloudProcessing) {
+    setSpeechStatus('Enable cloud processing before G2 Bridge recall.');
+    return;
+  }
+
+  stopActiveRecallSpeech();
+  const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
+  const capture = new ActiveRecallBridgeSpeechCapture({
+    onInterim: (text) => {
+      setSpeechStatus(`G2 listening: ${text}`);
+    },
+    onFinal: (text) => {
+      if (attemptEl) {
+        attemptEl.value = mergeAttemptText(attemptEl.value, text);
+      }
+      currentAttemptCaptureSource = 'g2_bridge';
+      currentVoiceAttemptConfidence = undefined;
+      setSpeechStatus('G2 recall attempt captured.');
+    },
+    onStatus: (status) => {
+      setSpeechButtons(status === 'listening', Boolean(currentRecallItem));
+      if (status !== 'idle' && status !== 'listening') {
+        setSpeechStatus(statusMessageForSpeechStatus(status));
+      }
+    },
+    onError: (message) => {
+      setSpeechStatus(`G2 voice capture failed: ${message}`);
+    },
+  }, {
+    hud: context.getHud(),
+  });
+  recallSpeechCapture = capture;
+
+  const result = await capture.start();
   if (!result.ok) {
     setSpeechStatus(statusMessageForSpeechStartReason(result.reason));
     recallSpeechCapture = null;
@@ -285,7 +338,7 @@ function startActiveRecallSpeech(): void {
 }
 
 function stopActiveRecallSpeech(): void {
-  recallSpeechCapture?.stop();
+  void recallSpeechCapture?.stop();
   recallSpeechCapture = null;
   setSpeechButtons(false, Boolean(currentRecallItem));
 }
@@ -341,10 +394,14 @@ function setSpeechStatus(message: string): void {
 }
 
 function setSpeechButtons(listening: boolean, enabled = true): void {
-  const start = document.getElementById('btn-recall-speech-start') as HTMLButtonElement | null;
+  const phoneStart = document.getElementById('btn-recall-phone-speech-start') as HTMLButtonElement | null;
+  const g2Start = document.getElementById('btn-recall-g2-speech-start') as HTMLButtonElement | null;
   const stop = document.getElementById('btn-recall-speech-stop') as HTMLButtonElement | null;
-  if (start) {
-    start.disabled = !enabled || listening;
+  if (phoneStart) {
+    phoneStart.disabled = !enabled || listening;
+  }
+  if (g2Start) {
+    g2Start.disabled = !enabled || listening;
   }
   if (stop) {
     stop.disabled = !enabled || !listening;
@@ -369,6 +426,8 @@ function combineConfidence(existing: number | undefined, next: number | undefine
 function statusMessageForSpeechStatus(status: ActiveRecallSpeechStatus): string {
   if (status === 'unsupported') return 'Voice recall is not supported in this browser.';
   if (status === 'secure_origin_required') return 'Voice recall needs HTTPS or localhost.';
+  if (status === 'g2_unavailable') return 'Connect G2 before using G2 Voice recall.';
+  if (status === 'proxy_unconfigured') return 'Configure the ECHO API proxy before G2 Voice recall.';
   if (status === 'error') return 'Voice recall stopped after an error.';
   return '';
 }
@@ -376,6 +435,8 @@ function statusMessageForSpeechStatus(status: ActiveRecallSpeechStatus): string 
 function statusMessageForSpeechStartReason(reason: string | undefined): string {
   if (reason === 'secure_origin_required') return 'Voice recall needs HTTPS or localhost.';
   if (reason === 'not_supported') return 'Voice recall is not supported in this browser.';
+  if (reason === 'g2_unavailable') return 'Connect G2 before using G2 Voice recall.';
+  if (reason === 'proxy_unconfigured') return 'Configure the ECHO API proxy before G2 Voice recall.';
   if (reason === 'start_failed') return 'Voice recall could not start.';
   return 'Voice recall is already active.';
 }
