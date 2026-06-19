@@ -144,7 +144,7 @@ aggregate metrics.
 - Put each final README portfolio marker on the same markdown link line:
   `project-echo-case-study-ko`, `project-echo-case-study-en`, and
   `project-echo-real-g2-video`. The link targets must match the completed pilot
-  manifest.
+  manifest, and repo-path targets must already exist in the repository.
 
 ## Defer Until Core Stability
 

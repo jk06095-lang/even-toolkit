@@ -43,7 +43,8 @@ as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`. Final portfolio
 links must be markdown links carrying the markers `project-echo-case-study-ko`,
 `project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
-match the completed pilot manifest targets.
+match the completed pilot manifest targets. Repo-path targets on those README
+links must point to files that already exist in the repository.
 
 The readiness gate is aligned with the
 [official Even Realities developer docs](https://hub.evenrealities.com/docs/get-started/overview):

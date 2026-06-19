@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 
 const repoRoot = process.cwd();
+const resolvedRepoRoot = path.resolve(repoRoot);
 const checks = [];
 
 function addCheck(name, status, detail, issue = '') {
@@ -475,6 +476,11 @@ function validateReadmePortfolioLinks(readmeText, completedPilot) {
       continue;
     }
 
+    if (!evidenceTargetExists(target)) {
+      findings.push(`README marker ${requirement.marker} repo path target must point to an existing file`);
+      continue;
+    }
+
     const manifestTarget = completedPilot?.caseStudy?.[requirement.manifestKey];
     if (manifestTarget && target !== manifestTarget) {
       findings.push(
@@ -503,6 +509,17 @@ function looksLikeEvidenceTarget(value, extensions) {
     'i',
   );
   return relativePathPattern.test(trimmed);
+}
+
+function evidenceTargetExists(value) {
+  const trimmed = String(value ?? '').trim();
+  if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  const resolvedPath = path.resolve(resolvedRepoRoot, trimmed);
+  const repoPrefix = `${resolvedRepoRoot}${path.sep}`;
+  if (resolvedPath !== resolvedRepoRoot && !resolvedPath.startsWith(repoPrefix)) {
+    return false;
+  }
+  return existsSync(resolvedPath);
 }
 
 function firstUsefulLine(output) {
