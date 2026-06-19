@@ -33,9 +33,9 @@ function blobToBase64(blob: Blob): Promise<string> {
 
 export interface HybridRecognizerCallbacks {
   /** Partial / interim transcription text. */
-  onInterimResult: (text: string) => void;
+  onInterimResult: (text: string, confidence?: number) => void;
   /** Finalized transcription text. */
-  onFinalResult: (text: string) => void;
+  onFinalResult: (text: string, confidence?: number) => void;
   /** Speech energy detected. */
   onSpeechStart: () => void;
   /** Speech pause detected. */
@@ -369,23 +369,29 @@ export class HybridRecognizer {
     this.recognition.onresult = (event: any) => {
       let interimTranscript = '';
       let finalTranscript = '';
+      const interimConfidences: number[] = [];
+      const finalConfidences: number[] = [];
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
-        const transcript: string = result[0].transcript;
+        const alternative = result[0];
+        const transcript: string = alternative?.transcript ?? '';
+        const confidence = readConfidence(alternative?.confidence);
 
         if (result.isFinal) {
           finalTranscript += transcript;
+          if (confidence !== undefined) finalConfidences.push(confidence);
         } else {
           interimTranscript += transcript;
+          if (confidence !== undefined) interimConfidences.push(confidence);
         }
       }
 
       if (interimTranscript) {
-        this.callbacks.onInterimResult(interimTranscript);
+        this.callbacks.onInterimResult(interimTranscript, averageConfidence(interimConfidences));
       }
       if (finalTranscript) {
-        this.callbacks.onFinalResult(finalTranscript);
+        this.callbacks.onFinalResult(finalTranscript, averageConfidence(finalConfidences));
       }
     };
 
@@ -471,16 +477,16 @@ export class HybridRecognizer {
         },
       }, controller.signal);
 
-      const text = extractTranscript(response);
+      const transcript = extractTranscription(response);
       if (!this._active || this._mode !== 'bridge') return;
-      if (text && text.length > 1) {
-        const clean = text
+      if (transcript.text && transcript.text.length > 1) {
+        const clean = transcript.text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
           .replace(/^["']|["']$/g, '')
           .trim();
 
         if (clean.length > 1) {
-          this.callbacks.onFinalResult(clean);
+          this.callbacks.onFinalResult(clean, transcript.confidence);
           console.log(`[HybridRecognizer] Bridge transcript received (${clean.length} chars)`);
         }
       }
@@ -516,16 +522,16 @@ export class HybridRecognizer {
         },
       }, controller.signal);
 
-      const text = extractTranscript(response);
+      const transcript = extractTranscription(response);
       if (!this._active || this._mode !== 'bridge') return;
-      if (text && text.length > 1) {
-        const clean = text
+      if (transcript.text && transcript.text.length > 1) {
+        const clean = transcript.text
           .replace(/^(Transcript|Here is|The speaker said|The audio says)[:\s]*/i, '')
           .replace(/^["']|["']$/g, '')
           .trim();
 
         if (clean.length > 1 && this.isSpeaking) {
-          this.callbacks.onInterimResult(clean + '...');
+          this.callbacks.onInterimResult(clean + '...', transcript.confidence);
           console.log(`[HybridRecognizer] Bridge interim transcript received (${clean.length} chars)`);
         }
       }
@@ -540,11 +546,25 @@ export class HybridRecognizer {
   }
 }
 
-function extractTranscript(response: unknown): string {
-  if (typeof response === 'string') return response.trim();
-  if (!response || typeof response !== 'object') return '';
+function extractTranscription(response: unknown): { text: string; confidence?: number } {
+  if (typeof response === 'string') return { text: response.trim() };
+  if (!response || typeof response !== 'object') return { text: '' };
 
   const record = response as Record<string, unknown>;
   const value = record.transcript ?? record.text;
-  return typeof value === 'string' ? value.trim() : '';
+  return {
+    text: typeof value === 'string' ? value.trim() : '',
+    confidence: readConfidence(record.confidence),
+  };
+}
+
+function readConfidence(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
+}
+
+function averageConfidence(values: number[]): number | undefined {
+  if (values.length === 0) return undefined;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }

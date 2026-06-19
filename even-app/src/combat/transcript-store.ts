@@ -35,6 +35,8 @@ export interface TranscriptEntry {
   source?: 'speech_api' | 'gemini_eval' | 'fallback' | 'live_final';
   /** Whether this is a finalized recognition result */
   isFinal?: boolean;
+  /** Provider/browser confidence for this transcript, when available. */
+  confidence?: number;
 }
 
 export interface HintUsageStats {
@@ -258,7 +260,12 @@ export class TranscriptStore {
     };
   }
 
-  addSpeech(text: string, source: TranscriptEntry['source'] = 'speech_api', isFinal = true): ConversationTurn | null {
+  addSpeech(
+    text: string,
+    source: TranscriptEntry['source'] = 'speech_api',
+    isFinal = true,
+    confidence?: number,
+  ): ConversationTurn | null {
     if (!text.trim()) return null;
     return this.addEntry({
       t: this.now(),
@@ -266,6 +273,7 @@ export class TranscriptStore {
       text: text.trim(),
       source,
       isFinal,
+      confidence: normalizeConfidence(confidence),
     });
   }
 
@@ -803,6 +811,7 @@ function createConversationTurnFromEntry(
     source,
     language,
     transcript: entry.text.trim(),
+    confidence: normalizeConfidence(entry.confidence),
     isFinal: entry.isFinal ?? true,
     piiFlags: [],
   };
@@ -826,6 +835,12 @@ function coerceNumber(value: unknown, fallback: number): number {
 function coerceTimestamp(value: unknown, fallback: number): number {
   const timestamp = coerceNumber(value, fallback);
   return timestamp >= 0 ? timestamp : fallback;
+}
+
+function normalizeConfidence(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
 }
 
 function cleanOptionalPlainText(value: unknown, maxLength: number): string | undefined {

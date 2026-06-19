@@ -16,6 +16,10 @@ It uses Node 20 built-in `http` and `fetch`, returns safe JSON errors, and logs
 only request id, method, path, status, and latency. It does not log request
 bodies, raw transcripts, or audio payloads.
 
+`/v1/transcribe` may return an optional numeric `confidence` in the range
+`0..1` when the upstream STT provider supplies one. The reference Gemini proxy
+does not fabricate confidence; clients treat a missing value as unknown.
+
 ## Environment
 
 Use `echo-api-proxy/.env.example` as the deployment template.

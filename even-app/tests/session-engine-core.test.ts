@@ -197,12 +197,12 @@ class FakeSpeechRecognizer implements SpeechRecognizerDriver {
     this.speechEndCount++;
   }
 
-  emitInterimResult(text: string): void {
-    this.callbacks.onInterimResult(text);
+  emitInterimResult(text: string, confidence?: number): void {
+    this.callbacks.onInterimResult(text, confidence);
   }
 
-  emitFinalResult(text: string): void {
-    this.callbacks.onFinalResult(text);
+  emitFinalResult(text: string, confidence?: number): void {
+    this.callbacks.onFinalResult(text, confidence);
   }
 
   emitError(error: string): void {
@@ -729,13 +729,14 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     const harness = createHarness({ audioSource: 'browser' });
     await harness.engine.start(harness.hud);
 
-    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?');
+    harness.recognizers[0]!.emitFinalResult('Could you clarify the customer segment?', 0.87);
 
     const latest = harness.conversationSnapshots.at(-1);
     expect(latest?.conversationTurns?.at(-1)).toMatchObject({
       speaker: 'learner',
       source: 'phone',
       transcript: 'Could you clarify the customer segment?',
+      confidence: 0.87,
       isFinal: true,
     });
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);

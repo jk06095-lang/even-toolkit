@@ -159,7 +159,7 @@ describe('transcript privacy controls', () => {
       idFactory: () => '00000000-0000-4000-8000-000000000001',
     });
 
-    store.addSpeech('store this sentence', 'live_final');
+    store.addSpeech('store this sentence', 'live_final', true, 0.82);
 
     const transcript = store.finalize();
     const turn = transcript?.conversationTurns?.[0];
@@ -173,6 +173,7 @@ describe('transcript privacy controls', () => {
       source: 'phone',
       language: 'en-US',
       transcript: 'store this sentence',
+      confidence: 0.82,
       isFinal: true,
       piiFlags: [],
     });

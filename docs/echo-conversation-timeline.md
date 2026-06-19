@@ -43,6 +43,11 @@ that snapshot without adding conversation history to the glasses HUD. Placeholde
 speech-detection events remain analytics/cache events and are not displayed as
 phone timeline turns.
 
+`ConversationTurn.confidence` is pass-through metadata only. The app preserves
+browser or provider STT confidence when it is supplied, but it does not invent a
+confidence score for G2 audio or Gemini transcription responses that do not
+include one.
+
 Remaining work for issue #28:
 
 - real G2/phone/import speaker segmentation evidence

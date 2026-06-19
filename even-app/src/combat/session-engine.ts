@@ -104,10 +104,10 @@ export interface SessionCallbacks {
   onSpeechDetected: () => void;
   onSilenceStart: () => void;
   onSessionLog: (log: SessionLog) => void;
-  onTranscript?: (transcript: string) => void;
+  onTranscript?: (transcript: string, confidence?: number) => void;
   onVolume?: (volume: number) => void;
   /** Real-time interim text from HybridRecognizer */
-  onLiveTranscript?: (text: string, isFinal: boolean) => void;
+  onLiveTranscript?: (text: string, isFinal: boolean, confidence?: number) => void;
   /** Notifies which audio source is active */
   onAudioSource?: (source: string) => void;
   /** Fired when hint usage is resolved (used, missed, or simplified) */
@@ -396,8 +396,9 @@ export class SessionEngine {
     text: string,
     source: TranscriptEntry['source'] = 'speech_api',
     isFinal = true,
+    confidence?: number,
   ): void {
-    const turn = this.transcriptStore?.addSpeech(text, source, isFinal);
+    const turn = this.transcriptStore?.addSpeech(text, source, isFinal, confidence);
     if (turn) {
       this.lastTurnId = turn.id;
       this.emitConversationTimeline();
@@ -776,21 +777,21 @@ export class SessionEngine {
           if (result) {
             // Forward the transcript to the UI
             if (this.callbacks.onTranscript) {
-              this.callbacks.onTranscript(result.transcript);
+              this.callbacks.onTranscript(result.transcript, result.confidence);
             }
 
             // Record to cache
-            this.recordSpeech(result.transcript, 'gemini_eval');
+            this.recordSpeech(result.transcript, 'gemini_eval', true, result.confidence);
 
             // If the audio source is 'bridge', reuse this transcript as the final recognized speech if not already finalized
             if (this.vad?.audioSource === 'bridge') {
               const alreadyFinalized = this.lastLiveTranscript && !this.lastLiveTranscript.startsWith('🎤');
               if (!alreadyFinalized) {
                 this.lastLiveTranscript = result.transcript;
-                this.callbacks.onLiveTranscript?.(result.transcript, true);
+                this.callbacks.onLiveTranscript?.(result.transcript, true, result.confidence);
                 const trimmed = result.transcript.trim();
                 if (trimmed) {
-                  this.recordSpeech(trimmed, 'live_final');
+                  this.recordSpeech(trimmed, 'live_final', true, result.confidence);
                   this.resetTranscriptActivity();
                   if (this.hudRef) {
                     this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
@@ -925,10 +926,10 @@ export class SessionEngine {
     const isCurrentRecognizer = () => this.isCurrentSpeechRecognizer(recognizer);
 
     recognizer = this.speechRecognizerFactory.create({
-      onInterimResult: (text) => {
+      onInterimResult: (text, confidence) => {
         if (!isCurrentRecognizer()) return;
         this.lastLiveTranscript = text;
-        this.callbacks.onLiveTranscript?.(text, false);
+        this.callbacks.onLiveTranscript?.(text, false, confidence);
         
         // Reset silence timer on interim transcript activity
         if (text && text.trim().length > 0) {
@@ -941,10 +942,10 @@ export class SessionEngine {
           this.hudRef.showSpeechActive(this.lastVolume);
         }
       },
-      onFinalResult: (text) => {
+      onFinalResult: (text, confidence) => {
         if (!isCurrentRecognizer()) return;
         this.lastLiveTranscript = text;
-        this.callbacks.onLiveTranscript?.(text, true);
+        this.callbacks.onLiveTranscript?.(text, true, confidence);
         const trimmed = text.trim();
         if (!trimmed) return;
 
@@ -952,7 +953,7 @@ export class SessionEngine {
         this.resetTranscriptActivity();
 
         // Record finalized speech recognition to cache and analyzer
-        this.recordSpeech(trimmed, 'live_final');
+        this.recordSpeech(trimmed, 'live_final', true, confidence);
         this.analyzer?.addUtterance(trimmed, true);
 
         // Update glasses bottom zone with confirmed text

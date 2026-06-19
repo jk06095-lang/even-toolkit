@@ -259,6 +259,7 @@ function validateResponseBody(endpoint, body) {
     assertOptionalNullableString(body, 'cue', 50);
     assertOptionalNullableString(body, 'hint', 50);
     assertOptionalNullableString(body, 'chunk', 50);
+    assertOptionalNumber(body, 'confidence', 0, 1);
   } else if (endpoint === 'translate') {
     if (typeof body.translationKo !== 'string' || !body.translationKo.trim() || body.translationKo.length > 1_000) {
       throw new HttpError(502, 'provider_schema_error', 'Translation response failed schema validation.');

@@ -150,6 +150,7 @@ export interface TranscriptionApiRequest {
 export interface TranscriptionApiResponse {
   transcript?: string | null;
   text?: string | null;
+  confidence?: number | null;
   hint?: string | null;
   chunk?: string | null;
   cue?: string | null;

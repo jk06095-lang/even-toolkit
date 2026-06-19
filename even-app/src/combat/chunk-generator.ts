@@ -55,6 +55,7 @@ export interface SpeechEvaluationResult {
   latencyMs: number;
   networkLatencyMs?: number;
   generationLatencyMs?: number | null;
+  confidence?: number;
 }
 
 export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
@@ -169,6 +170,7 @@ export async function evaluateSpeech(
       latencyMs: networkLatencyMs,
       networkLatencyMs,
       generationLatencyMs,
+      confidence: extractConfidence(result),
     };
   } catch (err) {
     if (!signal?.aborted) {
@@ -265,6 +267,14 @@ function extractLatency(input: unknown): number | null {
   if (!input || typeof input !== 'object') return null;
   const value = (input as Record<string, unknown>).latencyMs;
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function extractConfidence(input: unknown): number | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const value = (input as Record<string, unknown>).confidence;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : undefined;
 }
 
 function cleanChunk(raw: string): string {
