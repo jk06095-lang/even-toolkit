@@ -153,6 +153,10 @@ Still requires real G2 validation:
 - Test each retention option: `Delete after session`, `1 day`, `7 days`, and `Until deleted`.
 - Confirm `Delete current session`, per-session `Delete`, `Delete all transcripts`, per-session `Export`, and `Export my data` work from Review.
 
+Automated coverage added on 2026-06-19:
+
+- `echo-api-proxy` verifies safe `proxy_not_configured` errors do not echo learner text in response bodies or proxy stdout/stderr logs.
+
 ## Assist mode QA
 
 - Start a new practice session and confirm the phone UI shows `Assist: Manual`.

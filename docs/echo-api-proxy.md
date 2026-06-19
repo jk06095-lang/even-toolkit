@@ -85,7 +85,8 @@ Manifest:
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
 allowed CORS behavior, disallowed-origin rejection, and safe `proxy_not_configured`
-errors that do not echo learner text. `npm run smoke:deploy` performs the
+errors that do not echo learner text in the response body or proxy stdout/stderr
+logs. `npm run smoke:deploy` performs the
 corresponding remote deployment checks and expects the deployed server to report
 `configured: true` and `qaDelayMs: 0` unless local-only override flags are
 passed for local testing.

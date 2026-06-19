@@ -10,6 +10,8 @@ const baseUrl = `http://127.0.0.1:${port}`;
 const qaDelayMs = 120;
 
 let child;
+let proxyOutput = '';
+let proxyErrorOutput = '';
 
 before(async () => {
   child = spawn(process.execPath, ['server.mjs'], {
@@ -25,8 +27,13 @@ before(async () => {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (chunk) => {
+    proxyOutput += chunk;
+  });
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => {
+    proxyErrorOutput += chunk;
     process.stderr.write(chunk);
   });
 
@@ -89,6 +96,8 @@ test('missing provider key fails safely without echoing request content', async 
   assert.equal(body.error.code, 'proxy_not_configured');
   assert.match(body.error.message, /not configured/i);
   assert.equal(text.includes(sensitiveText), false);
+  await delay(20);
+  assert.equal((proxyOutput + proxyErrorOutput).includes(sensitiveText), false);
 });
 
 test('disallowed origins are rejected before proxy work starts', async () => {
