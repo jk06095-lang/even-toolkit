@@ -2,7 +2,10 @@ import { strict as assert } from 'node:assert';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { validateProxySmokeEvidenceOut } from './echo-release-readiness.mjs';
+import {
+  HARDWARE_QA_EVIDENCE_ISSUES,
+  validateProxySmokeEvidenceOut,
+} from './echo-release-readiness.mjs';
 
 const repoRoot = process.cwd();
 
@@ -35,4 +38,9 @@ test('rejects missing, non-json, absolute, and parent-traversal smoke evidence p
     assert.equal(result.ok, false, `${value} should be rejected`);
     assert.match(result.detail, /ECHO_PROXY_SMOKE_EVIDENCE_OUT/);
   }
+});
+
+test('tracks only open issue numbers in the hardware QA evidence blocker', () => {
+  assert.equal(HARDWARE_QA_EVIDENCE_ISSUES, '#2/#3/#6/#12/#13/#14/#28');
+  assert.equal(HARDWARE_QA_EVIDENCE_ISSUES.includes('#4'), false);
 });

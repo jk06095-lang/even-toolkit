@@ -91,6 +91,7 @@ const OFFICIAL_EVENHUB_PERMISSION_NAMES = new Set([
   'phone-microphone',
 ]);
 const OFFICIAL_EVENHUB_LANGUAGES = new Set(['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'zh']);
+export const HARDWARE_QA_EVIDENCE_ISSUES = '#2/#3/#6/#12/#13/#14/#28';
 
 async function validateFinalManifest({
   label,
@@ -631,7 +632,7 @@ async function main() {
     label: 'completed hardware QA manifest',
     filePath: 'docs/project-echo-hardware-qa.completed.json',
     npmScript: 'validate:hardware-qa',
-    issue: '#2/#3/#6/#12/#13/#14/#28',
+    issue: HARDWARE_QA_EVIDENCE_ISSUES,
     missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with .ehpk build-artifact hash, private/beta background lifecycle, Android cold-start recovery, root-page system-exit dialog, permission-denial path, console sanity, physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, explicit G2/Phone audio-source evidence, and two-speaker conversation timeline evidence.',
   });
 
