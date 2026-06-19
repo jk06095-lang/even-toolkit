@@ -62,6 +62,44 @@ test('requires ACK as a first-class G2 HUD evidence state', async () => {
   assert.match(combinedOutput(extraStateResult), /hud\.states\.TRANSCRIPT: unexpected key; allowed keys: READY, LISTENING, CUE, ACK, PAUSED/);
 });
 
+test('rejects audio-source evidence that silently opens Phone Mic for G2 sessions', async () => {
+  const template = JSON.parse(readFileSync(templatePath, 'utf8'));
+  const invalidAudio = structuredClone(template);
+  invalidAudio.audioSources.g2MicSession.selectedSource = 'G2 Mic';
+  invalidAudio.audioSources.g2MicSession.vadAudioSource = 'bridge';
+  invalidAudio.audioSources.g2MicSession.recognizerMode = 'hybrid';
+  invalidAudio.audioSources.g2MicSession.webSpeechStarted = true;
+  invalidAudio.audioSources.g2MicSession.phoneMicOpened = true;
+  invalidAudio.audioSources.phoneMicSession.explicitlySelected = false;
+  invalidAudio.audioSources.phoneMicSession.vadAudioSource = 'bridge';
+  invalidAudio.audioSources.phoneMicSession.recognizerMode = 'hybrid';
+  invalidAudio.audioSources.phoneMicSession.phoneMicOpened = false;
+  invalidAudio.audioSources.g2Failure.phoneMicOpenedBeforeConsent = true;
+  invalidAudio.audioSources.g2Failure.fallbackPromptShown = false;
+  invalidAudio.audioSources.g2Failure.cancelKeepsAudioOff = false;
+
+  const invalidAudioPath = path.join(tmpRoot, 'hardware-invalid-audio-sources.json');
+  writeFileSync(invalidAudioPath, `${JSON.stringify(invalidAudio, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidAudioPath),
+    '--allow-draft',
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /audioSources\.g2MicSession\.recognizerMode: must be "bridge"/);
+  assert.match(output, /audioSources\.g2MicSession\.webSpeechStarted: must be false/);
+  assert.match(output, /audioSources\.g2MicSession\.phoneMicOpened: must be false/);
+  assert.match(output, /audioSources\.phoneMicSession\.explicitlySelected: must be true/);
+  assert.match(output, /audioSources\.phoneMicSession\.vadAudioSource: must be "browser"/);
+  assert.match(output, /audioSources\.phoneMicSession\.recognizerMode: must be "browser"/);
+  assert.match(output, /audioSources\.phoneMicSession\.phoneMicOpened: must be true/);
+  assert.match(output, /audioSources\.g2Failure\.phoneMicOpenedBeforeConsent: must be false/);
+  assert.match(output, /audioSources\.g2Failure\.fallbackPromptShown: must be true/);
+  assert.match(output, /audioSources\.g2Failure\.cancelKeepsAudioOff: must be true/);
+});
+
 function runNode(args) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, args, {
