@@ -17,7 +17,9 @@ export interface ActiveRecallReviewState {
   updatedAt: string;
   lastGrade?: ActiveRecallGrade;
   lastAttemptAt?: string;
+  independentRecallDays: string[];
   transferSuccessCount: number;
+  successfulTransferScenarioIds: string[];
 }
 
 export interface ActiveRecallPrompt {
@@ -152,7 +154,7 @@ export function createActiveRecallPrompt(
   state: ActiveRecallReviewState = createInitialReviewState(item),
 ): ActiveRecallPrompt {
   const scenarioTag = item.examples[0]?.scenarioTag || item.scenarioTags[0] || 'conversation';
-  const readyForTransfer = state.reps >= 2 && state.transferSuccessCount < 2;
+  const readyForTransfer = state.independentRecallDays.length >= 2 && state.transferSuccessCount < 2;
   const mode: ActiveRecallPromptMode = readyForTransfer ? 'transfer' : 'meaning_to_expression';
   const transferScenario = mode === 'transfer'
     ? selectTransferScenario(item, state.transferSuccessCount)
@@ -219,7 +221,10 @@ export function recordActiveRecallAttempt(
   });
   const savedUserAttempt = sanitizeOptional(userAttempt, 1000);
   const effectiveGrade = gradeForCapturedAttempt(grade, savedUserAttempt);
-  const nextState = advanceActiveRecallState(current, effectiveGrade, now, mode);
+  const nextState = advanceActiveRecallState(current, effectiveGrade, now, {
+    mode,
+    transferScenarioId: prompt.transferScenario?.id,
+  });
   const captureSource = options.captureSource ??
     (options.audioLevelEvidence ? 'g2_bridge' : undefined) ??
     (options.pronunciationConfidence !== undefined ? 'phone_web_speech' : 'typed');
@@ -311,8 +316,12 @@ export function advanceActiveRecallState(
   current: ActiveRecallReviewState,
   grade: ActiveRecallGrade,
   now: Date,
-  mode: ActiveRecallPromptMode = 'meaning_to_expression',
+  options: {
+    mode?: ActiveRecallPromptMode;
+    transferScenarioId?: string;
+  } = {},
 ): ActiveRecallReviewState {
+  const mode = options.mode ?? 'meaning_to_expression';
   const currentStability = Math.max(0.1, current.stability);
   const nextReps = grade === 'again' ? current.reps : current.reps + 1;
   const nextLapses = grade === 'again' ? current.lapses + 1 : current.lapses;
@@ -334,9 +343,14 @@ export function advanceActiveRecallState(
     60,
   );
   const nextDueAt = new Date(now.getTime() + intervalMsForGrade(grade, nextStability)).toISOString();
-  const transferSuccessCount = mode === 'transfer' && (grade === 'good' || grade === 'easy')
-    ? current.transferSuccessCount + 1
-    : current.transferSuccessCount;
+  const successfulProduction = grade === 'good' || grade === 'easy';
+  const independentRecallDays = mode === 'meaning_to_expression' && successfulProduction
+    ? appendUnique(current.independentRecallDays, dayKey(now), 8)
+    : current.independentRecallDays;
+  const successfulTransferScenarioIds = mode === 'transfer' && successfulProduction && options.transferScenarioId
+    ? appendUnique(current.successfulTransferScenarioIds, options.transferScenarioId, 8)
+    : current.successfulTransferScenarioIds;
+  const transferSuccessCount = successfulTransferScenarioIds.length;
 
   return {
     itemId: current.itemId,
@@ -348,7 +362,9 @@ export function advanceActiveRecallState(
     updatedAt: now.toISOString(),
     lastGrade: grade,
     lastAttemptAt: now.toISOString(),
+    independentRecallDays,
     transferSuccessCount,
+    successfulTransferScenarioIds,
   };
 }
 
@@ -388,7 +404,9 @@ function createInitialReviewState(item: LearningItem): ActiveRecallReviewState {
     stability: item.scheduling.stability,
     dueAt: item.scheduling.dueAt,
     updatedAt: item.scheduling.dueAt,
+    independentRecallDays: [],
     transferSuccessCount: 0,
+    successfulTransferScenarioIds: [],
   };
 }
 
@@ -453,8 +471,9 @@ function normalizeSnapshot(value: unknown): ActiveRecallStoreSnapshot {
   const states: Record<string, ActiveRecallReviewState> = {};
   const rawStates = isRecord(value.states) ? value.states : {};
   for (const [key, state] of Object.entries(rawStates)) {
-    if (isReviewState(state)) {
-      states[key] = state;
+    const normalized = normalizeReviewState(state);
+    if (normalized) {
+      states[key] = normalized;
     }
   }
 
@@ -478,16 +497,41 @@ function emptySnapshot(): ActiveRecallStoreSnapshot {
   };
 }
 
-function isReviewState(value: unknown): value is ActiveRecallReviewState {
-  return isRecord(value) &&
-    typeof value.itemId === 'string' &&
-    typeof value.reps === 'number' &&
-    typeof value.lapses === 'number' &&
-    typeof value.difficulty === 'number' &&
-    typeof value.stability === 'number' &&
-    typeof value.dueAt === 'string' &&
-    typeof value.updatedAt === 'string' &&
-    typeof value.transferSuccessCount === 'number';
+function normalizeReviewState(value: unknown): ActiveRecallReviewState | null {
+  if (!isRecord(value) ||
+    typeof value.itemId !== 'string' ||
+    typeof value.reps !== 'number' ||
+    typeof value.lapses !== 'number' ||
+    typeof value.difficulty !== 'number' ||
+    typeof value.stability !== 'number' ||
+    typeof value.dueAt !== 'string' ||
+    typeof value.updatedAt !== 'string' ||
+    typeof value.transferSuccessCount !== 'number') {
+    return null;
+  }
+
+  const successfulTransferScenarioIds = normalizeStringList(
+    value.successfulTransferScenarioIds,
+    legacyTransferScenarioIds(value.transferSuccessCount),
+  );
+
+  return {
+    itemId: value.itemId,
+    reps: value.reps,
+    lapses: value.lapses,
+    difficulty: value.difficulty,
+    stability: value.stability,
+    dueAt: value.dueAt,
+    updatedAt: value.updatedAt,
+    lastGrade: isGrade(value.lastGrade) ? value.lastGrade : undefined,
+    lastAttemptAt: typeof value.lastAttemptAt === 'string' ? value.lastAttemptAt : undefined,
+    independentRecallDays: normalizeStringList(
+      value.independentRecallDays,
+      typeof value.lastAttemptAt === 'string' ? dayKeyFromString(value.lastAttemptAt) : [],
+    ),
+    transferSuccessCount: successfulTransferScenarioIds.length,
+    successfulTransferScenarioIds,
+  };
 }
 
 function normalizeActiveRecallAttempt(value: unknown): ActiveRecallAttempt | null {
@@ -677,6 +721,35 @@ function normalizeConfidence(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? round(clamp(value, 0, 1))
     : undefined;
+}
+
+function appendUnique(values: string[], value: string, maxLength: number): string[] {
+  const next = values.includes(value) ? values : [...values, value];
+  return next.slice(-maxLength);
+}
+
+function normalizeStringList(value: unknown, fallback: string[] = []): string[] {
+  const source = Array.isArray(value) ? value : fallback;
+  return Array.from(new Set(source.filter((entry): entry is string => (
+    typeof entry === 'string' && entry.trim().length > 0
+  )))).slice(-8);
+}
+
+function legacyTransferScenarioIds(count: number): string[] {
+  return Array.from({ length: Math.min(Math.max(0, Math.floor(count)), 8) }, (_value, index) => (
+    `legacy-transfer-${index + 1}`
+  ));
+}
+
+function dayKeyFromString(value: string): string[] {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? [dayKey(parsed)] : [];
+}
+
+function dayKey(value: Date): string {
+  return Number.isFinite(value.getTime())
+    ? value.toISOString().slice(0, 10)
+    : new Date(0).toISOString().slice(0, 10);
 }
 
 function normalizedPhrase(value: string): string {

@@ -83,11 +83,14 @@ source pairing: `pronunciationScore` is accepted only with
 `captureSource: "phone_web_speech"`, while `audioLevelEvidence` is accepted
 only with `captureSource: "g2_bridge"`.
 
-After two successful recall reps, the prompt moves into transfer mode. Transfer
-prompts are generated from the item's `speechAct`, scenario tags, and optional
+After successful recall on two separate calendar days, the prompt moves into
+transfer mode. Same-day repeated reveal/grade loops can increase review reps
+for scheduling, but they do not unlock transfer by themselves. Transfer prompts
+are generated from the item's `speechAct`, scenario tags, and optional
 partner-turn context so the learner must use the communication goal in a new
 situation instead of reciting the saved phrase. Successful transfer grades
-advance to the next generated scenario.
+advance to the next generated scenario, and repeated success on the same
+generated scenario is not double-counted as new transfer evidence.
 
 ## Custom GPT Handoff
 

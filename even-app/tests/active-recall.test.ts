@@ -170,6 +170,7 @@ describe('active recall learning loop', () => {
     });
 
     const matureState = loadActiveRecallSnapshot().states[item!.learningItem.id]!;
+    expect(matureState.independentRecallDays).toHaveLength(2);
     const prompt = createActiveRecallPrompt(item!.learningItem, matureState);
     expect(prompt.mode).toBe('transfer');
     expect(prompt.prompt).toContain('New situation');
@@ -199,6 +200,31 @@ describe('active recall learning loop', () => {
     );
     expect(nextTransferPrompt.transferScenario?.id).not.toBe(prompt.transferScenario?.id);
     expect(nextTransferPrompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
+  });
+
+  it('requires successful recall on separate days before transfer checks', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    recordActiveRecallAttempt(item!.learningItem, 'good', 'Could you say that again?', {
+      now: () => dueNow,
+    });
+    recordActiveRecallAttempt(item!.learningItem, 'easy', 'Could you say that again?', {
+      now: () => new Date(dueNow.getTime() + 60 * 60 * 1000),
+    });
+
+    const sameDayState = loadActiveRecallSnapshot().states[item!.learningItem.id]!;
+    expect(sameDayState).toMatchObject({
+      reps: 2,
+      independentRecallDays: [dueNow.toISOString().slice(0, 10)],
+      transferSuccessCount: 0,
+    });
+
+    const prompt = createActiveRecallPrompt(item!.learningItem, sameDayState);
+    expect(prompt.mode).toBe('meaning_to_expression');
+    expect(prompt.prompt).not.toContain(item!.learningItem.canonicalExpression);
   });
 
   it('records G2 bridge recall attempts with audio-level evidence but no browser pronunciation scores', () => {
@@ -406,6 +432,36 @@ describe('active recall learning loop', () => {
       { id: 'typed-legacy', captureSource: 'typed' },
       { id: 'voice-legacy', captureSource: 'phone_web_speech' },
     ]);
+  });
+
+  it('migrates legacy review states into spaced recall and transfer evidence fields', () => {
+    localStorage.setItem('echo_active_recall_reviews', JSON.stringify({
+      version: '1.0.0',
+      states: {
+        'item-1': {
+          itemId: 'item-1',
+          reps: 3,
+          lapses: 0,
+          difficulty: 0.4,
+          stability: 4,
+          dueAt: dueNow.toISOString(),
+          updatedAt: dueNow.toISOString(),
+          lastGrade: 'easy',
+          lastAttemptAt: dueNow.toISOString(),
+          transferSuccessCount: 2,
+        },
+      },
+      attempts: [],
+    }));
+
+    const state = loadActiveRecallSnapshot().states['item-1'];
+
+    expect(state).toMatchObject({
+      reps: 3,
+      independentRecallDays: [dueNow.toISOString().slice(0, 10)],
+      transferSuccessCount: 2,
+      successfulTransferScenarioIds: ['legacy-transfer-1', 'legacy-transfer-2'],
+    });
   });
 });
 
