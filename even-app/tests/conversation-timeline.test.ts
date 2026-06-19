@@ -180,6 +180,48 @@ describe('conversation timeline rows', () => {
     ]);
   });
 
+  it('excludes speech detection placeholders from review rows', () => {
+    const session: SessionTranscript = {
+      sessionId: 'session-a',
+      startTime: 0,
+      endTime: 0,
+      week: 1,
+      topic: 'Topic',
+      category: 'general',
+      entries: [],
+      conversationTurns: [
+        {
+          schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+          id: 'placeholder',
+          sessionId: 'session-a',
+          speaker: 'learner',
+          startedAt: 1,
+          endedAt: 1,
+          source: 'g2',
+          language: 'en-US',
+          transcript: '[speech detected]',
+          isFinal: true,
+          piiFlags: [],
+        },
+        {
+          schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+          id: 'actual',
+          sessionId: 'session-a',
+          speaker: 'learner',
+          startedAt: 2,
+          endedAt: 2,
+          source: 'g2',
+          language: 'en-US',
+          transcript: 'I need one more example.',
+          isFinal: true,
+          piiFlags: [],
+        },
+      ],
+    };
+
+    expect(buildConversationTimelineRows(session).map((row) => row.turnId)).toEqual(['actual']);
+  });
+
   it('labels unknown speakers without assuming diarization confidence', () => {
     expect(speakerLabel('unknown')).toBe('Unknown');
   });

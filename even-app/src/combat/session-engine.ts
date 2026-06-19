@@ -20,6 +20,7 @@ import {
   type Cue,
   type CueLevel,
   type CueLevelUsed,
+  type ConversationTurnSource,
   type SpeechAct,
 } from '@toolkit/echo-domain-v2';
 
@@ -398,7 +399,13 @@ export class SessionEngine {
     isFinal = true,
     confidence?: number,
   ): void {
-    const turn = this.transcriptStore?.addSpeech(text, source, isFinal, confidence);
+    const turn = this.transcriptStore?.addSpeech(
+      text,
+      source,
+      isFinal,
+      confidence,
+      this.currentConversationTurnSource(),
+    );
     if (turn) {
       this.lastTurnId = turn.id;
       this.emitConversationTimeline();
@@ -406,6 +413,11 @@ export class SessionEngine {
     }
     this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
     this.emitConversationTimeline();
+  }
+
+  private currentConversationTurnSource(): ConversationTurnSource {
+    const audioSource = this.vad?.audioSource ?? this.preferredAudioSource;
+    return audioSource === 'browser' ? 'phone' : 'g2';
   }
 
   private emitConversationTimeline(): void {

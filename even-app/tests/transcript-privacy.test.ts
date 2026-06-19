@@ -180,6 +180,25 @@ describe('transcript privacy controls', () => {
     expect(isConversationTurn(turn)).toBe(true);
   });
 
+  it('lets live speech choose a conversation turn source explicitly', () => {
+    const store = new TranscriptStore(2, 'Saved Topic', 'business', {
+      saveRawTranscript: true,
+      retentionPolicy: '7d',
+      now: () => now,
+      defaultTurnSource: 'g2',
+      idFactory: () => '00000000-0000-4000-8000-000000000002',
+    });
+
+    store.addSpeech('phone mic sentence', 'live_final', true, undefined, 'phone');
+
+    const transcript = store.finalize();
+    expect(transcript?.conversationTurns?.[0]).toMatchObject({
+      id: '00000000-0000-4000-8000-000000000002',
+      source: 'phone',
+      transcript: 'phone mic sentence',
+    });
+  });
+
   it('adds explicit partner conversation turns with Korean translation metadata', () => {
     const store = new TranscriptStore(2, 'Saved Topic', 'business', {
       saveRawTranscript: true,

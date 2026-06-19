@@ -265,6 +265,7 @@ export class TranscriptStore {
     source: TranscriptEntry['source'] = 'speech_api',
     isFinal = true,
     confidence?: number,
+    turnSource: ConversationTurnSource = this.defaultTurnSource,
   ): ConversationTurn | null {
     if (!text.trim()) return null;
     return this.addEntry({
@@ -274,7 +275,7 @@ export class TranscriptStore {
       source,
       isFinal,
       confidence: normalizeConfidence(confidence),
-    });
+    }, turnSource);
   }
 
   addHint(text: string, source: 'gemini_eval' | 'fallback' = 'gemini_eval'): void {
@@ -470,7 +471,10 @@ export class TranscriptStore {
     return this.session;
   }
 
-  private addEntry(entry: TranscriptEntry): ConversationTurn | null {
+  private addEntry(
+    entry: TranscriptEntry,
+    turnSource: ConversationTurnSource = this.defaultTurnSource,
+  ): ConversationTurn | null {
     this.session.entries.push(entry);
     let turn: ConversationTurn | null = null;
     if (entry.type === 'user_speech') {
@@ -479,7 +483,7 @@ export class TranscriptStore {
         this.session,
         entry,
         this.idFactory(),
-        this.defaultTurnSource,
+        turnSource,
         this.defaultLanguage,
       );
       this.session.conversationTurns.push(turn);

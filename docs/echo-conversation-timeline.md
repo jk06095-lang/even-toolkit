@@ -43,6 +43,11 @@ that snapshot without adding conversation history to the glasses HUD. Placeholde
 speech-detection events remain analytics/cache events and are not displayed as
 phone timeline turns.
 
+Live final turns now preserve the selected audio input boundary explicitly:
+G2/bridge recognition writes `source: "g2"`, while phone Web Speech recognition
+writes `source: "phone"`. This is input provenance only; real speaker
+segmentation still requires the hardware/simulator evidence listed below.
+
 Cue recovery is evaluated in the `SessionEngine` outcome path. The phone
 controller no longer emits ACKs from exact hint-string matches, so the glasses
 only show `ACK` after the shared cue outcome evaluator marks a cue as

@@ -38,6 +38,7 @@ export function buildConversationTimelineRows(
   maxRows = Number.POSITIVE_INFINITY,
 ): ConversationTimelineRow[] {
   return getConversationTurns(session)
+    .filter(shouldDisplayConversationTurn)
     .slice(0, maxRows)
     .map((turn) => toTimelineRow(turn));
 }
@@ -125,6 +126,11 @@ function toTimelineRow(turn: ConversationTurn): ConversationTimelineRow {
       ? translationState.label
       : undefined,
   };
+}
+
+function shouldDisplayConversationTurn(turn: ConversationTurn): boolean {
+  const transcript = turn.transcript.trim();
+  return transcript.length > 0 && transcript.toLowerCase() !== '[speech detected]';
 }
 
 function formatTime(timestamp: number): string {

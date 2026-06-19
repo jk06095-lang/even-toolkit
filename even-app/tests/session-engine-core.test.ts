@@ -742,6 +742,23 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
 
+  it('emits live G2 conversation timeline snapshots with the bridge source boundary', async () => {
+    const harness = createHarness({ audioSource: 'bridge' });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I can start with the onboarding risk.', 0.81);
+
+    const latest = harness.conversationSnapshots.at(-1);
+    expect(latest?.conversationTurns?.at(-1)).toMatchObject({
+      speaker: 'learner',
+      source: 'g2',
+      transcript: 'I can start with the onboarding risk.',
+      confidence: 0.81,
+      isFinal: true,
+    });
+    expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
+  });
+
   it('stops audio detector and recognizer during cleanup', async () => {
     const harness = createHarness();
     await harness.engine.start(harness.hud);
