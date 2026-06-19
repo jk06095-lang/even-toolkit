@@ -10,10 +10,13 @@
     "start": "node server.mjs",
     "check": "node --check server.mjs",
     "check:smoke": "node --check scripts/smoke-deploy.mjs",
+    "check:action-smoke": "node --check scripts/smoke-action-oauth.mjs",
     "check:token": "node --check scripts/issue-session-token.mjs",
     "issue:session-token": "node scripts/issue-session-token.mjs",
     "smoke:deploy": "node scripts/smoke-deploy.mjs",
+    "smoke:action-oauth": "node scripts/smoke-action-oauth.mjs",
     "test": "node --test server.test.mjs",
-    "verify": "npm run check && npm run check:smoke && npm run check:token && npm run test"
+    "test:action-smoke": "node --test scripts/smoke-action-oauth.test.mjs",
+    "verify": "npm run check && npm run check:smoke && npm run check:action-smoke && npm run check:token && npm run test && npm run test:action-smoke"
   }
 }

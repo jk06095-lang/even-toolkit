@@ -105,6 +105,10 @@ The next server-synced integration boundary now lives under
   `/oauth/authorize` and `/oauth/token`; OAuth access tokens are scoped to the
   Action route family and cannot be used for provider-bound cue, transcription,
   translation, or session-analysis calls.
+  `npm --prefix echo-api-proxy run smoke:action-oauth` exercises that deployed
+  OAuth flow, all Action endpoints, and privacy rejection checks while writing a
+  token-free evidence JSON that can be referenced from the completed Action
+  evidence manifest.
 - `gpt-instructions.md` fixes tutoring behavior for active recall and roleplay
   write-back.
 - `privacy-policy.md` records the Action data boundary.
@@ -135,7 +139,9 @@ policy configured, OAuth authorization-code flow is server-side, every Action
 endpoint returns bounded learner/review/roleplay data, raw transcripts/audio and
 direct identifiers are rejected, and G2/audio-level active-recall pronunciation
 evidence exists. `npm run readiness:echo` blocks #29 until that completed
-manifest is present.
+manifest is present. The Action OAuth smoke JSON is endpoint evidence only; it
+does not replace screenshots or exports proving that the Custom GPT itself is
+configured against the deployed schema and privacy policy.
 
 ## Remaining Work
 

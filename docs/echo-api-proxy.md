@@ -151,17 +151,30 @@ Manifest:
    then confirm `/healthz` reports `actionOAuth.configured: true`. The
    authorize and token URLs are `/oauth/authorize` and `/oauth/token` on the
    same proxy origin.
-6. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
+6. Smoke-test the deployed Action OAuth route family without storing secrets in
+   evidence:
+
+   ```bash
+   cd echo-api-proxy
+   npm run smoke:action-oauth -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin --client-id "$ECHO_ACTION_OAUTH_CLIENT_ID" --client-secret "$ECHO_ACTION_OAUTH_CLIENT_SECRET" --redirect-uri https://chatgpt.com/aip/project-echo/oauth/callback --evidence-out ../docs/chatgpt-action-oauth-smoke.json
+   ```
+
+   The generated JSON records the OAuth metadata, endpoint status, scope
+   behavior, and privacy-rejection checks, but it never writes the access token
+   or client secret. Reference it from the completed ChatGPT Action evidence
+   manifest only after the deployed Custom GPT configuration has also been
+   captured.
+7. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
-7. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
-8. For client retries, send an `Idempotency-Key` header with each provider-bound
+8. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
+9. For client retries, send an `Idempotency-Key` header with each provider-bound
    retryable POST. The key must be a bounded token. The proxy caches only
    successful responses keyed by session, path, key, and request-body hash; it
    does not cache raw request bodies, audio, or transcript text.
-9. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
+10. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
    `circuitBreaker` metadata. If `circuitBreaker.open` is true, the proxy is
    intentionally failing closed before making more provider calls.
-10. Smoke-test the deployed proxy without making a provider generation call:
+11. Smoke-test the deployed proxy without making a provider generation call:
 
    ```bash
    cd echo-api-proxy
@@ -190,10 +203,10 @@ Manifest:
    `readiness:echo` accepts the evidence path as a repo-local JSON path and
    converts it to the correct `echo-api-proxy` relative path before invoking
    `smoke:deploy`.
-11. Build and package the app with `cd even-app && npm run verify`.
-12. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
+12. Build and package the app with `cd even-app && npm run verify`.
+13. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
     tokens, direct provider hostnames, SDK imports, and development IPs.
-13. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+14. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact. Copy `docs/key-rotation-evidence.template.md` to
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
@@ -209,7 +222,7 @@ Manifest:
    counts prefilled. Treat it as a draft only; rotation date, deployed smoke
    JSON, session-token revocation, and log review still require production
    evidence.
-14. Confirm proxy logs do not contain request bodies, raw transcript text, or
+15. Confirm proxy logs do not contain request bodies, raw transcript text, or
     audio base64 payloads.
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
@@ -220,8 +233,8 @@ or proxy stdout/stderr logs. It also checks successful response idempotency,
 provider circuit opening against a local stub provider, and the proxy-backed
 Custom GPT Action read/write routes for bounded profile, session import, review
 attempt, roleplay start/result, reference OAuth authorization-code scope
-enforcement, privacy rejection behavior, and optional file-backed Action store
-persistence across proxy restarts. `npm run
+enforcement, deploy-smoke evidence generation, privacy rejection behavior, and
+optional file-backed Action store persistence across proxy restarts. `npm run
 smoke:deploy` performs the corresponding remote deployment checks and expects
 the deployed server to report `configured: true`, `authConfigured: true`,
 `tokenPolicy.configured: true`, `tokenPolicy.signedTokenConfigured: true`, and
