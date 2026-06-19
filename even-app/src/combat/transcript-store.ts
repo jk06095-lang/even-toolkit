@@ -266,6 +266,7 @@ export class TranscriptStore {
     isFinal = true,
     confidence?: number,
     turnSource: ConversationTurnSource = this.defaultTurnSource,
+    speaker: SpeakerRole = 'unknown',
   ): ConversationTurn | null {
     if (!text.trim()) return null;
     return this.addEntry({
@@ -275,7 +276,7 @@ export class TranscriptStore {
       source,
       isFinal,
       confidence: normalizeConfidence(confidence),
-    }, turnSource);
+    }, turnSource, speaker);
   }
 
   addHint(text: string, source: 'gemini_eval' | 'fallback' = 'gemini_eval'): void {
@@ -474,6 +475,7 @@ export class TranscriptStore {
   private addEntry(
     entry: TranscriptEntry,
     turnSource: ConversationTurnSource = this.defaultTurnSource,
+    speaker: SpeakerRole = 'unknown',
   ): ConversationTurn | null {
     this.session.entries.push(entry);
     let turn: ConversationTurn | null = null;
@@ -485,6 +487,7 @@ export class TranscriptStore {
         this.idFactory(),
         turnSource,
         this.defaultLanguage,
+        speaker,
       );
       this.session.conversationTurns.push(turn);
     }
@@ -759,6 +762,7 @@ function normalizeConversationTurns(value: unknown, session: SessionTranscript):
       `${session.sessionId}:turn:${index + 1}`,
       'g2',
       'en-US',
+      'unknown',
     ));
 }
 
@@ -803,13 +807,14 @@ function createConversationTurnFromEntry(
   id: string,
   source: ConversationTurnSource,
   language: string,
+  speaker: SpeakerRole,
 ): ConversationTurn {
   const timestamp = coerceTimestamp(entry.t, session.startTime);
   return {
     schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
     id,
     sessionId: session.sessionId,
-    speaker: 'learner',
+    speaker,
     startedAt: timestamp,
     endedAt: timestamp,
     source,

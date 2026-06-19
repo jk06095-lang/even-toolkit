@@ -115,7 +115,7 @@ describe('transcript export session-analysis guards', () => {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       id: 'session-a:turn:1',
       sessionId: 'session-a',
-      speaker: 'learner',
+      speaker: 'unknown',
       source: 'g2',
       language: 'en-US',
       transcript: 'I think we should start with the customer problem.',

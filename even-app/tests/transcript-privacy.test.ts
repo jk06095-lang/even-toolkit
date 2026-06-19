@@ -167,7 +167,7 @@ describe('transcript privacy controls', () => {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       id: '00000000-0000-4000-8000-000000000001',
       sessionId: transcript?.sessionId,
-      speaker: 'learner',
+      speaker: 'unknown',
       startedAt: now,
       endedAt: now,
       source: 'phone',
@@ -194,6 +194,7 @@ describe('transcript privacy controls', () => {
     const transcript = store.finalize();
     expect(transcript?.conversationTurns?.[0]).toMatchObject({
       id: '00000000-0000-4000-8000-000000000002',
+      speaker: 'unknown',
       source: 'phone',
       transcript: 'phone mic sentence',
     });
@@ -415,7 +416,7 @@ describe('transcript privacy controls', () => {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       id: 'legacy:turn:1',
       sessionId: 'legacy',
-      speaker: 'learner',
+      speaker: 'unknown',
       source: 'g2',
       language: 'en-US',
       transcript: 'legacy',

@@ -725,7 +725,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.startsWith('showGrammarFeedback:'))).toBe(false);
   });
 
-  it('emits live phone conversation timeline snapshots without writing transcript history to the HUD', async () => {
+  it('emits live phone conversation timeline snapshots with unknown speaker until corrected', async () => {
     const harness = createHarness({ audioSource: 'browser' });
     await harness.engine.start(harness.hud);
 
@@ -733,7 +733,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
 
     const latest = harness.conversationSnapshots.at(-1);
     expect(latest?.conversationTurns?.at(-1)).toMatchObject({
-      speaker: 'learner',
+      speaker: 'unknown',
       source: 'phone',
       transcript: 'Could you clarify the customer segment?',
       confidence: 0.87,
@@ -742,7 +742,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
 
-  it('emits live G2 conversation timeline snapshots with the bridge source boundary', async () => {
+  it('emits live G2 conversation timeline snapshots with source boundary and unknown speaker', async () => {
     const harness = createHarness({ audioSource: 'bridge' });
     await harness.engine.start(harness.hud);
 
@@ -750,7 +750,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
 
     const latest = harness.conversationSnapshots.at(-1);
     expect(latest?.conversationTurns?.at(-1)).toMatchObject({
-      speaker: 'learner',
+      speaker: 'unknown',
       source: 'g2',
       transcript: 'I can start with the onboarding risk.',
       confidence: 0.81,
