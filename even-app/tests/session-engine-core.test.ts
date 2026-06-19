@@ -15,6 +15,11 @@ import type { VADConfig } from '../src/combat/vad-manager';
 import type { ChunkRequest, ChunkResult } from '../src/combat/chunk-generator';
 import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } from '../src/combat/hybrid-recognizer';
 import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
+import type { TranscriptStoreOptions } from '../src/combat/transcript-store';
+import {
+  isAssistEpisode,
+  isCue,
+} from '@toolkit/echo-domain-v2';
 
 class FakeClock implements Clock {
   current = 1_000;
@@ -402,6 +407,49 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.requests[0]?.lastUtterance).toBe(sensitiveTranscript);
   });
 
+  it('persists ECHO domain v2 Cue and AssistEpisode records for shown cues', async () => {
+    const clock = new FakeClock();
+    const harness = createHarness({
+      clock,
+      chunkResult: {
+        chunk: 'Could you say that again?',
+        source: 'gemini',
+        latencyMs: 42,
+      },
+      transcriptOptions: {
+        saveRawTranscript: true,
+        retentionPolicy: '7d',
+        now: () => clock.now(),
+        idFactory: () => 'turn-manual-cue-1',
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I need help');
+    await harness.engine.requestManualCue();
+    await harness.engine.stop();
+
+    const transcript = harness.logs[0]?.transcript;
+    expect(transcript?.cues).toHaveLength(1);
+    expect(transcript?.assistEpisodes).toHaveLength(1);
+    expect(transcript?.cues?.[0]).toMatchObject({
+      cueId: 'echo-1000-test-scope:cue:1:cue',
+      targetTurnId: 'turn-manual-cue-1',
+      phrase: 'Could you say that again?',
+    });
+    expect(transcript?.assistEpisodes?.[0]).toMatchObject({
+      id: 'echo-1000-test-scope:cue:1:cue:episode',
+      targetTurnId: 'turn-manual-cue-1',
+      trigger: 'manual',
+      cueId: 'echo-1000-test-scope:cue:1:cue',
+      outcome: 'failed',
+      shownAt: 1000,
+      resolvedAt: 1000,
+    });
+    expect(isCue(transcript?.cues?.[0])).toBe(true);
+    expect(isAssistEpisode(transcript?.assistEpisodes?.[0])).toBe(true);
+  });
+
   it('prevents duplicate cue requests while one is in flight', async () => {
     const deferredCue = deferred<ChunkResult>();
     const harness = createHarness({ pendingChunk: deferredCue.promise });
@@ -757,6 +805,7 @@ function createHarness(options: {
   vadStartError?: Error;
   clock?: FakeClock;
   rejectChunkOnAbort?: boolean;
+  transcriptOptions?: TranscriptStoreOptions;
 } = {}) {
   const clock = options.clock ?? new FakeClock();
   const states: string[] = [];
@@ -824,7 +873,7 @@ function createHarness(options: {
       audioDetectorFactory,
       speechRecognizerFactory,
       cueProvider,
-      transcriptOptions: {
+      transcriptOptions: options.transcriptOptions ?? {
         saveRawTranscript: false,
         retentionPolicy: 'immediate',
         now: () => clock.now(),

@@ -14,9 +14,13 @@ import {
 } from '../privacy/settings';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isAssistEpisode,
   isConversationTurn,
+  isCue,
+  type AssistEpisode,
   type ConversationTurn,
   type ConversationTurnSource,
+  type Cue,
 } from '@toolkit/echo-domain-v2';
 
 export interface TranscriptEntry {
@@ -59,6 +63,10 @@ export interface SessionTranscript {
   entries: TranscriptEntry[];
   /** ECHO domain v2 learner turns, migrated from entries when loading legacy sessions. */
   conversationTurns?: ConversationTurn[];
+  /** ECHO domain v2 cues shown during this session. */
+  cues?: Cue[];
+  /** ECHO domain v2 assist lifecycle records linked to cues and turns. */
+  assistEpisodes?: AssistEpisode[];
   /** Hint usage statistics (populated at session end) */
   hintUsageStats?: HintUsageStats;
   /** Consent and retention snapshot used for this raw transcript. */
@@ -173,6 +181,8 @@ export class TranscriptStore {
       category,
       entries: [],
       conversationTurns: [],
+      cues: [],
+      assistEpisodes: [],
       savedWithConsent: this.saveRawTranscript,
       retentionPolicy: this.retentionPolicy,
     };
@@ -197,9 +207,9 @@ export class TranscriptStore {
     return meta;
   }
 
-  addSpeech(text: string, source: TranscriptEntry['source'] = 'speech_api', isFinal = true): void {
-    if (!text.trim()) return;
-    this.addEntry({
+  addSpeech(text: string, source: TranscriptEntry['source'] = 'speech_api', isFinal = true): ConversationTurn | null {
+    if (!text.trim()) return null;
+    return this.addEntry({
       t: this.now(),
       type: 'user_speech',
       text: text.trim(),
@@ -216,6 +226,57 @@ export class TranscriptStore {
       text: text.trim(),
       source,
     });
+  }
+
+  addCue(cue: Cue): Cue | null {
+    if (!isCue(cue)) return null;
+    this.session.cues ??= [];
+    const existingIndex = this.session.cues.findIndex((entry) => entry.cueId === cue.cueId);
+    if (existingIndex >= 0) {
+      this.session.cues[existingIndex] = cue;
+    } else {
+      this.session.cues.push(cue);
+    }
+    this.flush();
+    return cue;
+  }
+
+  addAssistEpisode(episode: AssistEpisode): AssistEpisode | null {
+    if (!isAssistEpisode(episode)) return null;
+    this.session.assistEpisodes ??= [];
+    const existingIndex = this.session.assistEpisodes.findIndex((entry) => entry.id === episode.id);
+    if (existingIndex >= 0) {
+      this.session.assistEpisodes[existingIndex] = episode;
+    } else {
+      this.session.assistEpisodes.push(episode);
+    }
+    this.flush();
+    return episode;
+  }
+
+  updateAssistEpisode(
+    episodeId: string,
+    patch: Partial<AssistEpisode>,
+  ): AssistEpisode | null {
+    const episodes = this.session.assistEpisodes ?? [];
+    const existingIndex = episodes.findIndex((episode) => episode.id === episodeId);
+    if (existingIndex < 0) return null;
+
+    const updated = {
+      ...episodes[existingIndex],
+      ...patch,
+    };
+
+    if (!isAssistEpisode(updated)) return null;
+    episodes[existingIndex] = updated;
+    this.session.assistEpisodes = episodes;
+    this.flush();
+    return updated;
+  }
+
+  getLatestConversationTurnId(): string | null {
+    const turns = this.session.conversationTurns ?? [];
+    return turns[turns.length - 1]?.id ?? null;
   }
 
   addSilence(durationMs: number): void {
@@ -306,21 +367,22 @@ export class TranscriptStore {
     return this.session;
   }
 
-  private addEntry(entry: TranscriptEntry): void {
+  private addEntry(entry: TranscriptEntry): ConversationTurn | null {
     this.session.entries.push(entry);
+    let turn: ConversationTurn | null = null;
     if (entry.type === 'user_speech') {
       this.session.conversationTurns ??= [];
-      this.session.conversationTurns.push(
-        createConversationTurnFromEntry(
-          this.session,
-          entry,
-          this.idFactory(),
-          this.defaultTurnSource,
-          this.defaultLanguage,
-        ),
+      turn = createConversationTurnFromEntry(
+        this.session,
+        entry,
+        this.idFactory(),
+        this.defaultTurnSource,
+        this.defaultLanguage,
       );
+      this.session.conversationTurns.push(turn);
     }
     this.flush();
+    return turn;
   }
 
   private flush(): void {
@@ -504,6 +566,14 @@ export function getConversationTurns(session: SessionTranscript): ConversationTu
   return normalizeSessionTranscript(session).conversationTurns ?? [];
 }
 
+export function getCues(session: SessionTranscript): Cue[] {
+  return normalizeSessionTranscript(session).cues ?? [];
+}
+
+export function getAssistEpisodes(session: SessionTranscript): AssistEpisode[] {
+  return normalizeSessionTranscript(session).assistEpisodes ?? [];
+}
+
 function normalizeSessionTranscript(value: unknown): SessionTranscript {
   const record = isRecord(value) ? value : {};
   const startTime = coerceTimestamp(record.startTime, Date.now());
@@ -528,6 +598,8 @@ function normalizeSessionTranscript(value: unknown): SessionTranscript {
       : undefined,
   };
   session.conversationTurns = normalizeConversationTurns(record.conversationTurns, session);
+  session.cues = normalizeCues(record.cues);
+  session.assistEpisodes = normalizeAssistEpisodes(record.assistEpisodes);
   return session;
 }
 
@@ -549,6 +621,14 @@ function normalizeConversationTurns(value: unknown, session: SessionTranscript):
       'g2',
       'en-US',
     ));
+}
+
+function normalizeCues(value: unknown): Cue[] {
+  return Array.isArray(value) ? value.filter(isCue) : [];
+}
+
+function normalizeAssistEpisodes(value: unknown): AssistEpisode[] {
+  return Array.isArray(value) ? value.filter(isAssistEpisode) : [];
 }
 
 function createConversationTurnFromEntry(

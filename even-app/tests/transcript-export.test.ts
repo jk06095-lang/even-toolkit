@@ -103,6 +103,18 @@ describe('transcript export session-analysis guards', () => {
       isFinal: true,
       piiFlags: [],
     });
+    expect(exportJson.stage_1_raw.cues[0]).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      cueId: 'cue-session-a-1',
+      targetTurnId: 'session-a:turn:1',
+      phrase: 'Could you say that again?',
+    });
+    expect(exportJson.stage_1_raw.assist_episodes[0]).toMatchObject({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'episode-session-a-1',
+      cueId: 'cue-session-a-1',
+      outcome: 'assisted_adapted',
+    });
   });
 
   it('ignores aborted delayed session-analysis responses and returns fallback handoff', async () => {
@@ -170,6 +182,43 @@ function makeSession(): SessionTranscript {
         type: 'user_speech',
         text: 'I think we should start with the customer problem.',
         source: 'live_final',
+      },
+    ],
+    cues: [
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        cueId: 'cue-session-a-1',
+        speechAct: 'ask_repeat',
+        level: 2,
+        phrase: 'Could you say that again?',
+        meaningKo: 'Meaning unavailable',
+        alternatives: ['Can you repeat it?'],
+        expiresAfterMs: 2000,
+        targetTurnId: 'session-a:turn:1',
+      },
+    ],
+    assistEpisodes: [
+      {
+        schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+        id: 'episode-session-a-1',
+        sessionId: 'session-a',
+        targetTurnId: 'session-a:turn:1',
+        trigger: 'manual',
+        decision: {
+          action: 'show',
+          confidence: 1,
+          trigger: 'manual',
+          maxCueLevel: 2,
+        },
+        cueId: 'cue-session-a-1',
+        cueLevelUsed: 2,
+        speechAct: 'ask_repeat',
+        requestedAt: Date.UTC(2026, 5, 19, 10, 0, 20),
+        shownAt: Date.UTC(2026, 5, 19, 10, 0, 21),
+        resolvedAt: Date.UTC(2026, 5, 19, 10, 0, 30),
+        acknowledgedAt: Date.UTC(2026, 5, 19, 10, 0, 30),
+        outcome: 'assisted_adapted',
+        userAttempt: 'Sorry, can you repeat it?',
       },
     ],
   };

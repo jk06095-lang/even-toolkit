@@ -13,6 +13,13 @@ import {
   requestTranscription,
 } from '../services/echo-api';
 import { getRandomFallbackChunk, type ChunkCategory } from './fallback-chunks';
+import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isCue,
+  type Cue,
+  type CueLevel,
+  type SpeechAct,
+} from '@toolkit/echo-domain-v2';
 
 export interface ChunkRequest {
   topic: string;
@@ -27,6 +34,9 @@ export interface ChunkRequest {
   conversationContext?: string;
   adaptiveDifficulty?: number;
   missedHint?: string;
+  targetTurnId?: string;
+  cueId?: string;
+  expiresAfterMs?: number;
 }
 
 export interface ChunkResult {
@@ -35,6 +45,7 @@ export interface ChunkResult {
   latencyMs: number;
   networkLatencyMs?: number;
   generationLatencyMs?: number | null;
+  cue?: Cue;
 }
 
 export interface SpeechEvaluationResult {
@@ -48,13 +59,17 @@ export interface SpeechEvaluationResult {
 
 export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
   const start = Date.now();
-  const fallback = () => ({
-    chunk: getRandomFallbackChunk(req.category ?? 'general'),
-    source: 'fallback' as const,
-    latencyMs: Date.now() - start,
-    networkLatencyMs: 0,
-    generationLatencyMs: 0,
-  });
+  const fallback = (): ChunkResult => {
+    const chunk = getRandomFallbackChunk(req.category ?? 'general');
+    return {
+      chunk,
+      source: 'fallback' as const,
+      latencyMs: Date.now() - start,
+      networkLatencyMs: 0,
+      generationLatencyMs: 0,
+      cue: createCueFromResponse(undefined, chunk, req),
+    };
+  };
 
   if (req.allowCloudProcessing === false || !isEchoApiConfigured()) {
     return fallback();
@@ -95,6 +110,7 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
       latencyMs: networkLatencyMs,
       networkLatencyMs,
       generationLatencyMs,
+      cue: createCueFromResponse(result, chunk, req),
     };
   } catch (err) {
     if (!signal?.aborted) {
@@ -252,12 +268,116 @@ function extractLatency(input: unknown): number | null {
 }
 
 function cleanChunk(raw: string): string {
-  return raw
+  return stripHtmlTags(raw)
     .replace(/^["'\[\(]+/, '')
     .replace(/["'\]\)]+$/, '')
     .replace(/\n/g, ' ')
     .trim()
     .slice(0, 50);
+}
+
+function createCueFromResponse(input: unknown, phrase: string, req: ChunkRequest): Cue | undefined {
+  if (!req.targetTurnId || !phrase) return undefined;
+  const record = isRecord(input) ? input : {};
+  const cue: Cue = {
+    schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+    cueId: cleanId(
+      extractText(input, ['cueId', 'cue_id', 'id']) ||
+      req.cueId ||
+      req.requestId ||
+      `cue-${Date.now()}`,
+    ),
+    speechAct: readSpeechAct(record.speechAct) ?? inferSpeechAct(phrase),
+    level: readCueLevel(record.level) ?? clampCueLevel(req.adaptiveDifficulty ?? req.week),
+    phrase,
+    meaningKo: cleanPlainText(
+      extractText(input, ['meaningKo', 'meaning_ko', 'meaning', 'translationKo', 'translation']) ||
+      'Meaning unavailable',
+      240,
+    ),
+    alternatives: cleanAlternatives(record.alternatives, phrase),
+    expiresAfterMs: readExpiresAfterMs(record.expiresAfterMs) ?? readExpiresAfterMs(req.expiresAfterMs) ?? 8000,
+    targetTurnId: cleanId(req.targetTurnId),
+  };
+
+  return isCue(cue) ? cue : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cleanId(value: string): string {
+  return value.trim().slice(0, 128) || `cue-${Date.now()}`;
+}
+
+function cleanPlainText(value: string, maxLength: number): string {
+  return stripHtmlTags(value)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function cleanAlternatives(value: unknown, phrase: string): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set([phrase.toLowerCase()]);
+  const alternatives: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string') continue;
+    const cleaned = cleanPlainText(item, 160);
+    if (!cleaned || seen.has(cleaned.toLowerCase())) continue;
+    seen.add(cleaned.toLowerCase());
+    alternatives.push(cleaned);
+    if (alternatives.length >= 5) break;
+  }
+  return alternatives;
+}
+
+function stripHtmlTags(value: string): string {
+  return value.replace(/<[^>]*>/g, '');
+}
+
+function readCueLevel(value: unknown): CueLevel | null {
+  if (value === 1 || value === 2 || value === 3) return value;
+  return null;
+}
+
+function clampCueLevel(value: number): CueLevel {
+  const level = Math.max(1, Math.min(3, Math.round(value)));
+  return level as CueLevel;
+}
+
+function readSpeechAct(value: unknown): SpeechAct | null {
+  return value === 'answer' ||
+    value === 'clarify' ||
+    value === 'ask_repeat' ||
+    value === 'buy_time' ||
+    value === 'repair'
+    ? value
+    : null;
+}
+
+function inferSpeechAct(phrase: string): SpeechAct {
+  const lower = phrase.toLowerCase();
+  if (lower.includes('repeat') || lower.includes('say that again') || lower.includes('pardon')) {
+    return 'ask_repeat';
+  }
+  if (lower.includes('moment') || lower.includes('second') || lower.includes('let me think')) {
+    return 'buy_time';
+  }
+  if (lower.includes('sorry') || lower.includes('mean')) {
+    return 'repair';
+  }
+  if (/^(could|can|would|what|when|where|how|why)\b/.test(lower)) {
+    return 'clarify';
+  }
+  return 'answer';
+}
+
+function readExpiresAfterMs(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 100 && value <= 30_000
+    ? Math.round(value)
+    : null;
 }
 
 function cleanTranscript(raw: string): string {

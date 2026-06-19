@@ -10,9 +10,18 @@ import { generateChunk, evaluateSpeech, simplifyHint, type ChunkResult } from '.
 import type { ChunkCategory } from './fallback-chunks';
 import type { VadCalibration } from '../dsp/calibration';
 import { HybridRecognizer, type HybridMode, type HybridRecognizerCallbacks, type HybridRecognizerOptions } from './hybrid-recognizer';
-import { TranscriptStore, type SessionTranscript, type TranscriptStoreOptions } from './transcript-store';
+import { TranscriptStore, type SessionTranscript, type TranscriptEntry, type TranscriptStoreOptions } from './transcript-store';
 import { TranscriptAnalyzer, type SessionAnalysis } from './transcript-analyzer';
-import type { AssistOutcome } from '@toolkit/echo-domain-v2';
+import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  type AssistDecision,
+  type AssistOutcome,
+  type AssistTrigger,
+  type Cue,
+  type CueLevel,
+  type CueLevelUsed,
+  type SpeechAct,
+} from '@toolkit/echo-domain-v2';
 
 // ── Types ──
 
@@ -292,6 +301,8 @@ export class SessionEngine {
   private readonly maxAutoTriggersPerSession = 3;
   private activeCueTrigger: CueTrigger | null = null;
   private cueVisible = false;
+  private activeAssistEpisodeId: string | null = null;
+  private lastTurnId: string | null = null;
 
   constructor(
     week: number,
@@ -377,6 +388,19 @@ export class SessionEngine {
   private clearDisplayedCue(): void {
     this.cueVisible = false;
     this.activeCueTrigger = null;
+  }
+
+  private recordSpeech(
+    text: string,
+    source: TranscriptEntry['source'] = 'speech_api',
+    isFinal = true,
+  ): void {
+    const turn = this.transcriptStore?.addSpeech(text, source, isFinal);
+    if (turn) {
+      this.lastTurnId = turn.id;
+      return;
+    }
+    this.lastTurnId = this.transcriptStore?.getLatestConversationTurnId() ?? this.lastTurnId;
   }
 
   private isCurrentSpeechRecognizer(recognizer: SpeechRecognizerDriver | null): boolean {
@@ -487,9 +511,120 @@ export class SessionEngine {
     };
 
     this.cueLatencyRecords.push(record);
+    this.markActiveAssistEpisodeShown(displayedAt, displayedAt - request.startedAt);
     console.info(
       `[Session] Cue latency ${record.request_id}: network=${record.network_latency_ms}ms generation=${record.generation_latency_ms ?? 'n/a'}ms hud=${record.hud_render_latency_ms}ms e2e=${record.end_to_end_latency_ms}ms`,
     );
+  }
+
+  private withDomainCue(
+    result: ChunkResult,
+    request: ReturnType<SessionEngine['beginRequest']>,
+    targetTurnId: string,
+    difficulty: number,
+  ): ChunkResult {
+    const cue = result.cue?.targetTurnId === targetTurnId
+      ? result.cue
+      : this.createCueFromChunk(result.chunk, request.requestId, targetTurnId, difficulty);
+    return { ...result, cue };
+  }
+
+  private createCueFromChunk(
+    phrase: string,
+    requestId: string,
+    targetTurnId: string,
+    difficulty: number,
+  ): Cue {
+    return {
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      cueId: cleanDomainId(`${requestId}:cue`),
+      speechAct: inferSpeechAct(phrase),
+      level: clampCueLevel(difficulty),
+      phrase: phrase.slice(0, 160),
+      meaningKo: 'Meaning unavailable',
+      alternatives: [],
+      expiresAfterMs: Math.max(100, Math.min(30_000, this.weekConfig.hintFlashDurationMs)),
+      targetTurnId: cleanDomainId(targetTurnId),
+    };
+  }
+
+  private resolveTargetTurnId(requestId: string): string {
+    return (
+      this.lastTurnId ??
+      this.transcriptStore?.getLatestConversationTurnId() ??
+      cleanDomainId(`${requestId}:target`)
+    );
+  }
+
+  private recordAssistCue(
+    result: ChunkResult,
+    trigger: CueTrigger,
+    request: ReturnType<SessionEngine['beginRequest']>,
+  ): void {
+    if (!result.cue || !this.transcriptStore) return;
+    const cue = this.transcriptStore.addCue(result.cue);
+    if (!cue) return;
+
+    const decision = this.createAssistDecision(trigger, cue.level);
+    const episodeId = cleanDomainId(`${cue.cueId}:episode`);
+    const episode = this.transcriptStore.addAssistEpisode({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: episodeId,
+      sessionId: this.transcriptStore.sessionId,
+      targetTurnId: cue.targetTurnId,
+      trigger: decision.trigger,
+      decision,
+      cueId: cue.cueId,
+      cueLevelUsed: cue.level,
+      speechAct: cue.speechAct,
+      requestedAt: request.startedAt,
+      outcome: 'partial',
+    });
+
+    if (episode) {
+      this.activeAssistEpisodeId = episode.id;
+    }
+  }
+
+  private createAssistDecision(trigger: CueTrigger, maxCueLevel: CueLevel): AssistDecision {
+    const domainTrigger = mapCueTrigger(trigger);
+    return {
+      action: 'show',
+      confidence: trigger === 'manual' ? 1 : domainTrigger === 'long_pause' ? 0.65 : 0.75,
+      trigger: domainTrigger,
+      maxCueLevel,
+    };
+  }
+
+  private markActiveAssistEpisodeShown(shownAt: number, latencyMs: number): void {
+    if (!this.activeAssistEpisodeId) return;
+    this.transcriptStore?.updateAssistEpisode(this.activeAssistEpisodeId, {
+      shownAt,
+      latencyMs: Math.max(0, latencyMs),
+    });
+  }
+
+  private resolveActiveAssistEpisode(patch: {
+    outcome: AssistOutcome;
+    cueLevelUsed?: CueLevelUsed;
+    speechAct?: SpeechAct;
+    userAttempt?: string;
+    acceptedPhrase?: string;
+    acknowledgedAt?: number;
+  }): void {
+    if (!this.activeAssistEpisodeId) return;
+    const update: Parameters<TranscriptStore['updateAssistEpisode']>[1] = {
+      outcome: patch.outcome,
+      resolvedAt: this.clock.now(),
+    };
+    if (patch.cueLevelUsed !== undefined) update.cueLevelUsed = patch.cueLevelUsed;
+    if (patch.speechAct !== undefined) update.speechAct = patch.speechAct;
+    if (patch.userAttempt !== undefined) update.userAttempt = patch.userAttempt;
+    if (patch.acceptedPhrase !== undefined) update.acceptedPhrase = patch.acceptedPhrase;
+    if (patch.acknowledgedAt !== undefined) update.acknowledgedAt = patch.acknowledgedAt;
+
+    this.transcriptStore?.updateAssistEpisode(this.activeAssistEpisodeId, update);
+    this.activeAssistEpisodeId = null;
   }
 
   private summarizeCueLatency(): {
@@ -560,6 +695,8 @@ export class SessionEngine {
     this.usedHintChunks = [];
     this.selfResponses = 0;
     this.lastLiveTranscript = '';
+    this.lastTurnId = null;
+    this.activeAssistEpisodeId = null;
     this.resetAssistMetrics();
 
     // Initialize transcript cache
@@ -602,7 +739,7 @@ export class SessionEngine {
         // Evaluate the speech for poor grammar/nonsense while silence timer ticks
         if (this.isGenerating || this._state !== 'listening') return;
         if (!this.cloudProcessingEnabled) {
-          this.transcriptStore?.addSpeech('[speech detected]', 'speech_api');
+          this.recordSpeech('[speech detected]', 'speech_api');
           return;
         }
 
@@ -631,7 +768,7 @@ export class SessionEngine {
             }
 
             // Record to cache
-            this.transcriptStore?.addSpeech(result.transcript, 'gemini_eval');
+            this.recordSpeech(result.transcript, 'gemini_eval');
 
             // If the audio source is 'bridge', reuse this transcript as the final recognized speech if not already finalized
             if (this.vad?.audioSource === 'bridge') {
@@ -641,7 +778,7 @@ export class SessionEngine {
                 this.callbacks.onLiveTranscript?.(result.transcript, true);
                 const trimmed = result.transcript.trim();
                 if (trimmed) {
-                  this.transcriptStore?.addSpeech(trimmed, 'live_final');
+                  this.recordSpeech(trimmed, 'live_final');
                   this.resetTranscriptActivity();
                   if (this.hudRef) {
                     this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
@@ -654,29 +791,38 @@ export class SessionEngine {
 
             // If Gemini returned a hint chunk (meaning speech was bad) and we are still listening
             if (result.chunk) {
+              const targetTurnId = this.resolveTargetTurnId(request.requestId);
+              const cueResult = this.withDomainCue(
+                {
+                  chunk: result.chunk,
+                  source: result.source,
+                  latencyMs: result.latencyMs,
+                  networkLatencyMs: result.networkLatencyMs,
+                  generationLatencyMs: result.generationLatencyMs,
+                },
+                request,
+                targetTurnId,
+                this.weekConfig.week,
+              );
               this.hintCount++;
-              this.usedHintChunks.push(result.chunk);
+              this.usedHintChunks.push(cueResult.chunk);
               this.markCueVisible('speech-evaluation');
+              this.recordAssistCue(cueResult, 'speech-evaluation', request);
               this.hintHistory.push({
-                chunk: result.chunk,
+                chunk: cueResult.chunk,
                 source: result.source,
                 timestamp: this.clock.now(),
               });
 
               // Record hint to cache
-              this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
+              this.transcriptStore?.addHint(cueResult.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
+              this.analyzer?.setActiveHint(cueResult.chunk, this.weekConfig.week, cueResult.cue);
 
               // Check if session was stopped during evaluation
               if ((this._state as any) === 'session_end') return;
 
               this.setState('hud_flash');
-              await this.displayCueAndRecordLatency(request, {
-                chunk: result.chunk,
-                source: result.source,
-                latencyMs: result.latencyMs,
-                networkLatencyMs: result.networkLatencyMs,
-                generationLatencyMs: result.generationLatencyMs,
-              }, 'speech-evaluation', null, responseReceivedAt);
+              await this.displayCueAndRecordLatency(request, cueResult, 'speech-evaluation', null, responseReceivedAt);
 
               // Auto-clear after flash duration, then restart silence cycle
               this.scheduleTimeout(() => {
@@ -691,7 +837,7 @@ export class SessionEngine {
             }
           } else {
             // Gemini evaluation returned null — still record that speech was detected
-            this.transcriptStore?.addSpeech('[speech detected]', 'speech_api');
+            this.recordSpeech('[speech detected]', 'speech_api');
           }
         } finally {
           this.finishRequest(request.controller);
@@ -794,7 +940,7 @@ export class SessionEngine {
         this.resetTranscriptActivity();
 
         // Record finalized speech recognition to cache and analyzer
-        this.transcriptStore?.addSpeech(trimmed, 'live_final');
+        this.recordSpeech(trimmed, 'live_final');
         this.analyzer?.addUtterance(trimmed, true);
 
         // Update glasses bottom zone with confirmed text
@@ -811,6 +957,14 @@ export class SessionEngine {
             // User successfully used the recommended expression!
             this.analyzer.resolveActiveHint('used', trimmed, evaluation);
             this.transcriptStore?.addHintUsed(activeHint.text, trimmed);
+            this.resolveActiveAssistEpisode({
+              outcome: evaluation.outcome,
+              cueLevelUsed: evaluation.cueLevelUsed,
+              speechAct: evaluation.speechAct,
+              userAttempt: trimmed,
+              acceptedPhrase: activeHint.text,
+              acknowledgedAt: this.clock.now(),
+            });
             this.callbacks.onHintUsageResult?.({
               hint: activeHint.text,
               status: 'used',
@@ -941,6 +1095,11 @@ export class SessionEngine {
       const activeHint = this.analyzer.getActiveHint()!;
       this.analyzer.resolveActiveHint('missed');
       this.transcriptStore?.addHintMissed(activeHint.text);
+      this.resolveActiveAssistEpisode({
+        outcome: 'failed',
+        cueLevelUsed: activeHint.cue?.level ?? clampCueLevel(activeHint.difficulty),
+        speechAct: activeHint.cue?.speechAct,
+      });
     }
 
     // Get session analysis from TranscriptAnalyzer
@@ -1098,6 +1257,12 @@ export class SessionEngine {
       }
     }
 
+    const activeHint = this.analyzer?.getActiveHint();
+    this.resolveActiveAssistEpisode({
+      outcome: 'failed',
+      cueLevelUsed: activeHint?.cue?.level ?? (activeHint ? clampCueLevel(activeHint.difficulty) : undefined),
+      speechAct: activeHint?.cue?.speechAct,
+    });
     this.analyzer?.clearActiveHint();
     this.clearDisplayedCue();
     this.clearPendingTimeouts();
@@ -1133,6 +1298,11 @@ export class SessionEngine {
         const activeHint = this.analyzer.getActiveHint()!;
         this.analyzer.resolveActiveHint('missed');
         this.transcriptStore?.addHintMissed(activeHint.text);
+        this.resolveActiveAssistEpisode({
+          outcome: 'failed',
+          cueLevelUsed: activeHint.cue?.level ?? clampCueLevel(activeHint.difficulty),
+          speechAct: activeHint.cue?.speechAct,
+        });
         this.clearDisplayedCue();
         this.callbacks.onHintUsageResult?.({
           hint: activeHint.text,
@@ -1187,44 +1357,59 @@ export class SessionEngine {
           if (!this.isCurrentRequest(request)) return;
 
           if (simplified && simplified !== activeHint.text) {
-          // Show simplified hint
-          this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
-          this.analyzer?.resolveActiveHint('simplified', simplified);
-          this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1));
+            const targetTurnId = activeHint.cue?.targetTurnId ?? this.resolveTargetTurnId(request.requestId);
+            const cueResult = this.withDomainCue({
+              chunk: simplified,
+              source: 'gemini',
+              latencyMs: responseReceivedAt - request.startedAt,
+              networkLatencyMs: responseReceivedAt - request.startedAt,
+              generationLatencyMs: null,
+            }, request, targetTurnId, Math.max(1, activeHint.difficulty - 1));
 
-          this.hintCount++;
-          this.usedHintChunks.push(simplified);
-          this.markCueVisible('simplified');
-          this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: this.clock.now() });
-          this.transcriptStore?.addHint(simplified, 'gemini_eval');
+            // Show simplified hint
+            this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
+            this.resolveActiveAssistEpisode({
+              outcome: 'partial',
+              cueLevelUsed: activeHint.cue?.level ?? clampCueLevel(activeHint.difficulty),
+              speechAct: activeHint.cue?.speechAct,
+              acceptedPhrase: simplified,
+            });
+            this.analyzer?.resolveActiveHint('simplified', simplified);
+            this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1), cueResult.cue);
 
-          this.callbacks.onHintUsageResult?.({
-            hint: activeHint.text,
-            status: 'simplified',
-            simplifiedTo: simplified,
-          });
+            this.hintCount++;
+            this.usedHintChunks.push(simplified);
+            this.markCueVisible('simplified');
+            this.recordAssistCue(cueResult, 'simplified', request);
+            this.hintHistory.push({ chunk: simplified, source: 'gemini', timestamp: this.clock.now() });
+            this.transcriptStore?.addHint(simplified, 'gemini_eval');
 
-          this.setState('hud_flash');
-          await this.displayCueAndRecordLatency(request, {
-            chunk: simplified,
-            source: 'gemini',
-            latencyMs: responseReceivedAt - request.startedAt,
-            networkLatencyMs: responseReceivedAt - request.startedAt,
-            generationLatencyMs: null,
-          }, 'simplified', this.lastSilenceDetectedAt, responseReceivedAt);
+            this.callbacks.onHintUsageResult?.({
+              hint: activeHint.text,
+              status: 'simplified',
+              simplifiedTo: simplified,
+            });
 
-          this.scheduleTimeout(() => {
-            if (this._state === 'hud_flash') {
-              this.cueVisible = false;
-              this.setState('listening');
-              this.resetTranscriptActivity();
-              this.hudRef?.showListening();
-            }
-          }, this.weekConfig.hintFlashDurationMs);
+            this.setState('hud_flash');
+            await this.displayCueAndRecordLatency(request, cueResult, 'simplified', this.lastSilenceDetectedAt, responseReceivedAt);
+
+            this.scheduleTimeout(() => {
+              if (this._state === 'hud_flash') {
+                this.cueVisible = false;
+                this.setState('listening');
+                this.resetTranscriptActivity();
+                this.hudRef?.showListening();
+              }
+            }, this.weekConfig.hintFlashDurationMs);
         } else {
           // Simplification failed — generate a new contextual hint
           this.analyzer?.resolveActiveHint('missed');
           this.transcriptStore?.addHintMissed(activeHint.text);
+          this.resolveActiveAssistEpisode({
+            outcome: 'failed',
+            cueLevelUsed: activeHint.cue?.level ?? clampCueLevel(activeHint.difficulty),
+            speechAct: activeHint.cue?.speechAct,
+          });
           await this.generateContextualHint('auto');
         }
       } catch {
@@ -1262,12 +1447,13 @@ export class SessionEngine {
     this.isGenerating = true;
     this.setState('chunk_generating');
     const request = this.beginRequest('cue');
+    const targetTurnId = this.resolveTargetTurnId(request.requestId);
 
     try {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
       const conversationContext = this.analyzer?.getConversationContext() ?? undefined;
 
-      const result = await this.cueProvider.generateChunk({
+      const generatedResult = await this.cueProvider.generateChunk({
         topic: this._topic,
         week: this.weekConfig.week,
         category: this._category,
@@ -1279,15 +1465,20 @@ export class SessionEngine {
         scenarioContext: this._scenarioContext || undefined,
         conversationContext,
         adaptiveDifficulty,
+        targetTurnId,
+        cueId: `${request.requestId}:cue`,
+        expiresAfterMs: this.weekConfig.hintFlashDurationMs,
       }, request.controller.signal);
       const responseReceivedAt = this.clock.now();
 
       if (!this.isCurrentRequest(request)) return;
 
+      const result = this.withDomainCue(generatedResult, request, targetTurnId, adaptiveDifficulty);
       if (result.chunk) {
         this.hintCount++;
         this.usedHintChunks.push(result.chunk);
         this.markCueVisible(trigger);
+        this.recordAssistCue(result, trigger, request);
         this.hintHistory.push({
           chunk: result.chunk,
           source: result.source,
@@ -1295,7 +1486,7 @@ export class SessionEngine {
         });
 
         // Register with TranscriptAnalyzer for tracking
-        this.analyzer?.setActiveHint(result.chunk, adaptiveDifficulty);
+        this.analyzer?.setActiveHint(result.chunk, adaptiveDifficulty, result.cue);
 
         this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
@@ -1355,4 +1546,38 @@ export class SessionEngine {
       this.setState('listening');
     }
   }
+}
+
+function cleanDomainId(value: string): string {
+  const cleaned = value.trim().slice(0, 128);
+  return cleaned || 'echo-domain-record';
+}
+
+function clampCueLevel(value: number): CueLevel {
+  const level = Math.max(1, Math.min(3, Math.round(value)));
+  return level as CueLevel;
+}
+
+function inferSpeechAct(phrase: string): SpeechAct {
+  const lower = phrase.toLowerCase();
+  if (lower.includes('repeat') || lower.includes('say that again') || lower.includes('pardon')) {
+    return 'ask_repeat';
+  }
+  if (lower.includes('moment') || lower.includes('second') || lower.includes('let me think')) {
+    return 'buy_time';
+  }
+  if (lower.includes('sorry') || lower.includes('mean')) {
+    return 'repair';
+  }
+  if (/^(could|can|would|what|when|where|how|why)\b/.test(lower)) {
+    return 'clarify';
+  }
+  return 'answer';
+}
+
+function mapCueTrigger(trigger: CueTrigger): AssistTrigger {
+  if (trigger === 'manual') return 'manual';
+  if (trigger === 'speech-evaluation') return 'abandoned_utterance';
+  if (trigger === 'simplified') return 'repeated_filler';
+  return 'long_pause';
 }

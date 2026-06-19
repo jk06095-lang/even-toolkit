@@ -3,7 +3,9 @@ import { DEFAULT_PRIVACY_SETTINGS, loadPrivacySettings } from '../src/privacy/se
 import { TranscriptStore, type SessionTranscript } from '../src/combat/transcript-store';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  isAssistEpisode,
   isConversationTurn,
+  isCue,
 } from '@toolkit/echo-domain-v2';
 
 class MemoryStorage {
@@ -177,6 +179,74 @@ describe('transcript privacy controls', () => {
     expect(isConversationTurn(turn)).toBe(true);
   });
 
+  it('persists validated ECHO domain v2 Cue and AssistEpisode records', () => {
+    const store = new TranscriptStore(2, 'Saved Topic', 'business', {
+      saveRawTranscript: true,
+      retentionPolicy: '7d',
+      now: () => now,
+      idFactory: () => 'turn-0001',
+    });
+
+    store.addSpeech('Can you repeat that?', 'live_final');
+    const targetTurnId = store.getLatestConversationTurnId();
+    expect(targetTurnId).toBe('turn-0001');
+
+    const cue = store.addCue({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      cueId: 'cue-0001',
+      speechAct: 'ask_repeat',
+      level: 2,
+      phrase: 'Could you say that again?',
+      meaningKo: 'Meaning unavailable',
+      alternatives: ['Can you repeat it?'],
+      expiresAfterMs: 2000,
+      targetTurnId: targetTurnId!,
+    });
+    expect(isCue(cue)).toBe(true);
+
+    const episode = store.addAssistEpisode({
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: 'episode-0001',
+      sessionId: store.sessionId,
+      targetTurnId: targetTurnId!,
+      trigger: 'manual',
+      decision: {
+        action: 'show',
+        confidence: 1,
+        trigger: 'manual',
+        maxCueLevel: 2,
+      },
+      cueId: 'cue-0001',
+      cueLevelUsed: 2,
+      speechAct: 'ask_repeat',
+      requestedAt: now,
+      shownAt: now + 10,
+      outcome: 'partial',
+    });
+    expect(isAssistEpisode(episode)).toBe(true);
+
+    store.updateAssistEpisode('episode-0001', {
+      resolvedAt: now + 100,
+      acknowledgedAt: now + 100,
+      outcome: 'assisted_adapted',
+      userAttempt: 'Sorry, can you repeat it?',
+    });
+
+    const transcript = store.finalize();
+    expect(transcript?.cues?.[0]).toMatchObject({
+      cueId: 'cue-0001',
+      targetTurnId: 'turn-0001',
+    });
+    expect(transcript?.assistEpisodes?.[0]).toMatchObject({
+      id: 'episode-0001',
+      cueId: 'cue-0001',
+      outcome: 'assisted_adapted',
+      userAttempt: 'Sorry, can you repeat it?',
+    });
+    expect(isCue(transcript?.cues?.[0])).toBe(true);
+    expect(isAssistEpisode(transcript?.assistEpisodes?.[0])).toBe(true);
+  });
+
   it('migrates legacy transcripts to v2 turns and rejects malformed turn records', () => {
     const legacy = makeSession('legacy', now);
     localStorage.setItem('echo_transcripts', JSON.stringify([
@@ -187,6 +257,38 @@ describe('transcript privacy controls', () => {
             schemaVersion: 'bad',
             id: 'bad',
             transcript: '<script>alert(1)</script>',
+          },
+        ],
+        cues: [
+          {
+            schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+            cueId: 'bad-cue',
+            speechAct: 'answer',
+            level: 1,
+            phrase: '<script>alert(1)</script>',
+            meaningKo: 'bad',
+            alternatives: [],
+            expiresAfterMs: 2000,
+            targetTurnId: 'legacy:turn:1',
+          },
+        ],
+        assistEpisodes: [
+          {
+            schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+            id: 'bad-episode',
+            sessionId: 'legacy',
+            targetTurnId: 'legacy:turn:1',
+            trigger: 'manual',
+            decision: {
+              action: 'show',
+              confidence: 1,
+              trigger: 'manual',
+              maxCueLevel: 1,
+            },
+            cueLevelUsed: 1,
+            requestedAt: now,
+            outcome: 'failed',
+            userAttempt: '<script>alert(1)</script>',
           },
         ],
       },
@@ -207,6 +309,8 @@ describe('transcript privacy controls', () => {
     });
     expect(isConversationTurn(stored?.conversationTurns?.[0])).toBe(true);
     expect(JSON.stringify(stored?.conversationTurns)).not.toContain('<script>');
+    expect(stored?.cues).toEqual([]);
+    expect(stored?.assistEpisodes).toEqual([]);
   });
 
   it('supports delete-after-session retention', () => {
