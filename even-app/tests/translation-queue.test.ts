@@ -16,6 +16,7 @@ import {
   loadConversationTranslationJobs,
   markConversationTranslationComplete,
   markConversationTranslationFailed,
+  orderConversationTranslationJobsForProcessing,
   processPendingConversationTranslations,
   queuePendingConversationTranslations,
   shouldQueueKoreanTranslation,
@@ -142,6 +143,28 @@ describe('conversation translation queue', () => {
     expect(JSON.stringify(stored)).not.toContain('<b>');
   });
 
+  it('keeps low-confidence translation warnings visible after completion', () => {
+    const session = makeSession([makeTurn({
+      id: 'partner-low-confidence',
+      confidence: 0.58,
+    })]);
+    localStorage.setItem('echo_transcripts', JSON.stringify([session]));
+
+    queuePendingConversationTranslations(session, 1_000);
+    markConversationTranslationComplete(
+      'session-a',
+      'partner-low-confidence',
+      '고객 세그먼트를 명확히 해 주시겠어요?',
+      2_000,
+    );
+
+    const [stored] = TranscriptStore.loadAll();
+    expect(getConversationTranslationState(stored!.conversationTurns![0]!)).toMatchObject({
+      status: 'translated',
+      warningLabel: 'Low-confidence transcript: review Korean translation against the original turn.',
+    });
+  });
+
   it('processes pending jobs through the translation proxy when cloud processing is allowed', async () => {
     const session = makeSession([makeTurn({ id: 'partner-1' })]);
     localStorage.setItem('echo_transcripts', JSON.stringify([session]));
@@ -209,6 +232,47 @@ describe('conversation translation queue', () => {
       }),
     ]);
     expect(TranscriptStore.loadAll()[0]?.conversationTurns?.[0]).not.toHaveProperty('translationKo');
+  });
+
+  it('prioritizes partner turns before learner and unknown translation jobs', () => {
+    const turns = [
+      makeTurn({ id: 'learner-1', speaker: 'learner', startedAt: 1_000 }),
+      makeTurn({ id: 'unknown-1', speaker: 'unknown', startedAt: 500 }),
+      makeTurn({ id: 'partner-1', speaker: 'partner', startedAt: 2_000 }),
+      makeTurn({ id: 'partner-2', speaker: 'partner', startedAt: 1_500 }),
+    ];
+    const session = makeSession(turns);
+
+    const jobs = queuePendingConversationTranslations(session, 1_000);
+
+    expect(orderConversationTranslationJobsForProcessing(jobs, turns).map((job) => job.turnId)).toEqual([
+      'partner-2',
+      'partner-1',
+      'learner-1',
+      'unknown-1',
+    ]);
+  });
+
+  it('sends partner translations first when processing a pending batch', async () => {
+    const turns = [
+      makeTurn({ id: 'learner-1', speaker: 'learner', transcript: 'I need one example.', startedAt: 1_000 }),
+      makeTurn({ id: 'partner-1', speaker: 'partner', transcript: 'Could you clarify the customer segment?', startedAt: 2_000 }),
+    ];
+    const session = makeSession(turns);
+    localStorage.setItem('echo_transcripts', JSON.stringify([session]));
+    echoApiMock.requestTranslation.mockResolvedValue({
+      translationKo: '번역 완료',
+    });
+
+    await processPendingConversationTranslations(session, {
+      allowCloudProcessing: true,
+      now: () => 2_000,
+    });
+
+    expect(echoApiMock.requestTranslation.mock.calls.map(([request]) => request.turnId)).toEqual([
+      'partner-1',
+      'learner-1',
+    ]);
   });
 });
 

@@ -21,6 +21,16 @@ This keeps translation failures non-blocking:
 - `translated` means `translationKo` has been written back to the stored
   `ConversationTurn`.
 
+When several pending jobs are processed together, partner turns are sent before
+learner and unknown turns. This matches the debrief goal: recover what the other
+speaker asked first, then review the learner response. Within the same speaker
+role, older turns are processed first.
+
+If the source STT confidence is below `0.7`, the phone timeline keeps the
+Korean translation visible but adds a warning to review it against the original
+turn. The warning is review metadata only; it does not fabricate confidence and
+does not block export.
+
 The queue uses `localStorage`, matching Even Hub's Android lifecycle guidance:
 important phone WebView state must be persisted because in-memory state can be
 lost when the app backgrounds or the screen locks.
@@ -45,6 +55,11 @@ timeline snapshot. The phone UI renders the latest recognized final turns from
 that snapshot without adding conversation history or translations to the glasses
 HUD. Placeholder speech-detection events remain analytics/cache events and are
 not displayed as phone timeline turns.
+
+This boundary follows the current Even Hub device model: the glasses render a
+small fixed-canvas container UI, while richer review state belongs on the phone.
+The HUD therefore stays cue/status-only and does not show full conversation
+history, speaker labels, or Korean translations.
 
 The Live Practice timeline also exposes a compact speaker selector for each
 final turn. Changing `Me`, `Partner`, or `Unknown` updates the active in-memory
@@ -88,5 +103,6 @@ Those proof points are now part of the final hardware QA evidence contract under
 `conversationTimeline` in `docs/project-echo-hardware-qa.template.json`. A
 completed `docs/project-echo-hardware-qa.completed.json` must prove G2 Mic,
 Phone Mic, and import segmentation, manual speaker correction persistence,
-Korean translation review, and the phone-only timeline / cue-only G2 HUD
-boundary before #28 can be closed.
+Korean translation review, partner-turn translation priority, low-confidence
+translation warnings, and the phone-only timeline / cue-only G2 HUD boundary
+before #28 can be closed.

@@ -777,6 +777,8 @@ function validateConversationTimeline(manifestObject) {
     const review = manifestObject.conversationTimeline.translationReview;
     validateExpected(review, 'koreanTranslationShown', true, 'conversationTimeline.translationReview');
     validateExpected(review, 'failedTranslationNonBlocking', true, 'conversationTimeline.translationReview');
+    validateExpected(review, 'partnerTurnsPrioritized', true, 'conversationTimeline.translationReview');
+    validateExpected(review, 'lowConfidenceTranslationWarningShown', true, 'conversationTimeline.translationReview');
     validateExpected(review, 'manualSpeakerCorrectionPersisted', true, 'conversationTimeline.translationReview');
     validateExpected(review, 'correctedByUserExported', true, 'conversationTimeline.translationReview');
     validateEvidenceLink(review, 'evidenceRef', 'conversationTimeline.translationReview');

@@ -146,6 +146,43 @@ describe('conversation timeline rows', () => {
     });
   });
 
+  it('flags low-confidence translations for phone timeline review', () => {
+    const session: SessionTranscript = {
+      sessionId: 'session-a',
+      startTime: Date.UTC(2026, 5, 19, 10, 0, 0),
+      endTime: Date.UTC(2026, 5, 19, 10, 1, 0),
+      week: 1,
+      topic: 'Project discussion',
+      category: 'business',
+      entries: [],
+      conversationTurns: [
+        {
+          schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+          id: 'partner-low-confidence',
+          sessionId: 'session-a',
+          speaker: 'partner',
+          startedAt: Date.UTC(2026, 5, 19, 10, 0, 5),
+          endedAt: Date.UTC(2026, 5, 19, 10, 0, 7),
+          source: 'phone',
+          language: 'en-US',
+          transcript: 'Could you clarify the customer segment?',
+          translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+          confidence: 0.59,
+          isFinal: true,
+          piiFlags: [],
+        },
+      ],
+    };
+
+    expect(buildConversationTimelineRows(session)[0]).toMatchObject({
+      turnId: 'partner-low-confidence',
+      confidenceLabel: '59%',
+      translationStatus: 'translated',
+      translationKo: '고객 세그먼트를 명확히 해 주시겠어요?',
+      translationWarningLabel: 'Low-confidence transcript: review Korean translation against the original turn.',
+    });
+  });
+
   it('limits rows for compact saved-session cards', () => {
     const session: SessionTranscript = {
       sessionId: 'session-a',

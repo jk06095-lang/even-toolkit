@@ -31,6 +31,7 @@ export interface ConversationTimelineRow {
   correctedByUser: boolean;
   translationStatus: ConversationTranslationStatus;
   translationStatusLabel?: string;
+  translationWarningLabel?: string;
 }
 
 export function buildConversationTimelineRows(
@@ -125,6 +126,7 @@ function toTimelineRow(turn: ConversationTurn): ConversationTimelineRow {
     translationStatusLabel: translationState.status === 'pending' || translationState.status === 'failed'
       ? translationState.label
       : undefined,
+    translationWarningLabel: translationState.warningLabel,
   };
 }
 

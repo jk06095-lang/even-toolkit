@@ -425,6 +425,8 @@ function writeCompletedHardwareFixture(name) {
       translationReview: {
         koreanTranslationShown: true,
         failedTranslationNonBlocking: true,
+        partnerTurnsPrioritized: true,
+        lowConfidenceTranslationWarningShown: true,
         manualSpeakerCorrectionPersisted: true,
         correctedByUserExported: true,
         evidenceRef: evidence,

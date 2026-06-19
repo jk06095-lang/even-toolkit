@@ -350,6 +350,8 @@
     "translationReview": {
       "koreanTranslationShown": null,
       "failedTranslationNonBlocking": null,
+      "partnerTurnsPrioritized": null,
+      "lowConfidenceTranslationWarningShown": null,
       "manualSpeakerCorrectionPersisted": null,
       "correctedByUserExported": null,
       "evidenceRef": "TBD"

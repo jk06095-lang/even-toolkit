@@ -7,6 +7,7 @@ const TARGET_LANGUAGE = 'ko-KR';
 const MAX_JOBS = 200;
 const MAX_ERROR_LENGTH = 300;
 const MAX_TRANSLATION_LENGTH = 1000;
+export const LOW_CONFIDENCE_TRANSLATION_THRESHOLD = 0.7;
 
 export type ConversationTranslationStatus =
   | 'not_needed'
@@ -31,6 +32,7 @@ export interface ConversationTranslationJob {
 export interface ConversationTranslationState {
   status: ConversationTranslationStatus;
   label?: string;
+  warningLabel?: string;
   job?: ConversationTranslationJob;
 }
 
@@ -98,15 +100,18 @@ export function enqueueConversationTurnTranslation(
 }
 
 export function getConversationTranslationState(turn: ConversationTurn): ConversationTranslationState {
+  const warningLabel = getTranslationWarningLabel(turn);
+
   if (turn.translationKo) {
     return {
       status: 'translated',
       label: 'Korean translation ready',
+      warningLabel,
     };
   }
 
   if (!shouldQueueKoreanTranslation(turn)) {
-    return { status: 'not_needed' };
+    return { status: 'not_needed', warningLabel };
   }
 
   const job = getConversationTranslationJob(turn.sessionId, turn.id);
@@ -114,6 +119,7 @@ export function getConversationTranslationState(turn: ConversationTurn): Convers
     return {
       status: 'failed',
       label: 'Korean translation unavailable',
+      warningLabel,
       job,
     };
   }
@@ -122,6 +128,7 @@ export function getConversationTranslationState(turn: ConversationTurn): Convers
     return {
       status: 'translated',
       label: 'Korean translation ready',
+      warningLabel,
       job,
     };
   }
@@ -129,8 +136,23 @@ export function getConversationTranslationState(turn: ConversationTurn): Convers
   return {
     status: 'pending',
     label: 'Korean translation pending',
+    warningLabel,
     job: job ?? undefined,
   };
+}
+
+export function hasLowConfidenceTranslationRisk(turn: ConversationTurn): boolean {
+  return (
+    typeof turn.confidence === 'number' &&
+    Number.isFinite(turn.confidence) &&
+    turn.confidence < LOW_CONFIDENCE_TRANSLATION_THRESHOLD
+  );
+}
+
+export function getTranslationWarningLabel(turn: ConversationTurn): string | undefined {
+  return hasLowConfidenceTranslationRisk(turn)
+    ? 'Low-confidence transcript: review Korean translation against the original turn.'
+    : undefined;
 }
 
 export function getConversationTranslationJob(
@@ -151,8 +173,11 @@ export async function processPendingConversationTranslations(
   const translate = options.translate ?? requestTranslation;
   const turns = getConversationTurns(session);
   const turnsById = new Map(turns.map((turn) => [turn.id, turn]));
-  const jobs = queuePendingConversationTranslations(session, now())
-    .filter((job) => job.status === 'pending');
+  const jobs = orderConversationTranslationJobsForProcessing(
+    queuePendingConversationTranslations(session, now())
+      .filter((job) => job.status === 'pending'),
+    turns,
+  );
   const results: ConversationTranslationProcessResult[] = [];
 
   for (const job of jobs) {
@@ -217,6 +242,27 @@ export async function processPendingConversationTranslations(
   }
 
   return results;
+}
+
+export function orderConversationTranslationJobsForProcessing(
+  jobs: ConversationTranslationJob[],
+  turns: ConversationTurn[],
+): ConversationTranslationJob[] {
+  const turnsById = new Map(turns.map((turn) => [turn.id, turn]));
+  return jobs
+    .map((job, index) => ({ job, index }))
+    .sort((left, right) => {
+      const leftTurn = turnsById.get(left.job.turnId);
+      const rightTurn = turnsById.get(right.job.turnId);
+      const speakerDelta = translationSpeakerPriority(leftTurn) - translationSpeakerPriority(rightTurn);
+      if (speakerDelta !== 0) return speakerDelta;
+
+      const timeDelta = translationTurnTime(leftTurn, left.job) - translationTurnTime(rightTurn, right.job);
+      if (timeDelta !== 0) return timeDelta;
+
+      return left.index - right.index;
+    })
+    .map(({ job }) => job);
 }
 
 export function loadConversationTranslationJobs(): ConversationTranslationJob[] {
@@ -371,6 +417,16 @@ function isTranslationJob(value: unknown): value is ConversationTranslationJob {
 
 function isStoredStatus(value: unknown): value is ConversationTranslationJob['status'] {
   return value === 'pending' || value === 'translated' || value === 'failed';
+}
+
+function translationSpeakerPriority(turn: ConversationTurn | undefined): number {
+  if (turn?.speaker === 'partner') return 0;
+  if (turn?.speaker === 'learner') return 1;
+  return 2;
+}
+
+function translationTurnTime(turn: ConversationTurn | undefined, job: ConversationTranslationJob): number {
+  return turn?.startedAt ?? job.requestedAt;
 }
 
 function translationJobId(sessionId: string, turnId: string): string {

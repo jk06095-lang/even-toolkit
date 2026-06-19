@@ -346,6 +346,10 @@ Still requires real G2 validation:
   `correctedByUser` is persisted and exported.
 - With cloud processing enabled, confirm Korean translation appears on the
   phone timeline for at least one turn.
+- Confirm partner turns are translated before learner/unknown turns when a
+  pending batch contains mixed speaker roles.
+- Confirm a low-confidence transcript keeps a visible warning beside the Korean
+  translation so reviewers know to compare it with the original turn.
 - With the translation proxy unavailable or failing, confirm the original turn
   remains visible and the failed translation state is non-blocking.
 - During the same run, confirm the phone timeline is visible but G2 does not

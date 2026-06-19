@@ -649,10 +649,18 @@ function createLiveConversationTimelineItem(row: ConversationTimelineRow): HTMLE
   const translation = row.translationKo ?? row.translationStatusLabel;
   if (translation) {
     const translationEl = document.createElement('div');
-    translationEl.className = 'text-detail';
-    translationEl.style.cssText = 'color: var(--color-text-dim); margin-top: 5px;';
+    translationEl.className = `text-detail conversation-turn-translation${row.translationStatus === 'failed' ? ' conversation-turn-translation-status-failed' : ''}`;
+    translationEl.style.cssText = 'margin-top: 5px;';
     translationEl.textContent = translation;
     item.append(translationEl);
+  }
+
+  if (row.translationWarningLabel) {
+    const warningEl = document.createElement('div');
+    warningEl.className = 'text-detail conversation-turn-translation-warning';
+    warningEl.style.cssText = 'margin-top: 5px;';
+    warningEl.textContent = row.translationWarningLabel;
+    item.append(warningEl);
   }
 
   return item;
