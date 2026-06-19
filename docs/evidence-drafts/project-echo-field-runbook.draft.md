@@ -48,7 +48,9 @@ list as the remaining evidence queue, not as a reason to fill placeholders.
 
 Set these only after the HTTPS proxy is deployed and a short-lived signed smoke
 token has been minted from the server-side secret manager. Do not commit token
-values.
+values. `ECHO_PROXY_SMOKE_ORIGIN` must be the deployed public HTTPS client
+origin only; localhost, private-network hosts, paths, queries, and hashes are
+local/test inputs and cannot satisfy #1/#27 release evidence.
 
 ```bash
 ECHO_PROXY_BASE_URL=https://api.project-echo.app

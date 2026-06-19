@@ -37,6 +37,45 @@ test('rejects deployment smoke evidence that used local-only release override fl
   assert.match(result.stderr, /deploymentSmokeEvidence\.releaseFlags/);
 });
 
+test('rejects deployment smoke evidence with local or non-origin CORS origins', async () => {
+  const localFixture = writeFixture('local-allowed-origin', smokeEvidence({
+    allowedOrigin: 'http://127.0.0.1:5173',
+  }));
+  const localResult = await runValidator(localFixture.markdownPath);
+
+  assert.notEqual(localResult.code, 0);
+  assert.match(localResult.stderr, /deploymentSmokeEvidence\.allowedOrigin/);
+
+  const ipv6Fixture = writeFixture('ipv6-loopback-allowed-origin', smokeEvidence({
+    allowedOrigin: 'https://[::1]',
+  }));
+  const ipv6Result = await runValidator(ipv6Fixture.markdownPath);
+
+  assert.notEqual(ipv6Result.code, 0);
+  assert.match(ipv6Result.stderr, /deploymentSmokeEvidence\.allowedOrigin/);
+  assert.match(ipv6Result.stderr, /private network host/);
+
+  const pathFixture = writeFixture('path-allowed-origin', smokeEvidence({
+    allowedOrigin: 'https://echo-client.example.test/app',
+  }));
+  const pathResult = await runValidator(pathFixture.markdownPath);
+
+  assert.notEqual(pathResult.code, 0);
+  assert.match(pathResult.stderr, /deploymentSmokeEvidence\.allowedOrigin/);
+  assert.match(pathResult.stderr, /origin without path/);
+});
+
+test('rejects deployment smoke evidence when allowed and disallowed origins match', async () => {
+  const fixture = writeFixture('matching-cors-origins', smokeEvidence({
+    disallowedOrigin: 'https://echo-client.example.test',
+  }));
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.disallowedOrigin/);
+  assert.match(result.stderr, /must differ from allowedOrigin/);
+});
+
 test('rejects key-rotation evidence text that includes unauthenticated smoke override', async () => {
   const fixture = writeFixture('unauthenticated-flag-text', smokeEvidence());
   const markdownPath = path.join(repoRoot, fixture.markdownPath);

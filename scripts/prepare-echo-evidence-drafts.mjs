@@ -459,7 +459,9 @@ list as the remaining evidence queue, not as a reason to fill placeholders.
 
 Set these only after the HTTPS proxy is deployed and a short-lived signed smoke
 token has been minted from the server-side secret manager. Do not commit token
-values.
+values. \`ECHO_PROXY_SMOKE_ORIGIN\` must be the deployed public HTTPS client
+origin only; localhost, private-network hosts, paths, queries, and hashes are
+local/test inputs and cannot satisfy #1/#27 release evidence.
 
 \`\`\`bash
 ECHO_PROXY_BASE_URL=https://api.project-echo.app
@@ -806,6 +808,8 @@ function isValidProxySmokeForDraft(smoke) {
   if (smoke.sessionTokenProvided !== true) return false;
   if (!/^https:\/\/[^/]+/i.test(String(smoke.baseUrl || ''))) return false;
   if (isLocalEvidenceHost(smoke.baseUrl)) return false;
+  if (!isProductionEvidenceOrigin(smoke.allowedOrigin) || !isProductionEvidenceOrigin(smoke.disallowedOrigin)) return false;
+  if (normalizeEvidenceOrigin(smoke.allowedOrigin) === normalizeEvidenceOrigin(smoke.disallowedOrigin)) return false;
 
   const healthz = smoke.checks?.healthz;
   if (healthz?.status !== 200 || healthz?.ok !== true || healthz?.configured !== true || healthz?.authConfigured !== true) return false;
@@ -831,7 +835,7 @@ function isValidProxySmokeForDraft(smoke) {
 
 function isLocalEvidenceHost(value) {
   try {
-    const host = new URL(value).hostname.toLowerCase();
+    const host = new URL(value).hostname.toLowerCase().replace(/^\[|\]$/g, '');
     if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === '127.0.0.1' || host === '::1') return true;
     const parts = host.split('.').map((part) => Number.parseInt(part, 10));
     if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
@@ -839,6 +843,23 @@ function isLocalEvidenceHost(value) {
     return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
   } catch {
     return true;
+  }
+}
+
+function isProductionEvidenceOrigin(value) {
+  const origin = normalizeEvidenceOrigin(value);
+  return Boolean(origin) && !isLocalEvidenceHost(origin);
+}
+
+function normalizeEvidenceOrigin(value) {
+  if (typeof value !== 'string') return '';
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') return '';
+    if (parsed.origin !== value.replace(/\/$/, '')) return '';
+    return parsed.origin;
+  } catch {
+    return '';
   }
 }
 

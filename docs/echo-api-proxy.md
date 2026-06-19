@@ -242,8 +242,11 @@ Manifest:
 
    `readiness:echo` accepts the evidence path as a repo-local JSON path and
    converts it to the correct `echo-api-proxy` relative path before invoking
-   `smoke:deploy`. To prefill the key-rotation draft with the token-free smoke
-   metadata without marking rotation complete, run:
+   `smoke:deploy`. `ECHO_PROXY_SMOKE_ORIGIN` must be the deployed HTTPS client
+   origin only, with no path, query, hash, localhost, or private-network host;
+   local origins are accepted only when using the local dry-run flags and do not
+   satisfy #1/#27 release evidence. To prefill the key-rotation draft with the
+   token-free smoke metadata without marking rotation complete, run:
 
    ```bash
    npm run prepare:echo-evidence-drafts -- --proxy-smoke-evidence docs/proxy-smoke-evidence.json
@@ -257,8 +260,9 @@ Manifest:
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
    The evidence must use a production HTTPS proxy URL, include the same URL in
    the `smoke:deploy` result, reference the checked-in deployment smoke JSON,
-   mark smoke/log/session-token confirmations as passed or verified, prove a
-   TTL and rotation cadence inside policy limits, prove idempotency/circuit
+   prove a production HTTPS client origin with no local/private host or URL
+   path, mark smoke/log/session-token confirmations as passed or verified, prove
+   a TTL and rotation cadence inside policy limits, prove idempotency/circuit
    metadata in the deployment smoke JSON, prove old-token revocation, and record
    clean artifact scans such as `0 matches` or `no matches`. This same evidence
    is required before both #1 and #27 can be closed.

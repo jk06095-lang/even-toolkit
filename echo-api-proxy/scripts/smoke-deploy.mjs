@@ -6,10 +6,10 @@ const args = process.argv.slice(2);
 const wantsHelp = args.includes('--help') || args.includes('-h');
 
 const baseUrl = readOption('--base-url') || process.env.ECHO_PROXY_BASE_URL || '';
-const allowedOrigin = readOption('--allowed-origin') || process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
+const rawAllowedOrigin = readOption('--allowed-origin') || process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
 const sessionToken = readOption('--session-token') || process.env.ECHO_PROXY_SMOKE_SESSION_TOKEN || '';
 const evidenceOut = readOption('--evidence-out') || process.env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '';
-const disallowedOrigin =
+const rawDisallowedOrigin =
   readOption('--disallowed-origin') ||
   process.env.ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN ||
   'https://blocked.project-echo.invalid';
@@ -18,7 +18,7 @@ const allowUnconfigured = args.includes('--allow-unconfigured');
 const allowUnauthenticated = args.includes('--allow-unauthenticated');
 const allowQaDelay = args.includes('--allow-qa-delay');
 
-if (wantsHelp || !baseUrl || !allowedOrigin) {
+if (wantsHelp || !baseUrl || !rawAllowedOrigin) {
   console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin --session-token <short-lived-token> [--evidence-out ../docs/proxy-smoke-evidence.json]
 
 Environment alternatives:
@@ -34,6 +34,8 @@ Use --allow-http, --allow-unconfigured, --allow-unauthenticated, and --allow-qa-
 }
 
 const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+const allowedOrigin = normalizeOrigin(rawAllowedOrigin, '--allowed-origin', { allowLocal: allowHttp });
+const disallowedOrigin = normalizeOrigin(rawDisallowedOrigin, '--disallowed-origin', { allowLocal: allowHttp });
 const failures = [];
 const evidence = {
   schema: 'project-echo-proxy-smoke-v1',
@@ -52,6 +54,9 @@ const evidence = {
 
 if (!sessionToken && !allowUnauthenticated) {
   fail('release smoke requires --session-token or ECHO_PROXY_SMOKE_SESSION_TOKEN');
+}
+if (allowedOrigin === disallowedOrigin) {
+  fail('--disallowed-origin must differ from --allowed-origin');
 }
 
 function fail(message) {
@@ -82,6 +87,53 @@ function normalizeBaseUrl(value) {
   parsed.search = '';
   parsed.hash = '';
   return parsed.toString().replace(/\/$/, '');
+}
+
+function normalizeOrigin(value, optionName, { allowLocal = false } = {}) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    console.error(`[proxy-smoke] invalid ${optionName}: ${value}`);
+    process.exit(1);
+  }
+
+  const isHttpAllowed = allowHttp && parsed.protocol === 'http:';
+  if (parsed.protocol !== 'https:' && !isHttpAllowed) {
+    console.error(`[proxy-smoke] release smoke requires ${optionName} to use https://; pass --allow-http only for local checks`);
+    process.exit(1);
+  }
+
+  if (parsed.origin !== value.replace(/\/$/, '')) {
+    console.error(`[proxy-smoke] ${optionName} must be an origin without path, query, or hash`);
+    process.exit(1);
+  }
+
+  if (!allowLocal && isLocalHost(parsed.hostname)) {
+    console.error(`[proxy-smoke] release smoke ${optionName} must not point to localhost or a private network host`);
+    process.exit(1);
+  }
+
+  return parsed.origin;
+}
+
+function isLocalHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host === '127.0.0.1' ||
+    host === '::1'
+  ) {
+    return true;
+  }
+  const parts = host.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  const [a, b] = parts;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
 }
 
 async function fetchText(path, options = {}) {

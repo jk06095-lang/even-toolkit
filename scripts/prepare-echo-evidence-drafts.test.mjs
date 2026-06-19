@@ -191,6 +191,38 @@ test('prepares draft evidence manifests without marking external evidence comple
   await assertValidatorPasses('scripts/validate-key-rotation-evidence.mjs', keyRotationPath);
 });
 
+test('does not prefill key-rotation draft from non-production proxy smoke origins', async () => {
+  const cases = [
+    ['local-allowed-origin', { allowedOrigin: 'http://127.0.0.1:5173' }],
+    ['ipv6-loopback-allowed-origin', { allowedOrigin: 'https://[::1]' }],
+    ['path-allowed-origin', { allowedOrigin: 'https://echo-client.example.test/app' }],
+    ['matching-cors-origins', { disallowedOrigin: 'https://echo-client.example.test' }],
+  ];
+
+  for (const [name, overrides] of cases) {
+    const outDir = path.join(tmpRoot, `invalid-proxy-smoke-${name}`);
+    const proxySmokePath = path.join(tmpRoot, `${name}.json`);
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(proxySmokePath, `${JSON.stringify(proxySmokeFixture(overrides), null, 2)}\n`, 'utf8');
+
+    const result = await runNode([
+      'scripts/prepare-echo-evidence-drafts.mjs',
+      '--out-dir',
+      repoRelative(outDir),
+      '--proxy-smoke-evidence',
+      repoRelative(proxySmokePath),
+    ]);
+
+    assert.equal(result.code, 0, result.stderr);
+
+    const keyRotation = readFileSync(path.join(outDir, 'key-rotation-evidence.draft.md'), 'utf8');
+    assert.doesNotMatch(keyRotation, /Deployment smoke command result: passed: npm --prefix echo-api-proxy run smoke:deploy/);
+    assert.doesNotMatch(keyRotation, new RegExp(escapeRegExp(repoRelative(proxySmokePath))));
+    assert.match(keyRotation, /^- Deployment smoke evidence JSON:\s*$/m);
+    assert.match(keyRotation, /^- Allowed origin passed:\s*$/m);
+  }
+});
+
 async function assertValidatorPasses(scriptPath, targetPath) {
   const result = await runNode([scriptPath, repoRelative(targetPath), '--allow-draft']);
   assert.equal(result.code, 0, result.stderr);
@@ -291,8 +323,8 @@ function actionOauthSmokeFixture(baseUrl) {
   };
 }
 
-function proxySmokeFixture() {
-  return {
+function proxySmokeFixture(overrides = {}) {
+  const base = {
     schema: 'project-echo-proxy-smoke-v1',
     generatedAt: '2026-06-19T00:00:00.000Z',
     baseUrl: 'https://api.project-echo.app',
@@ -355,4 +387,26 @@ function proxySmokeFixture() {
       },
     },
   };
+
+  return deepMerge(base, overrides);
+}
+
+function deepMerge(base, overrides) {
+  if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) return base;
+  const merged = { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (
+      value
+      && typeof value === 'object'
+      && !Array.isArray(value)
+      && base[key]
+      && typeof base[key] === 'object'
+      && !Array.isArray(base[key])
+    ) {
+      merged[key] = deepMerge(base[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+  return merged;
 }

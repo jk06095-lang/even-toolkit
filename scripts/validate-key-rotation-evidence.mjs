@@ -275,7 +275,7 @@ function validateProductionProxyUrl(value) {
     return;
   }
 
-  const host = url.hostname.toLowerCase();
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (
     host === 'localhost'
     || host.endsWith('.localhost')
@@ -381,6 +381,15 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
   }
   if (evidence.baseUrl !== normalizeEvidenceBaseUrl(proxyUrl)) {
     addError(`${pointer}.baseUrl`, 'must match Production proxy URL');
+  }
+  validateProductionSmokeOrigin(evidence.allowedOrigin, `${pointer}.allowedOrigin`);
+  validateProductionSmokeOrigin(evidence.disallowedOrigin, `${pointer}.disallowedOrigin`);
+  if (
+    typeof evidence.allowedOrigin === 'string' &&
+    typeof evidence.disallowedOrigin === 'string' &&
+    normalizeEvidenceBaseUrl(evidence.allowedOrigin) === normalizeEvidenceBaseUrl(evidence.disallowedOrigin)
+  ) {
+    addError(`${pointer}.disallowedOrigin`, 'must differ from allowedOrigin');
   }
   if (
     evidence.allowHttp !== false ||
@@ -510,6 +519,42 @@ function normalizeEvidenceBaseUrl(value) {
     return parsed.toString().replace(/\/$/, '');
   } catch {
     return '';
+  }
+}
+
+function validateProductionSmokeOrigin(value, pointer) {
+  if (typeof value !== 'string' || !value.trim()) {
+    addError(pointer, 'must be a production HTTPS origin');
+    return;
+  }
+
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    addError(pointer, 'must be a valid production HTTPS origin');
+    return;
+  }
+
+  if (url.protocol !== 'https:') {
+    addError(pointer, 'must use https');
+    return;
+  }
+
+  if (url.origin !== value.replace(/\/$/, '')) {
+    addError(pointer, 'must be an origin without path, query, or hash');
+  }
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host.endsWith('.local')
+    || host === '127.0.0.1'
+    || host === '::1'
+    || isPrivateIpv4(host)
+  ) {
+    addError(pointer, 'must not point to localhost or a private network host');
   }
 }
 
