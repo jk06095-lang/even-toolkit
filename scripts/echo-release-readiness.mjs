@@ -189,6 +189,78 @@ async function checkKeyRotationEvidence() {
   return true;
 }
 
+function checkEchoAppManifest() {
+  const packagePath = path.resolve(repoRoot, 'even-app/package.json');
+  const appPath = path.resolve(repoRoot, 'even-app/app.json');
+  const publicAppPath = path.resolve(repoRoot, 'even-app/public/app.json');
+  const findings = [];
+
+  if (!existsSync(packagePath)) {
+    findings.push('Missing even-app/package.json');
+  }
+
+  if (!existsSync(appPath)) {
+    findings.push('Missing single-source even-app/app.json');
+  }
+
+  if (existsSync(publicAppPath)) {
+    findings.push('Remove duplicated even-app/public/app.json');
+  }
+
+  if (findings.length === 0) {
+    try {
+      const packageJson = readJson(packagePath);
+      const appJson = readJson(appPath);
+
+      if (appJson.version !== packageJson.version) {
+        findings.push(`app.json version ${appJson.version} must match package.json version ${packageJson.version}`);
+      }
+
+      const permissions = Array.isArray(appJson.permissions) ? appJson.permissions : [];
+      const permissionNames = permissions.map((permission) => permission?.name).filter(Boolean);
+      for (const unusedPermission of ['camera', 'location']) {
+        if (permissionNames.includes(unusedPermission)) {
+          findings.push(`Remove unused ${unusedPermission} permission`);
+        }
+      }
+
+      const networkPermission = permissions.find((permission) => permission?.name === 'network');
+      const whitelist = Array.isArray(networkPermission?.whitelist)
+        ? networkPermission.whitelist
+        : [];
+
+      if (!networkPermission) {
+        findings.push('Missing network permission for ECHO API proxy');
+      }
+
+      if (!whitelist.includes('https://api.project-echo.app')) {
+        findings.push('Network whitelist must include https://api.project-echo.app');
+      }
+
+      const unexpectedOrigins = whitelist.filter(
+        (origin) => origin !== 'https://api.project-echo.app',
+      );
+      if (unexpectedOrigins.length > 0) {
+        findings.push(`Network whitelist must only contain the ECHO API proxy origin; found ${unexpectedOrigins.join(', ')}`);
+      }
+
+      if (whitelist.some((origin) => /generativelanguage\.googleapis\.com|192\.168\./i.test(origin))) {
+        findings.push('Network whitelist must not contain Google API or 192.168.* development origins');
+      }
+    } catch (error) {
+      findings.push(`Could not validate even-app/app.json: ${error.message}`);
+    }
+  }
+
+  if (findings.length > 0) {
+    addCheck('single-source minimal app manifest', 'blocked', findings.slice(0, 3).join('; '), '#17');
+    return false;
+  }
+
+  addCheck('single-source minimal app manifest', 'passed', 'even-app/app.json is synchronized, unique, and whitelists only the ECHO API proxy.', '#17');
+  return true;
+}
+
 function checkManifestSummaries() {
   const pilotPath = path.resolve(repoRoot, 'docs/project-echo-pilot-evidence.completed.json');
   if (!existsSync(pilotPath)) return false;
@@ -292,6 +364,8 @@ await validateFinalManifest({
   issue: '#5/#10',
   missingDetail: 'Missing docs/project-echo-pilot-evidence.completed.json with 5-user real G2 pilot, VAD environment metrics, case-study links, and real G2 video evidence.',
 });
+
+checkEchoAppManifest();
 
 await validateFinalManifest({
   label: 'completed hardware QA manifest',
