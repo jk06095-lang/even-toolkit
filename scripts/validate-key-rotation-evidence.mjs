@@ -371,8 +371,16 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
   if (evidence.baseUrl !== normalizeEvidenceBaseUrl(proxyUrl)) {
     addError(`${pointer}.baseUrl`, 'must match Production proxy URL');
   }
-  if (evidence.allowHttp !== false || evidence.allowUnconfigured !== false || evidence.allowQaDelay !== false) {
+  if (
+    evidence.allowHttp !== false ||
+    evidence.allowUnconfigured !== false ||
+    evidence.allowUnauthenticated !== false ||
+    evidence.allowQaDelay !== false
+  ) {
     addError(`${pointer}.releaseFlags`, 'must not use local-only smoke override flags');
+  }
+  if (evidence.sessionTokenProvided !== true) {
+    addError(`${pointer}.sessionTokenProvided`, 'must be true for production smoke');
   }
 
   const checks = evidence.checks && typeof evidence.checks === 'object' ? evidence.checks : {};
@@ -380,6 +388,7 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
     status: 200,
     ok: true,
     configured: true,
+    authConfigured: true,
     qaDelayMs: 0,
     corsOriginMatches: true,
     cacheControlNoStore: true,
@@ -388,6 +397,13 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
     status: 204,
     corsOriginMatches: true,
     allowsPost: true,
+    allowsAuthorization: true,
+    allowsSessionToken: true,
+  });
+  validateSmokeCheck(checks.missingSessionToken, 'missingSessionToken', {
+    status: 401,
+    errorCode: 'missing_session_token',
+    corsOriginMatches: true,
   });
   validateSmokeCheck(checks.disallowedOrigin, 'disallowedOrigin', {
     status: 403,

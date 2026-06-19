@@ -77,13 +77,16 @@ function smokeEvidence(overrides = {}) {
     disallowedOrigin: 'https://blocked.project-echo.invalid',
     allowHttp: false,
     allowUnconfigured: false,
+    allowUnauthenticated: false,
     allowQaDelay: false,
+    sessionTokenProvided: true,
     ok: true,
     checks: {
       healthz: {
         status: 200,
         ok: true,
         configured: true,
+        authConfigured: true,
         qaDelayMs: 0,
         corsOriginMatches: true,
         cacheControlNoStore: true,
@@ -92,6 +95,13 @@ function smokeEvidence(overrides = {}) {
         status: 204,
         corsOriginMatches: true,
         allowsPost: true,
+        allowsAuthorization: true,
+        allowsSessionToken: true,
+      },
+      missingSessionToken: {
+        status: 401,
+        errorCode: 'missing_session_token',
+        corsOriginMatches: true,
       },
       disallowedOrigin: {
         status: 403,

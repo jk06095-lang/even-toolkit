@@ -7,6 +7,7 @@ const wantsHelp = args.includes('--help') || args.includes('-h');
 
 const baseUrl = readOption('--base-url') || process.env.ECHO_PROXY_BASE_URL || '';
 const allowedOrigin = readOption('--allowed-origin') || process.env.ECHO_PROXY_SMOKE_ORIGIN || '';
+const sessionToken = readOption('--session-token') || process.env.ECHO_PROXY_SMOKE_SESSION_TOKEN || '';
 const evidenceOut = readOption('--evidence-out') || process.env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '';
 const disallowedOrigin =
   readOption('--disallowed-origin') ||
@@ -14,19 +15,21 @@ const disallowedOrigin =
   'https://blocked.project-echo.invalid';
 const allowHttp = args.includes('--allow-http');
 const allowUnconfigured = args.includes('--allow-unconfigured');
+const allowUnauthenticated = args.includes('--allow-unauthenticated');
 const allowQaDelay = args.includes('--allow-qa-delay');
 
 if (wantsHelp || !baseUrl || !allowedOrigin) {
-  console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin [--evidence-out ../docs/proxy-smoke-evidence.json]
+  console.info(`Usage: npm run smoke:deploy -- --base-url https://api.project-echo.app --allowed-origin https://your-client-origin --session-token <short-lived-token> [--evidence-out ../docs/proxy-smoke-evidence.json]
 
 Environment alternatives:
   ECHO_PROXY_BASE_URL
   ECHO_PROXY_SMOKE_ORIGIN
+  ECHO_PROXY_SMOKE_SESSION_TOKEN
   ECHO_PROXY_SMOKE_DISALLOWED_ORIGIN
   ECHO_PROXY_SMOKE_EVIDENCE_OUT
 
-Default release behavior requires HTTPS, /healthz configured=true, and qaDelayMs=0.
-Use --allow-http, --allow-unconfigured, and --allow-qa-delay only for local smoke testing.`);
+Default release behavior requires HTTPS, /healthz configured=true, authConfigured=true, a supplied smoke session token, and qaDelayMs=0.
+Use --allow-http, --allow-unconfigured, --allow-unauthenticated, and --allow-qa-delay only for local smoke testing.`);
   process.exit(wantsHelp ? 0 : 1);
 }
 
@@ -40,10 +43,16 @@ const evidence = {
   disallowedOrigin,
   allowHttp,
   allowUnconfigured,
+  allowUnauthenticated,
   allowQaDelay,
+  sessionTokenProvided: Boolean(sessionToken),
   ok: false,
   checks: {},
 };
+
+if (!sessionToken && !allowUnauthenticated) {
+  fail('release smoke requires --session-token or ECHO_PROXY_SMOKE_SESSION_TOKEN');
+}
 
 function fail(message) {
   failures.push(message);
@@ -93,6 +102,11 @@ function header(response, name) {
   return response.headers.get(name);
 }
 
+function authHeaders() {
+  if (!sessionToken) return {};
+  return { Authorization: `Bearer ${sessionToken}` };
+}
+
 function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     fail(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
@@ -119,6 +133,7 @@ async function checkHealthz() {
     status: response.status,
     ok: body?.ok === true,
     configured: body?.configured === true,
+    authConfigured: body?.authConfigured === true,
     qaDelayMs: body?.qaDelayMs ?? 0,
     corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
     cacheControlNoStore: String(header(response, 'cache-control') || '').includes('no-store'),
@@ -128,6 +143,10 @@ async function checkHealthz() {
   assertEqual(body?.ok, true, 'GET /healthz ok');
   if (!allowUnconfigured) {
     assertEqual(body?.configured, true, 'GET /healthz configured');
+  }
+  if (!allowUnauthenticated) {
+    assertEqual(body?.authConfigured, true, 'GET /healthz authConfigured');
+    assertEqual(Boolean(sessionToken), true, 'smoke session token configured');
   }
   if (!allowQaDelay) {
     assertEqual(body?.qaDelayMs ?? 0, 0, 'GET /healthz qaDelayMs');
@@ -150,12 +169,45 @@ async function checkOptions() {
     status: response.status,
     corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
     allowsPost: String(header(response, 'access-control-allow-methods') || '').includes('POST'),
+    allowsAuthorization: String(header(response, 'access-control-allow-headers') || '').includes('Authorization'),
+    allowsSessionToken: String(header(response, 'access-control-allow-headers') || '').includes('X-Echo-Session-Token'),
   };
 
   assertEqual(response.status, 204, 'OPTIONS /v1/cue status');
   assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'OPTIONS /v1/cue CORS origin');
   assertIncludes(header(response, 'access-control-allow-methods'), 'POST', 'OPTIONS /v1/cue methods');
+  assertIncludes(header(response, 'access-control-allow-headers'), 'Authorization', 'OPTIONS /v1/cue headers');
+  assertIncludes(header(response, 'access-control-allow-headers'), 'X-Echo-Session-Token', 'OPTIONS /v1/cue headers');
   console.info('[proxy-smoke] OPTIONS /v1/cue ok');
+}
+
+async function checkMissingSessionToken() {
+  if (allowUnauthenticated) {
+    evidence.checks.missingSessionToken = {
+      skipped: true,
+      reason: 'allowUnauthenticated local override',
+    };
+    return;
+  }
+
+  const { response, body } = await fetchText('/v1/cue', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+    },
+    body: JSON.stringify({ topic: 'auth smoke' }),
+  });
+  evidence.checks.missingSessionToken = {
+    status: response.status,
+    errorCode: body?.error?.code ?? null,
+    corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
+  };
+
+  assertEqual(response.status, 401, 'missing session token status');
+  assertEqual(body?.error?.code, 'missing_session_token', 'missing session token error code');
+  assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'missing session token CORS origin');
+  console.info('[proxy-smoke] missing session token rejected');
 }
 
 async function checkDisallowedOrigin() {
@@ -186,6 +238,7 @@ async function checkSafeErrorNoEcho() {
     headers: {
       'Content-Type': 'application/json',
       Origin: allowedOrigin,
+      ...authHeaders(),
     },
     body: JSON.stringify({
       task: 'transcribe',
@@ -216,6 +269,7 @@ async function checkSafeErrorNoEcho() {
 try {
   await checkHealthz();
   await checkOptions();
+  await checkMissingSessionToken();
   await checkDisallowedOrigin();
   await checkSafeErrorNoEcho();
 } catch (error) {

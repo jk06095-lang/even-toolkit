@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 
 const PORT = readNumberEnv('PORT', readNumberEnv('ECHO_PROXY_PORT', 8787));
 const MAX_BODY_BYTES = readNumberEnv('ECHO_PROXY_MAX_BODY_BYTES', 6_000_000);
@@ -10,6 +10,12 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATI
 const ALLOWED_ORIGINS = parseOrigins(
   process.env.ECHO_PROXY_ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173',
 );
+const SESSION_TOKENS = parseTokens(
+  process.env.ECHO_PROXY_SESSION_TOKENS || process.env.ECHO_PROXY_SESSION_TOKEN || '',
+);
+const RATE_LIMIT_WINDOW_MS = readNumberEnv('ECHO_PROXY_RATE_LIMIT_WINDOW_MS', 60_000);
+const RATE_LIMIT_MAX = readNumberEnv('ECHO_PROXY_RATE_LIMIT_MAX', 60);
+const rateLimitBuckets = new Map();
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -38,8 +44,13 @@ const server = http.createServer(async (req, res) => {
       sendJson(req, res, 200, {
         ok: true,
         configured: Boolean(GEMINI_API_KEY),
+        authConfigured: SESSION_TOKENS.length > 0,
         model: GEMINI_MODEL,
         qaDelayMs: QA_DELAY_MS,
+        rateLimit: {
+          windowMs: RATE_LIMIT_WINDOW_MS,
+          max: RATE_LIMIT_MAX,
+        },
       });
       return;
     }
@@ -47,6 +58,12 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== 'POST') {
       throw new HttpError(405, 'method_not_allowed', 'Use POST for ECHO API endpoints.');
     }
+
+    const endpoint = resolveEndpoint(url.pathname);
+    const auth = authenticateRequest(req);
+    const body = await readJsonBody(req);
+    validateRequestBody(endpoint, body);
+    applyRateLimit(req, auth, body, url.pathname);
 
     if (QA_DELAY_MS > 0) {
       await delay(QA_DELAY_MS);
@@ -56,23 +73,20 @@ const server = http.createServer(async (req, res) => {
       throw new HttpError(503, 'proxy_not_configured', 'ECHO API proxy is not configured.');
     }
 
-    const body = await readJsonBody(req);
-    if (url.pathname === '/v1/cue') {
-      sendJson(req, res, 200, await handleCue(body));
+    if (endpoint === 'cue') {
+      sendJson(req, res, 200, validateResponseBody(endpoint, await handleCue(body)));
       return;
     }
 
-    if (url.pathname === '/v1/transcribe') {
-      sendJson(req, res, 200, await handleTranscription(body));
+    if (endpoint === 'transcribe') {
+      sendJson(req, res, 200, validateResponseBody(endpoint, await handleTranscription(body)));
       return;
     }
 
-    if (url.pathname === '/v1/session-analysis') {
-      sendJson(req, res, 200, await handleSessionAnalysis(body));
+    if (endpoint === 'session-analysis') {
+      sendJson(req, res, 200, validateResponseBody(endpoint, await handleSessionAnalysis(body)));
       return;
     }
-
-    throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
   } catch (err) {
     sendSafeError(req, res, err);
   } finally {
@@ -85,6 +99,159 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.info(`[EchoProxy] listening on :${PORT}`);
 });
+
+function resolveEndpoint(pathname) {
+  if (pathname === '/v1/cue') return 'cue';
+  if (pathname === '/v1/transcribe') return 'transcribe';
+  if (pathname === '/v1/session-analysis') return 'session-analysis';
+  throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
+}
+
+function authenticateRequest(req) {
+  if (SESSION_TOKENS.length === 0) {
+    return { sessionId: 'anonymous' };
+  }
+
+  const token = readSessionToken(req);
+  if (!token) {
+    throw new HttpError(401, 'missing_session_token', 'A valid ECHO session token is required.');
+  }
+  if (!SESSION_TOKENS.some((expected) => safeTokenEquals(token, expected))) {
+    throw new HttpError(401, 'invalid_session_token', 'A valid ECHO session token is required.');
+  }
+
+  return { sessionId: token.slice(0, 12) };
+}
+
+function readSessionToken(req) {
+  const headerToken = req.headers['x-echo-session-token'];
+  if (typeof headerToken === 'string' && headerToken.trim()) {
+    return headerToken.trim();
+  }
+
+  const authorization = req.headers.authorization;
+  if (typeof authorization !== 'string') return '';
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function safeTokenEquals(actual, expected) {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function applyRateLimit(req, auth, body, pathname) {
+  if (RATE_LIMIT_MAX <= 0) return;
+  const now = Date.now();
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : 'no-origin';
+  const sessionId = clipString(body?.clientSessionId, 128) || auth.sessionId || req.socket.remoteAddress || 'unknown';
+  const key = `${origin}:${sessionId}:${pathname}`;
+  const existing = rateLimitBuckets.get(key);
+  const bucket =
+    existing && existing.resetAt > now
+      ? existing
+      : { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+
+  bucket.count += 1;
+  rateLimitBuckets.set(key, bucket);
+
+  if (bucket.count > RATE_LIMIT_MAX) {
+    throw new HttpError(429, 'rate_limit_exceeded', 'Too many ECHO API requests. Please retry after the rate-limit window.');
+  }
+
+  if (rateLimitBuckets.size > 5_000) {
+    for (const [entryKey, entry] of rateLimitBuckets) {
+      if (entry.resetAt <= now) rateLimitBuckets.delete(entryKey);
+    }
+  }
+}
+
+function validateRequestBody(endpoint, body) {
+  assertPlainObject(body, 'body');
+  if (endpoint === 'cue') {
+    assertOptionalString(body, 'topic', 120);
+    assertOptionalNumber(body, 'difficulty', 1, 4);
+    assertOptionalString(body, 'category', 80);
+    assertOptionalString(body, 'clientSessionId', 128);
+    assertOptionalString(body, 'requestId', 180);
+    assertOptionalString(body, 'recentTranscript', 4_000);
+    assertOptionalString(body, 'conversationContext', 4_000);
+    assertOptionalString(body, 'lastUtterance', 1_000);
+    assertOptionalString(body, 'scenarioContext', 1_000);
+    assertOptionalString(body, 'missedHint', 160);
+    assertOptionalStringArray(body, 'usedHints', 20, 80);
+    assertOptionalEnum(body, 'intent', ['cue', 'simplify']);
+    return;
+  }
+
+  if (endpoint === 'transcribe') {
+    assertOptionalString(body, 'topic', 120);
+    assertOptionalNumber(body, 'difficulty', 1, 4);
+    assertOptionalString(body, 'clientSessionId', 128);
+    assertOptionalString(body, 'requestId', 180);
+    assertOptionalString(body, 'language', 35);
+    assertOptionalEnum(body, 'task', ['transcribe', 'speech_evaluation']);
+    assertOptionalString(body, 'lastUtterance', 1_000);
+    assertOptionalString(body, 'scenarioContext', 1_000);
+    assertOptionalStringArray(body, 'usedHints', 20, 80);
+    const audio = body.audio;
+    if (!audio || typeof audio !== 'object' || Array.isArray(audio)) {
+      throw new HttpError(400, 'invalid_request_schema', 'audio must be an object.');
+    }
+    assertOptionalString(audio, 'mimeType', 80);
+    if (typeof audio.data !== 'string' || !audio.data.trim()) {
+      throw new HttpError(400, 'invalid_request_schema', 'audio.data must be a non-empty string.');
+    }
+    if (audio.data.length > MAX_BODY_BYTES) {
+      throw new HttpError(413, 'payload_too_large', 'Audio payload is too large.');
+    }
+    cleanMimeType(audio.mimeType);
+    return;
+  }
+
+  if (endpoint === 'session-analysis') {
+    assertOptionalString(body, 'clientSessionId', 128);
+    assertOptionalString(body, 'requestId', 180);
+    assertOptionalEnum(body, 'task', ['grammar', 'session_handoff']);
+    if (body.task === 'grammar') {
+      if (typeof body.transcript !== 'string' || !body.transcript.trim()) {
+        throw new HttpError(400, 'invalid_request_schema', 'transcript is required for grammar analysis.');
+      }
+      assertOptionalString(body, 'topic', 120);
+      assertOptionalString(body, 'transcript', 4_000);
+      return;
+    }
+
+    if (body.stage_1_raw !== undefined) assertPlainObject(body.stage_1_raw, 'stage_1_raw');
+    if (body.stage_2_analysis !== undefined) assertPlainObject(body.stage_2_analysis, 'stage_2_analysis');
+  }
+}
+
+function validateResponseBody(endpoint, body) {
+  assertPlainObject(body, 'response');
+  if (endpoint === 'cue') {
+    if (typeof body.cue !== 'string' || !body.cue.trim() || body.cue.length > 50) {
+      throw new HttpError(502, 'provider_schema_error', 'Cue response failed schema validation.');
+    }
+  } else if (endpoint === 'transcribe') {
+    assertOptionalString(body, 'transcript', 2_000);
+    assertOptionalString(body, 'text', 2_000);
+    assertOptionalNullableString(body, 'cue', 50);
+    assertOptionalNullableString(body, 'hint', 50);
+    assertOptionalNullableString(body, 'chunk', 50);
+  } else if (endpoint === 'session-analysis') {
+    assertOptionalNullableString(body, 'correction', 240);
+    if (body.weak_areas !== undefined) assertOptionalStringArray(body, 'weak_areas', 5, 160);
+    if (body.recommended_chunks !== undefined) assertOptionalStringArray(body, 'recommended_chunks', 5, 160);
+    assertOptionalString(body, 'difficulty_assessment', 160);
+    assertOptionalString(body, 'next_session_focus', 240);
+    assertOptionalString(body, 'gem_instruction', 600);
+  }
+  assertOptionalString(body, 'source', 40);
+  assertOptionalNumber(body, 'latencyMs', 0, 120_000);
+  return body;
+}
 
 async function handleCue(input) {
   const startedAt = Date.now();
@@ -330,7 +497,7 @@ function corsHeaders(req) {
   const allowed = origin ? allowedOrigin(origin) : '';
   const headers = {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Echo-Session-Token',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -349,6 +516,13 @@ function parseOrigins(value) {
   return value
     .split(',')
     .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function parseTokens(value) {
+  return value
+    .split(',')
+    .map((token) => token.trim())
     .filter(Boolean);
 }
 
@@ -396,6 +570,58 @@ function firstText(input, keys) {
 function clipString(value, max) {
   if (value === null || value === undefined) return '';
   return String(value).replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function assertPlainObject(value, field) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be an object.`);
+  }
+}
+
+function assertOptionalString(record, field, max) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  if (typeof value !== 'string') {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a string.`);
+  }
+  if (value.length > max) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} is too long.`);
+  }
+}
+
+function assertOptionalNullableString(record, field, max) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  assertOptionalString(record, field, max);
+}
+
+function assertOptionalNumber(record, field, min, max) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a number in range.`);
+  }
+}
+
+function assertOptionalEnum(record, field, values) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  if (!values.includes(value)) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} has an unsupported value.`);
+  }
+}
+
+function assertOptionalStringArray(record, field, maxItems, maxChars) {
+  const value = record[field];
+  if (value === undefined || value === null) return;
+  if (!Array.isArray(value) || value.length > maxItems) {
+    throw new HttpError(400, 'invalid_request_schema', `${field} must be a bounded string array.`);
+  }
+  for (const item of value) {
+    if (typeof item !== 'string' || item.length > maxChars) {
+      throw new HttpError(400, 'invalid_request_schema', `${field} must contain bounded strings.`);
+    }
+  }
 }
 
 function clipArray(value, maxItems, maxChars) {

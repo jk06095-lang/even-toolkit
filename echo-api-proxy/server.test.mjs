@@ -8,6 +8,7 @@ const port = 18_700 + Math.floor(Math.random() * 500);
 const allowedOrigin = 'https://echo-client.example.test';
 const baseUrl = `http://127.0.0.1:${port}`;
 const qaDelayMs = 120;
+const sessionToken = 'test-session-token';
 
 let child;
 let proxyOutput = '';
@@ -21,6 +22,10 @@ before(async () => {
       PORT: String(port),
       ECHO_PROXY_ALLOWED_ORIGINS: allowedOrigin,
       ECHO_PROXY_QA_DELAY_MS: String(qaDelayMs),
+      ECHO_PROXY_SESSION_TOKEN: sessionToken,
+      ECHO_PROXY_RATE_LIMIT_MAX: '2',
+      ECHO_PROXY_RATE_LIMIT_WINDOW_MS: '60000',
+      ECHO_PROXY_MAX_BODY_BYTES: '1024',
       GEMINI_API_KEY: '',
       GOOGLE_GENERATIVE_AI_API_KEY: '',
     },
@@ -59,6 +64,13 @@ after(async () => {
   ]);
 });
 
+function authHeaders(extra = {}) {
+  return {
+    Authorization: `Bearer ${sessionToken}`,
+    ...extra,
+  };
+}
+
 test('healthz reports configuration state without requiring provider credentials', async () => {
   const response = await fetch(`${baseUrl}/healthz`, {
     headers: { Origin: allowedOrigin },
@@ -69,8 +81,51 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(response.headers.get('access-control-allow-origin'), allowedOrigin);
   assert.equal(body.ok, true);
   assert.equal(body.configured, false);
+  assert.equal(body.authConfigured, true);
   assert.equal(body.qaDelayMs, qaDelayMs);
+  assert.equal(body.rateLimit.max, 2);
   assert.equal(typeof body.model, 'string');
+});
+
+test('missing session token is rejected before provider work starts', async () => {
+  const response = await fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+    },
+    body: JSON.stringify({
+      topic: 'auth qa',
+      clientSessionId: 'missing-token-session',
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(body.error.code, 'missing_session_token');
+});
+
+test('invalid session token is rejected without echoing request content', async () => {
+  const sensitiveText = 'invalid token learner text must not echo';
+  const response = await fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      Authorization: 'Bearer wrong-token',
+    },
+    body: JSON.stringify({
+      topic: 'auth qa',
+      clientSessionId: 'invalid-token-session',
+      lastUtterance: sensitiveText,
+    }),
+  });
+  const text = await response.text();
+  const body = JSON.parse(text);
+
+  assert.equal(response.status, 401);
+  assert.equal(body.error.code, 'invalid_session_token');
+  assert.equal(text.includes(sensitiveText), false);
 });
 
 test('missing provider key fails safely without echoing request content', async () => {
@@ -81,9 +136,11 @@ test('missing provider key fails safely without echoing request content', async 
     headers: {
       'Content-Type': 'application/json',
       Origin: allowedOrigin,
+      ...authHeaders(),
     },
     body: JSON.stringify({
       topic: 'hardware qa',
+      clientSessionId: 'safe-provider-session',
       lastUtterance: sensitiveText,
     }),
   });
@@ -98,6 +155,84 @@ test('missing provider key fails safely without echoing request content', async 
   assert.equal(text.includes(sensitiveText), false);
   await delay(20);
   assert.equal((proxyOutput + proxyErrorOutput).includes(sensitiveText), false);
+});
+
+test('rate limit returns a clear 429 before provider work starts', async () => {
+  const request = () => fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      topic: 'rate qa',
+      clientSessionId: 'rate-limit-session',
+    }),
+  });
+
+  assert.equal((await request()).status, 503);
+  assert.equal((await request()).status, 503);
+
+  const response = await request();
+  const body = await response.json();
+  assert.equal(response.status, 429);
+  assert.equal(body.error.code, 'rate_limit_exceeded');
+});
+
+test('malformed JSON is rejected before provider work starts', async () => {
+  const response = await fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: '{"topic":',
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, 'invalid_json');
+});
+
+test('malformed request schema is rejected before provider work starts', async () => {
+  const response = await fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      topic: 'schema qa',
+      clientSessionId: 'malformed-schema-session',
+      usedHints: 'not an array',
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 400);
+  assert.equal(body.error.code, 'invalid_request_schema');
+});
+
+test('oversized bodies are rejected before provider work starts', async () => {
+  const response = await fetch(`${baseUrl}/v1/cue`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Origin: allowedOrigin,
+      ...authHeaders(),
+    },
+    body: JSON.stringify({
+      topic: 'x'.repeat(2_000),
+      clientSessionId: 'oversized-session',
+    }),
+  });
+  const body = await response.json();
+
+  assert.equal(response.status, 413);
+  assert.equal(body.error.code, 'payload_too_large');
 });
 
 test('disallowed origins are rejected before proxy work starts', async () => {
