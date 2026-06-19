@@ -54,7 +54,7 @@ export function renderDebriefView(): string {
           </div>
           <div class="stat-item">
             <div class="value" id="debrief-stress" style="color: var(--color-negative)"></div>
-            <div class="label">Intensity</div>
+            <div class="label">Source</div>
           </div>
           <div class="stat-item">
             <div class="value" id="debrief-chunks"></div>

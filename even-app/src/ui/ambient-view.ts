@@ -85,6 +85,19 @@ export function renderAmbientView(): string {
         </div>
       </div>
 
+      <div class="card" id="imported-review-card">
+        <div class="card-header">
+          <div class="icon" style="background: var(--color-surface-light)">IR</div>
+          <h3>Imported Review Items</h3>
+          <span class="badge badge-accent" id="imported-review-count">0</span>
+        </div>
+        <div class="empty-state" id="imported-review-empty">
+          <div class="icon">0</div>
+          <p>No imported review items yet.<br/>Import ECHO review JSON from Review.</p>
+        </div>
+        <ul class="schedule-list" id="imported-review-list" style="display: none;"></ul>
+      </div>
+
       <div class="card" id="exposure-card">
         <div class="card-header">
           <div class="icon" style="background: var(--color-surface-light)">EX</div>

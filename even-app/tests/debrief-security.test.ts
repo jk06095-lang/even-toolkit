@@ -121,6 +121,43 @@ describe('debrief import safety', () => {
     }))).toThrow(/direct contact identifiers/);
   });
 
+  it('rejects invalid ids, enums, and oversized schema-versioned review imports', () => {
+    expect(() => parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      items: [
+        {
+          id: '잘못된-id',
+          canonicalExpression: 'Could you repeat that?',
+          meaningKo: '다시 말해 달라고 요청하기',
+        },
+      ],
+    }))).toThrow(/stable ASCII id/);
+
+    expect(() => parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      items: [
+        {
+          id: 'bad-speech-act',
+          canonicalExpression: 'Could you repeat that?',
+          meaningKo: '다시 말해 달라고 요청하기',
+          speechAct: 'translate_everything',
+        },
+      ],
+    }))).toThrow(/speechAct/);
+
+    expect(() => parseDebriefJSON(JSON.stringify({
+      schemaVersion: '2.0.0',
+      importKind: 'echo_review_items',
+      items: Array.from({ length: 101 }, (_, index) => ({
+        id: `review-${index}`,
+        canonicalExpression: `Review phrase ${index}`,
+        meaningKo: `복습 문구 ${index}`,
+      })),
+    }))).toThrow(/Too many learningItems/);
+  });
+
   it('rejects executable URL schemes and control characters in imported phrases', () => {
     for (const target of [
       'javascript:alert(1)',

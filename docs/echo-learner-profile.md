@@ -39,6 +39,9 @@ queue. The older `session_date` / `fsi_stress_level` /
 `bottleneck_chunks.interval` report is still accepted, but it is treated as a
 legacy migration path and converted into conservative `LearningItem` records
 without revealing the saved English phrase in the recall prompt.
+The Echo Reminders screen also shows an Imported Review Items list with due
+time, meaning, speech act, and scenario tag so learners can confirm imported
+items are present without exposing the answer before recall.
 
 Each saved attempt also carries a local text evaluation: keyword coverage,
 precision, a semantic score, and a suggested grade. The suggestion is a

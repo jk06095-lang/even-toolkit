@@ -53,6 +53,19 @@ describe('Project ECHO UI copy', () => {
     expect(html).toContain('Conversation Timeline');
   });
 
+  it('shows schema-versioned review import and imported-item management surfaces', () => {
+    const reviewHtml = renderDebriefView();
+    const ambientHtml = renderAmbientView();
+
+    expect(reviewHtml).toContain('"importKind": "echo_review_items"');
+    expect(reviewHtml).toContain('<div class="label">Source</div>');
+    expect(reviewHtml).not.toContain('<div class="label">Intensity</div>');
+
+    expect(ambientHtml).toContain('Imported Review Items');
+    expect(ambientHtml).toContain('id="imported-review-list"');
+    expect(ambientHtml).toContain('id="imported-review-count"');
+  });
+
   it('keeps app shell metadata ASCII-safe for packaged output', () => {
     const indexHtml = readFileSync(path.join(appRoot, 'index.html'), 'utf8');
 

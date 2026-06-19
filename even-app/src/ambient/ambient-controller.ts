@@ -15,6 +15,7 @@ import {
   ActiveRecallSpeechCapture,
   type ActiveRecallSpeechStatus,
 } from '../learning/active-recall-speech';
+import { loadImportedLearningItemsForRecall } from '../debrief/json-parser';
 
 export interface AmbientControllerContext {
   getHud: () => HUDController | null;
@@ -26,7 +27,10 @@ export interface AmbientControllerContext {
 export function bindAmbientEvents(context: AmbientControllerContext): void {
   document.getElementById('btn-start-ambient')?.addEventListener('click', () => startAmbient(context));
   document.getElementById('btn-stop-ambient')?.addEventListener('click', () => stopAmbient(context));
-  document.getElementById('btn-refresh-recall')?.addEventListener('click', () => renderActiveRecallPanel());
+  document.getElementById('btn-refresh-recall')?.addEventListener('click', () => {
+    renderActiveRecallPanel();
+    renderImportedReviewItems();
+  });
   document.getElementById('btn-recall-reveal')?.addEventListener('click', () => revealActiveRecallAnswer());
   document.getElementById('btn-recall-speech-start')?.addEventListener('click', () => startActiveRecallSpeech());
   document.getElementById('btn-recall-speech-stop')?.addEventListener('click', () => stopActiveRecallSpeech());
@@ -44,6 +48,7 @@ export function bindAmbientEvents(context: AmbientControllerContext): void {
   }
 
   renderActiveRecallPanel();
+  renderImportedReviewItems();
 }
 
 function startAmbient(context: AmbientControllerContext): void {
@@ -186,6 +191,45 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   if (revealButton) revealButton.disabled = false;
   setSpeechButtons(false, true);
   if (emptyEl) emptyEl.style.display = 'none';
+}
+
+function renderImportedReviewItems(): void {
+  const listEl = document.getElementById('imported-review-list');
+  const emptyEl = document.getElementById('imported-review-empty');
+  const countEl = document.getElementById('imported-review-count');
+  if (!listEl) return;
+
+  const items = loadImportedLearningItemsForRecall();
+  if (countEl) countEl.textContent = String(items.length);
+
+  if (items.length === 0) {
+    listEl.replaceChildren();
+    listEl.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = 'block';
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = 'none';
+  listEl.style.display = 'block';
+  listEl.replaceChildren(...items.slice(0, 10).map((item) => {
+    const listItem = document.createElement('li');
+    listItem.className = 'schedule-item';
+
+    const due = document.createElement('span');
+    due.className = 'time';
+    due.textContent = formatDueTime(new Date(item.scheduling.dueAt));
+
+    const summary = document.createElement('span');
+    summary.className = 'chunk';
+    summary.textContent = [
+      item.meaningKo,
+      item.speechAct,
+      item.scenarioTags[0] ?? 'review',
+    ].join(' | ');
+
+    listItem.append(due, summary);
+    return listItem;
+  }));
 }
 
 function startActiveRecallSpeech(): void {
