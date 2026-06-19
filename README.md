@@ -302,6 +302,11 @@ Provider-agnostic speech-to-text module for voice input in G2 glasses apps.
 
 ### Quick Start
 
+> Security note: passing `apiKey` in a browser app is for local development
+> experiments only. Production Even Hub builds must call a server-side STT/AI
+> proxy and keep provider tokens out of the WebView, bundled `dist`, and
+> packaged `.ehpk` artifacts.
+
 ```tsx
 import { useSTT } from 'even-toolkit/stt/react';
 
@@ -329,7 +334,7 @@ function VoiceInput() {
 useSTT({
   provider: 'soniox',
   language: 'en-US',        // BCP-47 language tag
-  apiKey: 'your-key',       // Required
+  apiKey: 'your-key',       // Local development only; use a proxy in production
   vad: { silenceMs: 2500 }, // Auto-stop after silence
   chunkIntervalMs: 4000,    // Progressive transcription interval
   continuous: false,         // Don't auto-stop on silence

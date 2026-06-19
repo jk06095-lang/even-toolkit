@@ -345,6 +345,10 @@
     "./web/theme-dark.css": "./web/theme/tokens-dark.css",
     "./web/typography.css": "./web/theme/typography.css",
     "./web/utilities.css": "./web/theme/utilities.css",
+    "./echo-domain-v2": {
+      "types": "./dist/echo-domain-v2/index.d.ts",
+      "import": "./dist/echo-domain-v2/index.js"
+    },
     "./stt": {
       "types": "./dist/stt/index.d.ts",
       "import": "./dist/stt/index.js"
@@ -380,6 +384,7 @@
     "web",
     "glasses",
     "stt",
+    "echo-domain-v2",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
@@ -390,6 +395,8 @@
     "validate:hardware-template": "node scripts/validate-hardware-qa.mjs docs/project-echo-hardware-qa.template.json --allow-draft",
     "validate:key-rotation-evidence": "node scripts/validate-key-rotation-evidence.mjs",
     "validate:key-rotation-template": "node scripts/validate-key-rotation-evidence.mjs docs/key-rotation-evidence.template.md --allow-draft",
+    "test:key-rotation-evidence": "node --test scripts/validate-key-rotation-evidence.test.mjs",
+    "validate:echo-domain-v2": "node scripts/validate-echo-domain-v2.mjs",
     "validate:pilot-evidence": "node scripts/validate-pilot-evidence.mjs",
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
     "validate:release-deps": "node scripts/validate-release-deps.mjs",

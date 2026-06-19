@@ -19,7 +19,8 @@
     "glasses/**/*.ts",
     "web/**/*.ts",
     "web/**/*.tsx",
-    "stt/**/*.ts"
+    "stt/**/*.ts",
+    "echo-domain-v2/**/*.ts"
   ],
   "exclude": [
     "node_modules",

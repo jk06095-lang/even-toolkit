@@ -11,6 +11,10 @@ const steps = [
     args: ['run', 'build'],
   },
   {
+    label: 'ECHO domain v2 schemas',
+    args: ['run', 'validate:echo-domain-v2'],
+  },
+  {
     label: 'Project ECHO pilot evidence template',
     args: ['run', 'validate:pilot-template'],
   },
@@ -21,6 +25,10 @@ const steps = [
   {
     label: 'Project ECHO key-rotation template',
     args: ['run', 'validate:key-rotation-template'],
+  },
+  {
+    label: 'Project ECHO key-rotation evidence validator tests',
+    args: ['run', 'test:key-rotation-evidence'],
   },
   {
     label: 'ECHO API proxy verify',
