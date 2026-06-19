@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -93,6 +94,8 @@ test('healthz reports configuration state without requiring provider credentials
   assert.equal(JSON.stringify(body).includes(sessionToken), false);
   assert.equal(body.qaDelayMs, qaDelayMs);
   assert.equal(body.rateLimit.max, 2);
+  assert.equal(body.idempotency.ttlMs, 600000);
+  assert.equal(body.circuitBreaker.failureThreshold, 5);
   assert.equal(typeof body.model, 'string');
 });
 
@@ -312,3 +315,163 @@ test('disallowed origins are rejected before proxy work starts', async () => {
   assert.equal(response.headers.get('access-control-allow-origin'), null);
   assert.equal(body.error.code, 'origin_not_allowed');
 });
+
+test('idempotency key replays a successful provider response without a duplicate provider call', async () => {
+  let providerCalls = 0;
+  const provider = await startProviderStub((_req, res) => {
+    providerCalls += 1;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      candidates: [
+        {
+          content: {
+            parts: [{ text: '{"cue":"Could you repeat?"}' }],
+          },
+        },
+      ],
+    }));
+  });
+  const proxy = await startProxy({
+    GEMINI_API_KEY: 'stub-provider-key',
+    GEMINI_API_BASE_URL: provider.baseUrl,
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+  });
+
+  try {
+    const request = () => fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        'Idempotency-Key': 'retry-cue-0001',
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        topic: 'idempotency qa',
+        clientSessionId: 'idempotency-session',
+        requestId: 'idempotency-session:cue:1',
+      }),
+    });
+
+    const first = await request();
+    const second = await request();
+    const firstBody = await first.json();
+    const secondBody = await second.json();
+
+    assert.equal(first.status, 200);
+    assert.equal(second.status, 200);
+    assert.equal(firstBody.cue, 'Could you repeat?');
+    assert.deepEqual(secondBody, firstBody);
+    assert.equal(providerCalls, 1);
+  } finally {
+    await proxy.stop();
+    await provider.stop();
+  }
+});
+
+test('provider circuit opens after consecutive provider failures', async () => {
+  let providerCalls = 0;
+  const provider = await startProviderStub((_req, res) => {
+    providerCalls += 1;
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'temporary provider failure' }));
+  });
+  const proxy = await startProxy({
+    GEMINI_API_KEY: 'stub-provider-key',
+    GEMINI_API_BASE_URL: provider.baseUrl,
+    ECHO_PROXY_RATE_LIMIT_MAX: '20',
+    ECHO_PROXY_CIRCUIT_FAILURE_THRESHOLD: '2',
+    ECHO_PROXY_CIRCUIT_COOLDOWN_MS: '60000',
+  });
+
+  try {
+    const request = () => fetch(`${proxy.baseUrl}/v1/cue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: allowedOrigin,
+        ...authHeaders(),
+      },
+      body: JSON.stringify({
+        topic: 'circuit qa',
+        clientSessionId: 'circuit-session',
+      }),
+    });
+
+    const first = await request();
+    const second = await request();
+    const third = await request();
+    const thirdBody = await third.json();
+
+    assert.equal(first.status, 502);
+    assert.equal(second.status, 502);
+    assert.equal(third.status, 503);
+    assert.equal(thirdBody.error.code, 'provider_circuit_open');
+    assert.equal(providerCalls, 2);
+  } finally {
+    await proxy.stop();
+    await provider.stop();
+  }
+});
+
+async function startProviderStub(handler) {
+  const server = http.createServer(handler);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  const port = typeof address === 'object' && address ? address.port : 0;
+  return {
+    baseUrl: `http://127.0.0.1:${port}`,
+    stop: () => new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    }),
+  };
+}
+
+async function startProxy(extraEnv = {}) {
+  const proxyPort = 19_400 + Math.floor(Math.random() * 500);
+  const proxy = spawn(process.execPath, ['server.mjs'], {
+    cwd: new URL('.', import.meta.url),
+    env: {
+      ...process.env,
+      PORT: String(proxyPort),
+      ECHO_PROXY_ALLOWED_ORIGINS: allowedOrigin,
+      ECHO_PROXY_SESSION_TOKEN: sessionToken,
+      ECHO_PROXY_SESSION_TOKEN_ISSUER: 'test-session-issuer',
+      ECHO_PROXY_SESSION_TOKEN_TTL_SECONDS: '3600',
+      ECHO_PROXY_SESSION_TOKEN_ROTATION_DAYS: '7',
+      ECHO_PROXY_RATE_LIMIT_WINDOW_MS: '60000',
+      ECHO_PROXY_IDEMPOTENCY_TTL_MS: '600000',
+      ...extraEnv,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  proxy.stdout.setEncoding('utf8');
+  proxy.stderr.setEncoding('utf8');
+  proxy.stderr.on('data', (chunk) => {
+    process.stderr.write(chunk);
+  });
+
+  const proxyBaseUrl = `http://127.0.0.1:${proxyPort}`;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    try {
+      const response = await fetch(`${proxyBaseUrl}/healthz`);
+      if (response.ok) {
+        return {
+          baseUrl: proxyBaseUrl,
+          stop: async () => {
+            if (proxy.exitCode !== null) return;
+            proxy.kill();
+            await Promise.race([once(proxy, 'exit'), delay(1_000)]);
+          },
+        };
+      }
+    } catch {
+      // Server is still starting.
+    }
+    await delay(100);
+  }
+
+  proxy.kill();
+  throw new Error('Proxy test server did not become ready.');
+}

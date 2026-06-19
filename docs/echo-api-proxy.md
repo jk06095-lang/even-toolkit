@@ -27,6 +27,9 @@ Use `echo-api-proxy/.env.example` as the deployment template.
 Required:
 
 - `GEMINI_API_KEY`: provider key kept on the server only.
+- `GEMINI_API_BASE_URL`: provider API base URL. Leave this as
+  `https://generativelanguage.googleapis.com` in production unless a reviewed
+  provider adapter or staging stub is intentionally configured.
 - `ECHO_PROXY_ALLOWED_ORIGINS`: comma-separated browser origins allowed to call
   the proxy.
 - `ECHO_PROXY_SESSION_TOKENS`: comma-separated short-lived ECHO session tokens
@@ -48,6 +51,10 @@ Recommended:
 - `ECHO_PROXY_MAX_BODY_BYTES=6000000`
 - `ECHO_PROXY_RATE_LIMIT_WINDOW_MS=60000`
 - `ECHO_PROXY_RATE_LIMIT_MAX=60`
+- `ECHO_PROXY_IDEMPOTENCY_TTL_MS=600000`
+- `ECHO_PROXY_IDEMPOTENCY_MAX_ENTRIES=1000`
+- `ECHO_PROXY_CIRCUIT_FAILURE_THRESHOLD=5`
+- `ECHO_PROXY_CIRCUIT_COOLDOWN_MS=30000`
 - `ECHO_PROXY_QA_DELAY_MS=0`
 
 QA only:
@@ -82,7 +89,14 @@ Manifest:
 5. Set the client build variable `VITE_ECHO_API_BASE_URL` to the same proxy
    origin.
 6. Verify the proxy locally with `cd echo-api-proxy && npm run verify`.
-7. Smoke-test the deployed proxy without making a provider generation call:
+7. For client retries, send an `Idempotency-Key` header with each provider-bound
+   retryable POST. The key must be a bounded token. The proxy caches only
+   successful responses keyed by session, path, key, and request-body hash; it
+   does not cache raw request bodies, audio, or transcript text.
+8. Confirm `/healthz` reports the expected `rateLimit`, `idempotency`, and
+   `circuitBreaker` metadata. If `circuitBreaker.open` is true, the proxy is
+   intentionally failing closed before making more provider calls.
+9. Smoke-test the deployed proxy without making a provider generation call:
 
    ```bash
    cd echo-api-proxy
@@ -97,10 +111,10 @@ Manifest:
    validator. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
    only for local dry-runs.
-8. Build and package the app with `cd even-app && npm run verify`.
-9. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
+10. Build and package the app with `cd even-app && npm run verify`.
+11. Search `even-app/dist` and `even-app/echo.ehpk` for provider keys, session
    tokens, direct provider hostnames, SDK imports, and development IPs.
-10. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
+12. Rotate any provider key that was ever embedded in a built `dist` or `.ehpk`
    artifact. Copy `docs/key-rotation-evidence.template.md` to
    `docs/key-rotation-evidence.md`, record the rotation evidence there, and run
    `npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md`.
@@ -109,15 +123,17 @@ Manifest:
    mark smoke/log/session-token confirmations as passed or verified, prove a
    TTL and rotation cadence inside policy limits, prove old-token revocation,
    and record clean artifact scans such as `0 matches` or `no matches`.
-11. Confirm proxy logs do not contain request bodies, raw transcript text, or
+13. Confirm proxy logs do not contain request bodies, raw transcript text, or
    audio base64 payloads.
 
 `npm run verify` starts the proxy with no provider key and checks `/healthz`,
 session-token rejection, allowed CORS behavior, disallowed-origin rejection,
 bounded schema validation, rate limiting, oversized payload rejection, and safe
 `proxy_not_configured` errors that do not echo learner text in the response body
-or proxy stdout/stderr logs. `npm run smoke:deploy` performs the corresponding
-remote deployment checks and expects the deployed server to report
+or proxy stdout/stderr logs. It also checks successful response idempotency and
+provider circuit opening against a local stub provider so retry and failure
+behavior does not require real provider traffic. `npm run smoke:deploy` performs
+the corresponding remote deployment checks and expects the deployed server to report
 `configured: true`, `authConfigured: true`, `tokenPolicy.configured: true`,
 and `qaDelayMs: 0` unless local-only override flags are passed for local
 testing.

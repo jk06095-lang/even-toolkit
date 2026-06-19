@@ -1,11 +1,14 @@
 import http from 'node:http';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 
 const PORT = readNumberEnv('PORT', readNumberEnv('ECHO_PROXY_PORT', 8787));
 const MAX_BODY_BYTES = readNumberEnv('ECHO_PROXY_MAX_BODY_BYTES', 6_000_000);
 const PROVIDER_TIMEOUT_MS = readNumberEnv('ECHO_PROXY_PROVIDER_TIMEOUT_MS', 20_000);
 const QA_DELAY_MS = Math.min(readNumberEnv('ECHO_PROXY_QA_DELAY_MS', 0), 60_000);
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_API_BASE_URL = normalizeBaseUrl(
+  process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com',
+);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY || '';
 const ALLOWED_ORIGINS = parseOrigins(
   process.env.ECHO_PROXY_ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173',
@@ -19,7 +22,16 @@ const SESSION_TOKEN_ROTATION_DAYS = readNumberEnv('ECHO_PROXY_SESSION_TOKEN_ROTA
 const SESSION_TOKEN_POLICY = buildSessionTokenPolicy();
 const RATE_LIMIT_WINDOW_MS = readNumberEnv('ECHO_PROXY_RATE_LIMIT_WINDOW_MS', 60_000);
 const RATE_LIMIT_MAX = readNumberEnv('ECHO_PROXY_RATE_LIMIT_MAX', 60);
+const IDEMPOTENCY_TTL_MS = readNumberEnv('ECHO_PROXY_IDEMPOTENCY_TTL_MS', 10 * 60_000);
+const IDEMPOTENCY_MAX_ENTRIES = readNumberEnv('ECHO_PROXY_IDEMPOTENCY_MAX_ENTRIES', 1_000);
+const PROVIDER_CIRCUIT_FAILURE_THRESHOLD = readNumberEnv('ECHO_PROXY_CIRCUIT_FAILURE_THRESHOLD', 5);
+const PROVIDER_CIRCUIT_COOLDOWN_MS = readNumberEnv('ECHO_PROXY_CIRCUIT_COOLDOWN_MS', 30_000);
 const rateLimitBuckets = new Map();
+const idempotencyCache = new Map();
+const providerCircuit = {
+  failureCount: 0,
+  openedUntil: 0,
+};
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -56,6 +68,15 @@ const server = http.createServer(async (req, res) => {
           windowMs: RATE_LIMIT_WINDOW_MS,
           max: RATE_LIMIT_MAX,
         },
+        idempotency: {
+          ttlMs: IDEMPOTENCY_TTL_MS,
+          maxEntries: IDEMPOTENCY_MAX_ENTRIES,
+        },
+        circuitBreaker: {
+          failureThreshold: PROVIDER_CIRCUIT_FAILURE_THRESHOLD,
+          cooldownMs: PROVIDER_CIRCUIT_COOLDOWN_MS,
+          open: isProviderCircuitOpen(),
+        },
       });
       return;
     }
@@ -68,6 +89,14 @@ const server = http.createServer(async (req, res) => {
     const auth = authenticateRequest(req);
     const body = await readJsonBody(req);
     validateRequestBody(endpoint, body);
+
+    const idempotency = buildIdempotencyRecord(req, auth, body, url.pathname);
+    const cached = readIdempotencyCache(idempotency);
+    if (cached) {
+      sendJson(req, res, cached.status, cached.body);
+      return;
+    }
+
     applyRateLimit(req, auth, body, url.pathname);
 
     if (QA_DELAY_MS > 0) {
@@ -78,25 +107,12 @@ const server = http.createServer(async (req, res) => {
       throw new HttpError(503, 'proxy_not_configured', 'ECHO API proxy is not configured.');
     }
 
-    if (endpoint === 'cue') {
-      sendJson(req, res, 200, validateResponseBody(endpoint, await handleCue(body)));
-      return;
-    }
-
-    if (endpoint === 'transcribe') {
-      sendJson(req, res, 200, validateResponseBody(endpoint, await handleTranscription(body)));
-      return;
-    }
-
-    if (endpoint === 'translate') {
-      sendJson(req, res, 200, validateResponseBody(endpoint, await handleTranslation(body)));
-      return;
-    }
-
-    if (endpoint === 'session-analysis') {
-      sendJson(req, res, 200, validateResponseBody(endpoint, await handleSessionAnalysis(body)));
-      return;
-    }
+    const responseBody = await runProviderOperation(async () => validateResponseBody(
+      endpoint,
+      await handleEndpoint(endpoint, body),
+    ));
+    writeIdempotencyCache(idempotency, 200, responseBody);
+    sendJson(req, res, 200, responseBody);
   } catch (err) {
     sendSafeError(req, res, err);
   } finally {
@@ -115,6 +131,14 @@ function resolveEndpoint(pathname) {
   if (pathname === '/v1/transcribe') return 'transcribe';
   if (pathname === '/v1/translate') return 'translate';
   if (pathname === '/v1/session-analysis') return 'session-analysis';
+  throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
+}
+
+function handleEndpoint(endpoint, body) {
+  if (endpoint === 'cue') return handleCue(body);
+  if (endpoint === 'transcribe') return handleTranscription(body);
+  if (endpoint === 'translate') return handleTranslation(body);
+  if (endpoint === 'session-analysis') return handleSessionAnalysis(body);
   throw new HttpError(404, 'not_found', 'Unknown ECHO API endpoint.');
 }
 
@@ -176,6 +200,101 @@ function applyRateLimit(req, auth, body, pathname) {
       if (entry.resetAt <= now) rateLimitBuckets.delete(entryKey);
     }
   }
+}
+
+function buildIdempotencyRecord(req, auth, body, pathname) {
+  const key = req.headers['idempotency-key'];
+  if (key === undefined) return null;
+  if (Array.isArray(key) || typeof key !== 'string') {
+    throw new HttpError(400, 'invalid_idempotency_key', 'Idempotency-Key must be a single bounded token.');
+  }
+
+  const cleaned = key.trim();
+  if (!/^[A-Za-z0-9._:-]{8,180}$/.test(cleaned)) {
+    throw new HttpError(400, 'invalid_idempotency_key', 'Idempotency-Key must be a single bounded token.');
+  }
+
+  const bodyHash = createHash('sha256')
+    .update(stableStringify(body))
+    .digest('hex');
+  const cacheKey = createHash('sha256')
+    .update([auth.sessionId || 'anonymous', pathname, cleaned, bodyHash].join('\n'))
+    .digest('hex');
+
+  return { cacheKey };
+}
+
+function readIdempotencyCache(idempotency) {
+  if (!idempotency) return null;
+  const now = Date.now();
+  const entry = idempotencyCache.get(idempotency.cacheKey);
+  if (!entry) return null;
+  if (entry.expiresAt <= now) {
+    idempotencyCache.delete(idempotency.cacheKey);
+    return null;
+  }
+  return {
+    status: entry.status,
+    body: cloneJson(entry.body),
+  };
+}
+
+function writeIdempotencyCache(idempotency, status, body) {
+  if (!idempotency || status < 200 || status >= 300 || IDEMPOTENCY_TTL_MS <= 0) return;
+  idempotencyCache.set(idempotency.cacheKey, {
+    status,
+    body: cloneJson(body),
+    expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+  });
+
+  if (idempotencyCache.size > IDEMPOTENCY_MAX_ENTRIES) {
+    pruneIdempotencyCache();
+  }
+}
+
+function pruneIdempotencyCache() {
+  const now = Date.now();
+  for (const [key, entry] of idempotencyCache) {
+    if (entry.expiresAt <= now || idempotencyCache.size > IDEMPOTENCY_MAX_ENTRIES) {
+      idempotencyCache.delete(key);
+    }
+    if (idempotencyCache.size <= IDEMPOTENCY_MAX_ENTRIES) break;
+  }
+}
+
+async function runProviderOperation(operation) {
+  if (isProviderCircuitOpen()) {
+    throw new HttpError(503, 'provider_circuit_open', 'AI provider is temporarily unavailable. Please retry later.');
+  }
+
+  try {
+    const result = await operation();
+    providerCircuit.failureCount = 0;
+    providerCircuit.openedUntil = 0;
+    return result;
+  } catch (err) {
+    if (isProviderFailure(err)) {
+      providerCircuit.failureCount += 1;
+      if (providerCircuit.failureCount >= PROVIDER_CIRCUIT_FAILURE_THRESHOLD) {
+        providerCircuit.openedUntil = Date.now() + PROVIDER_CIRCUIT_COOLDOWN_MS;
+      }
+    }
+    throw err;
+  }
+}
+
+function isProviderCircuitOpen() {
+  return providerCircuit.openedUntil > Date.now();
+}
+
+function isProviderFailure(err) {
+  return err instanceof HttpError
+    && [
+      'provider_error',
+      'provider_timeout',
+      'provider_schema_error',
+      'provider_empty',
+    ].includes(err.code);
 }
 
 function validateRequestBody(endpoint, body) {
@@ -451,7 +570,7 @@ async function callGemini(parts, maxOutputTokens) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
   const endpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent` +
+    `${GEMINI_API_BASE_URL}/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent` +
     `?key=${encodeURIComponent(GEMINI_API_KEY)}`;
 
   try {
@@ -552,7 +671,7 @@ function corsHeaders(req) {
   const allowed = origin ? allowedOrigin(origin) : '';
   const headers = {
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Echo-Session-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Echo-Session-Token, Idempotency-Key',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -581,6 +700,18 @@ function parseTokens(value) {
     .filter(Boolean);
 }
 
+function normalizeBaseUrl(value) {
+  try {
+    const url = new URL(value);
+    url.pathname = url.pathname.replace(/\/+$/, '');
+    url.search = '';
+    url.hash = '';
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    return 'https://generativelanguage.googleapis.com';
+  }
+}
+
 function buildSessionTokenPolicy() {
   const ttlSeconds = SESSION_TOKEN_TTL_SECONDS || null;
   const rotationDays = SESSION_TOKEN_ROTATION_DAYS || null;
@@ -606,6 +737,19 @@ function buildSessionTokenPolicy() {
 function readNumberEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] || '', 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`;
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value));
 }
 
 function delay(ms) {

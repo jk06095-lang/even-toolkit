@@ -146,6 +146,11 @@ async function checkHealthz() {
     tokenPolicyTtlSeconds: body?.tokenPolicy?.ttlSeconds ?? null,
     tokenPolicyRotationDays: body?.tokenPolicy?.rotationDays ?? null,
     tokenPolicyActiveTokenCount: body?.tokenPolicy?.activeTokenCount ?? null,
+    idempotencyTtlMs: body?.idempotency?.ttlMs ?? null,
+    idempotencyMaxEntries: body?.idempotency?.maxEntries ?? null,
+    circuitBreakerFailureThreshold: body?.circuitBreaker?.failureThreshold ?? null,
+    circuitBreakerCooldownMs: body?.circuitBreaker?.cooldownMs ?? null,
+    circuitBreakerOpen: body?.circuitBreaker?.open === true,
     corsOriginMatches: header(response, 'access-control-allow-origin') === allowedOrigin,
     cacheControlNoStore: String(header(response, 'cache-control') || '').includes('no-store'),
   };
@@ -167,6 +172,10 @@ async function checkHealthz() {
   if (!allowQaDelay) {
     assertEqual(body?.qaDelayMs ?? 0, 0, 'GET /healthz qaDelayMs');
   }
+  assertNumberInRange(body?.idempotency?.ttlMs, 1, 86_400_000, 'GET /healthz idempotency.ttlMs');
+  assertNumberInRange(body?.idempotency?.maxEntries, 1, 100_000, 'GET /healthz idempotency.maxEntries');
+  assertNumberInRange(body?.circuitBreaker?.failureThreshold, 1, 100, 'GET /healthz circuitBreaker.failureThreshold');
+  assertNumberInRange(body?.circuitBreaker?.cooldownMs, 1, 3_600_000, 'GET /healthz circuitBreaker.cooldownMs');
   assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'GET /healthz CORS origin');
   assertIncludes(header(response, 'cache-control'), 'no-store', 'GET /healthz cache-control');
 
@@ -187,6 +196,7 @@ async function checkOptions() {
     allowsPost: String(header(response, 'access-control-allow-methods') || '').includes('POST'),
     allowsAuthorization: String(header(response, 'access-control-allow-headers') || '').includes('Authorization'),
     allowsSessionToken: String(header(response, 'access-control-allow-headers') || '').includes('X-Echo-Session-Token'),
+    allowsIdempotencyKey: String(header(response, 'access-control-allow-headers') || '').includes('Idempotency-Key'),
   };
 
   assertEqual(response.status, 204, 'OPTIONS /v1/cue status');
@@ -194,6 +204,7 @@ async function checkOptions() {
   assertIncludes(header(response, 'access-control-allow-methods'), 'POST', 'OPTIONS /v1/cue methods');
   assertIncludes(header(response, 'access-control-allow-headers'), 'Authorization', 'OPTIONS /v1/cue headers');
   assertIncludes(header(response, 'access-control-allow-headers'), 'X-Echo-Session-Token', 'OPTIONS /v1/cue headers');
+  assertIncludes(header(response, 'access-control-allow-headers'), 'Idempotency-Key', 'OPTIONS /v1/cue headers');
   console.info('[proxy-smoke] OPTIONS /v1/cue ok');
 }
 
