@@ -40,6 +40,11 @@ const VAD_METRICS = [
 
 const NO_ASSIST_SYSTEM_ZERO_METRICS = ['cueP50LatencyMs', 'cueP95LatencyMs'];
 const NO_ASSIST_UX_ZERO_METRICS = ['cueUsageRate', 'cueDismissalRate', 'falseCueRate'];
+const CONDITION_MODE_REQUIREMENTS = {
+  A: /no\s+assistance/i,
+  B: /full\s+sentence\s+suggestion/i,
+  C: /3\s*[-–]\s*5\s+word\s+cue/i,
+};
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
@@ -266,6 +271,21 @@ function validateConditionSemantics(condition, systemMetrics, uxMetrics, pointer
   }
 }
 
+function validateConditionMode(condition, mode, pointer) {
+  const requirement = CONDITION_MODE_REQUIREMENTS[condition];
+  if (!requirement) {
+    return;
+  }
+
+  if (allowDraft && (mode === null || isPlaceholder(mode))) {
+    return;
+  }
+
+  if (typeof mode !== 'string' || !requirement.test(mode)) {
+    addError(`${pointer}.mode`, `must match condition ${condition} expected mode`);
+  }
+}
+
 function validateAggregateSampleSize(conditionAggregate, condition, pointer, participants) {
   const fieldPointer = `${pointer}.sampleSize`;
   if (!hasOwn(conditionAggregate, 'sampleSize')) {
@@ -342,6 +362,7 @@ function validateRun(run, pointer) {
   }
 
   validateText(run, 'mode', pointer);
+  validateConditionMode(run.condition, run.mode, pointer);
   validateMetricGroup(run.systemMetrics, SYSTEM_METRICS, `${pointer}.systemMetrics`);
   validateMetricGroup(run.uxMetrics, UX_METRICS, `${pointer}.uxMetrics`);
   validateConditionSemantics(run.condition, run.systemMetrics, run.uxMetrics, pointer);

@@ -76,11 +76,12 @@ npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.js
 The final command intentionally fails if the manifest still has `TBD`, missing
 numeric metrics, fewer than 5 participants, missing A/B/C runs, duplicate or
 extra A/B/C runs for a participant, duplicate or extra condition-order entries,
-missing VAD environment results, missing real G2 video evidence, non-link
-case-study/video references, or README links not marked as updated. Case-study
-links must be `https://` URLs or repo paths such as
-`docs/project-echo-case-study.ko.md`; video evidence must be an `https://` URL
-or a repo path to a video file.
+condition mode labels that do not match A=`No assistance`, B=`Full sentence
+suggestion`, and C=`3-5 word cue`, missing VAD environment results, missing real
+G2 video evidence, non-link case-study/video references, or README links not
+marked as updated. Case-study links must be `https://` URLs or repo paths such
+as `docs/project-echo-case-study.ko.md`; video evidence must be an `https://`
+URL or a repo path to a video file.
 VAD calibration evidence must also be internally consistent: speech floor above
 noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.
