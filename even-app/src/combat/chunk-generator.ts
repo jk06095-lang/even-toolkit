@@ -20,6 +20,7 @@ import {
   type CueLevel,
   type SpeechAct,
 } from '@toolkit/echo-domain-v2';
+import { shapeCuePhraseForLevel } from './cue-level-policy';
 
 export interface ChunkRequest {
   topic: string;
@@ -63,13 +64,14 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
   const start = Date.now();
   const fallback = (): ChunkResult => {
     const chunk = getRandomFallbackChunk(req.category ?? 'general');
+    const cue = createCueFromResponse(undefined, chunk, req);
     return {
-      chunk,
+      chunk: cue?.phrase ?? chunk,
       source: 'fallback' as const,
       latencyMs: Date.now() - start,
       networkLatencyMs: 0,
       generationLatencyMs: 0,
-      cue: createCueFromResponse(undefined, chunk, req),
+      cue,
     };
   };
 
@@ -106,13 +108,14 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
       return fallback();
     }
 
+    const cue = createCueFromResponse(result, chunk, req);
     return {
-      chunk,
+      chunk: cue?.phrase ?? chunk,
       source,
       latencyMs: networkLatencyMs,
       networkLatencyMs,
       generationLatencyMs,
-      cue: createCueFromResponse(result, chunk, req),
+      cue,
     };
   } catch (err) {
     if (!signal?.aborted) {
@@ -290,6 +293,12 @@ function cleanChunk(raw: string): string {
 function createCueFromResponse(input: unknown, phrase: string, req: ChunkRequest): Cue | undefined {
   if (!req.targetTurnId || !phrase) return undefined;
   const record = isRecord(input) ? input : {};
+  const providerLevel = readCueLevel(record.level);
+  const level = resolveCueLevel(record.level, req);
+  const shouldShapePhrase = providerLevel !== null && providerLevel > level;
+  const cuePhrase = shouldShapePhrase
+    ? shapeCuePhraseForLevel(phrase, level) || phrase
+    : phrase;
   const cue: Cue = {
     schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
     cueId: cleanId(
@@ -298,15 +307,15 @@ function createCueFromResponse(input: unknown, phrase: string, req: ChunkRequest
       req.requestId ||
       `cue-${Date.now()}`,
     ),
-    speechAct: readSpeechAct(record.speechAct) ?? inferSpeechAct(phrase),
-    level: resolveCueLevel(record.level, req),
-    phrase,
+    speechAct: readSpeechAct(record.speechAct) ?? inferSpeechAct(cuePhrase),
+    level,
+    phrase: cuePhrase,
     meaningKo: cleanPlainText(
       extractText(input, ['meaningKo', 'meaning_ko', 'meaning', 'translationKo', 'translation']) ||
       'Meaning unavailable',
       240,
     ),
-    alternatives: cleanAlternatives(record.alternatives, phrase),
+    alternatives: cleanAlternatives(record.alternatives, cuePhrase, level, shouldShapePhrase),
     expiresAfterMs: readExpiresAfterMs(record.expiresAfterMs) ?? readExpiresAfterMs(req.expiresAfterMs) ?? 8000,
     targetTurnId: cleanId(req.targetTurnId),
   };
@@ -329,13 +338,19 @@ function cleanPlainText(value: string, maxLength: number): string {
     .slice(0, maxLength);
 }
 
-function cleanAlternatives(value: unknown, phrase: string): string[] {
+function cleanAlternatives(
+  value: unknown,
+  phrase: string,
+  level: CueLevel,
+  shapeAlternatives = false,
+): string[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set([phrase.toLowerCase()]);
   const alternatives: string[] = [];
   for (const item of value) {
     if (typeof item !== 'string') continue;
-    const cleaned = cleanPlainText(item, 160);
+    const plain = cleanPlainText(item, 160);
+    const cleaned = shapeAlternatives ? shapeCuePhraseForLevel(plain, level) : plain;
     if (!cleaned || seen.has(cleaned.toLowerCase())) continue;
     seen.add(cleaned.toLowerCase());
     alternatives.push(cleaned);

@@ -406,13 +406,13 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     ]);
   });
 
-  it('caps Auto Assist cue levels at 2 even when provider returns level 3', async () => {
+  it('caps Auto Assist cue levels and visible text at 2 even when provider returns level 3', async () => {
     const clock = new FakeClock();
     const harness = createHarness({
       week: 4,
       clock,
       chunkResult: {
-        chunk: 'Use this complete structure.',
+        chunk: 'Could you explain the full renewal timeline?',
         source: 'gemini',
         latencyMs: 5,
         cue: {
@@ -420,9 +420,9 @@ describe('SessionEngine core behavior with injected dependencies', () => {
           cueId: 'provider-auto-level-3',
           speechAct: 'answer',
           level: 3,
-          phrase: 'Use this complete structure.',
+          phrase: 'Could you explain the full renewal timeline?',
           meaningKo: 'Meaning unavailable',
-          alternatives: [],
+          alternatives: ['Could you explain the full renewal plan?'],
           expiresAfterMs: 1200,
           targetTurnId: 'turn-auto-cap-1',
         },
@@ -444,10 +444,34 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.requests[0]?.maxCueLevel).toBe(2);
     expect(harness.chunks[0]?.cue?.cueId).toBe('provider-auto-level-3');
     expect(harness.chunks[0]?.cue?.level).toBe(2);
+    expect(harness.chunks[0]?.chunk).toBe('Could you explain the full...');
+    expect(harness.chunks[0]?.cue?.phrase).toBe('Could you explain the full...');
+    expect(harness.chunks[0]?.chunk).not.toContain('timeline?');
   });
 
   it('keeps level 3 available for explicit Manual Assist requests', async () => {
-    const harness = createHarness({ week: 4 });
+    const harness = createHarness({
+      week: 4,
+      chunkResult: {
+        chunk: 'Could you explain the full renewal timeline?',
+        source: 'gemini',
+        latencyMs: 5,
+        cue: {
+          schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+          cueId: 'provider-manual-level-3',
+          speechAct: 'answer',
+          level: 3,
+          phrase: 'Could you explain the full renewal timeline?',
+          meaningKo: 'Meaning unavailable',
+          alternatives: [],
+          expiresAfterMs: 1200,
+          targetTurnId: 'turn-manual-1',
+        },
+      },
+      transcriptOptions: {
+        idFactory: () => 'turn-manual-1',
+      },
+    });
     await harness.engine.start(harness.hud);
 
     await harness.engine.requestManualCue();
@@ -455,15 +479,16 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.requests[0]?.adaptiveDifficulty).toBe(3);
     expect(harness.cueProvider.requests[0]?.maxCueLevel).toBe(3);
     expect(harness.chunks[0]?.cue?.level).toBe(3);
+    expect(harness.chunks[0]?.chunk).toBe('Could you explain the full renewal timeline?');
   });
 
-  it('caps speech-evaluation cues at level 2', async () => {
+  it('caps speech-evaluation cue levels and visible text at 2', async () => {
     const harness = createHarness({
       week: 4,
       cloudProcessingEnabled: true,
       speechEvaluationResult: {
         transcript: 'I think maybe',
-        chunk: 'Try a short repair.',
+        chunk: 'Could you explain the full renewal timeline?',
         source: 'gemini',
         latencyMs: 8,
         networkLatencyMs: 6,
@@ -479,6 +504,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.evaluationRequests[0]?.adaptiveDifficulty).toBe(2);
     expect(harness.cueProvider.evaluationRequests[0]?.maxCueLevel).toBe(2);
     expect(harness.chunks[0]?.cue?.level).toBe(2);
+    expect(harness.chunks[0]?.chunk).toBe('Could you explain the full...');
   });
 
   it('reconciles live final and speech-evaluation transcripts into one conversation turn', async () => {

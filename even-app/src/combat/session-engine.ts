@@ -21,6 +21,7 @@ import {
 } from './translation-queue';
 import { requestTranslation } from '../services/echo-api';
 import { SpeechTurnReconciler } from './speech-turn-reconciler';
+import { constrainCueForLevel, shapeCuePhraseForLevel } from './cue-level-policy';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   type AssistDecision,
@@ -795,16 +796,26 @@ export class SessionEngine {
     request: ReturnType<SessionEngine['beginRequest']>,
     targetTurnId: string,
     maxCueLevel: CueLevel,
+    shapeGeneratedPhrase = false,
   ): ChunkResult {
     const cue = result.cue?.targetTurnId === targetTurnId
       ? this.normalizeCueLevel(result.cue, maxCueLevel)
-      : this.createCueFromChunk(result.chunk, request.requestId, targetTurnId, maxCueLevel);
-    return { ...result, cue };
+      : this.createCueFromChunk(
+        result.chunk,
+        request.requestId,
+        targetTurnId,
+        maxCueLevel,
+        shapeGeneratedPhrase,
+      );
+    return {
+      ...result,
+      chunk: cue.phrase,
+      cue,
+    };
   }
 
   private normalizeCueLevel(cue: Cue, maxCueLevel: CueLevel): Cue {
-    if (cue.level <= maxCueLevel) return cue;
-    return { ...cue, level: maxCueLevel };
+    return constrainCueForLevel(cue, maxCueLevel);
   }
 
   private createCueFromChunk(
@@ -812,13 +823,19 @@ export class SessionEngine {
     requestId: string,
     targetTurnId: string,
     difficulty: number,
+    shapePhrase = false,
   ): Cue {
+    const level = clampCueLevel(difficulty);
+    const cleanedPhrase = phrase.trim().slice(0, 160);
+    const cuePhrase = shapePhrase
+      ? shapeCuePhraseForLevel(cleanedPhrase, level) || cleanedPhrase
+      : cleanedPhrase;
     return {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       cueId: cleanDomainId(`${requestId}:cue`),
-      speechAct: inferSpeechAct(phrase),
-      level: clampCueLevel(difficulty),
-      phrase: phrase.slice(0, 160),
+      speechAct: inferSpeechAct(cuePhrase),
+      level,
+      phrase: cuePhrase,
       meaningKo: 'Meaning unavailable',
       alternatives: [],
       expiresAfterMs: Math.max(100, Math.min(30_000, this.weekConfig.hintFlashDurationMs)),
@@ -1084,6 +1101,7 @@ export class SessionEngine {
                 request,
                 targetTurnId,
                 requestedCueLevel,
+                true,
               );
               this.hintCount++;
               this.usedHintChunks.push(cueResult.chunk);
@@ -1594,7 +1612,7 @@ export class SessionEngine {
               latencyMs: responseReceivedAt - request.startedAt,
               networkLatencyMs: responseReceivedAt - request.startedAt,
               generationLatencyMs: null,
-            }, request, targetTurnId, simplifiedLevel);
+            }, request, targetTurnId, simplifiedLevel, true);
 
             // Show simplified hint
             this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
@@ -1695,7 +1713,13 @@ export class SessionEngine {
 
       if (!this.isCurrentRequest(request)) return;
 
-      const result = this.withDomainCue(generatedResult, request, targetTurnId, requestedCueLevel);
+      const result = this.withDomainCue(
+        generatedResult,
+        request,
+        targetTurnId,
+        requestedCueLevel,
+        trigger !== 'manual',
+      );
       if (result.chunk) {
         this.hintCount++;
         this.usedHintChunks.push(result.chunk);
