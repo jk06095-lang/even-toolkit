@@ -64,3 +64,10 @@ Remaining work for issue #28:
 
 - real G2/phone speaker segmentation and hardware/simulator evidence
 - simulator or hardware proof that the glasses HUD remains cue-only
+
+Those proof points are now part of the final hardware QA evidence contract under
+`conversationTimeline` in `docs/project-echo-hardware-qa.template.json`. A
+completed `docs/project-echo-hardware-qa.completed.json` must prove G2 Mic,
+Phone Mic, and import segmentation, manual speaker correction persistence,
+Korean translation review, and the phone-only timeline / cue-only G2 HUD
+boundary before #28 can be closed.

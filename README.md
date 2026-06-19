@@ -32,7 +32,9 @@ manifests should pass
 and final hardware QA manifests should pass
 `npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json`
 before README portfolio links are updated. The hardware QA manifest must identify
-the exact `.ehpk` package path and SHA-256 digest used for the real G2 run. A
+the exact `.ehpk` package path and SHA-256 digest used for the real G2 run, and
+must include phone-only conversation timeline evidence for the G2 Mic, Phone
+Mic, and import flows. A
 GitHub Actions runs the same gate from
 [.github/workflows/verify.yml](./.github/workflows/verify.yml). A reference copy
 is also kept at [docs/github-actions-verify.yml](./docs/github-actions-verify.yml).

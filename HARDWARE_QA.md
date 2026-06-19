@@ -2,7 +2,7 @@
 
 Use [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json)
 as the required physical G2 evidence manifest for issues #2, #3, #4, #6, #12,
-#13, and #14.
+#13, #14, and #28.
 The draft template is shape-checked by `npm run validate:hardware-template`
 inside `npm run verify:all`. Final hardware QA must pass:
 
@@ -257,6 +257,32 @@ Still requires real G2 validation:
 
 - Confirm the physical G2/phone permission prompts match the automated source
   policy on device.
+
+## Conversation timeline QA
+
+- Run one G2 Mic conversation, one Phone Mic conversation, and one imported
+  transcript flow that each produce ordered `ConversationTurn` records.
+- Confirm each source records at least one learner turn and one partner turn
+  with timing, finality, source, language, and confidence-policy metadata.
+- Confirm `unknownTurnCount` is recorded as a number, even when it is `0`, so
+  diarization uncertainty is explicit instead of hidden.
+- Confirm imported transcript rows exercise speaker prefixes such as `Partner:`,
+  `Me:`, `Speaker 1:`, and `Speaker 2:`.
+- Confirm malformed imported rows are skipped and deterministic import turn IDs
+  are preserved.
+- In Review, manually correct at least one speaker label and confirm
+  `correctedByUser` is persisted and exported.
+- With cloud processing enabled, confirm Korean translation appears on the
+  phone timeline for at least one turn.
+- With the translation proxy unavailable or failing, confirm the original turn
+  remains visible and the failed translation state is non-blocking.
+- During the same run, confirm the phone timeline is visible but G2 does not
+  show conversation history, speaker labels, Korean translations, or debrief
+  details.
+- Record this under `conversationTimeline` in
+  [docs/project-echo-hardware-qa.template.json](./docs/project-echo-hardware-qa.template.json).
+  Final hardware QA requires evidence refs for G2 Mic, Phone Mic, import,
+  translation/correction review, and a video proving the HUD boundary.
 
 ## Wear status QA
 

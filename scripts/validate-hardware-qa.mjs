@@ -660,6 +660,68 @@ function validateAudioSources(manifestObject) {
   }
 }
 
+function validateConversationTimeline(manifestObject) {
+  if (!validateObject(manifestObject.conversationTimeline, 'conversationTimeline')) return;
+
+  validateTimelineSegmentationSource(
+    manifestObject.conversationTimeline.g2MicSegmentation,
+    'conversationTimeline.g2MicSegmentation',
+    'g2',
+  );
+  validateTimelineSegmentationSource(
+    manifestObject.conversationTimeline.phoneMicSegmentation,
+    'conversationTimeline.phoneMicSegmentation',
+    'phone',
+  );
+
+  if (validateObject(manifestObject.conversationTimeline.importSegmentation, 'conversationTimeline.importSegmentation')) {
+    const imported = manifestObject.conversationTimeline.importSegmentation;
+    validateExpected(imported, 'source', 'import', 'conversationTimeline.importSegmentation');
+    validateExpected(imported, 'speakerPrefixesTested', true, 'conversationTimeline.importSegmentation');
+    validateCountMetric(imported, { key: 'learnerTurnCount', min: 1 }, 'conversationTimeline.importSegmentation');
+    validateCountMetric(imported, { key: 'partnerTurnCount', min: 1 }, 'conversationTimeline.importSegmentation');
+    validateExpected(imported, 'malformedRowsSkipped', true, 'conversationTimeline.importSegmentation');
+    validateExpected(imported, 'deterministicIds', true, 'conversationTimeline.importSegmentation');
+    validateEvidenceLink(imported, 'evidenceRef', 'conversationTimeline.importSegmentation');
+  }
+
+  if (validateObject(manifestObject.conversationTimeline.translationReview, 'conversationTimeline.translationReview')) {
+    const review = manifestObject.conversationTimeline.translationReview;
+    validateExpected(review, 'koreanTranslationShown', true, 'conversationTimeline.translationReview');
+    validateExpected(review, 'failedTranslationNonBlocking', true, 'conversationTimeline.translationReview');
+    validateExpected(review, 'manualSpeakerCorrectionPersisted', true, 'conversationTimeline.translationReview');
+    validateExpected(review, 'correctedByUserExported', true, 'conversationTimeline.translationReview');
+    validateEvidenceLink(review, 'evidenceRef', 'conversationTimeline.translationReview');
+  }
+
+  if (validateObject(manifestObject.conversationTimeline.hudBoundary, 'conversationTimeline.hudBoundary')) {
+    const boundary = manifestObject.conversationTimeline.hudBoundary;
+    validateExpected(boundary, 'phoneTimelineVisible', true, 'conversationTimeline.hudBoundary');
+    validateExpected(boundary, 'g2ConversationHistoryHidden', true, 'conversationTimeline.hudBoundary');
+    validateExpected(boundary, 'g2TranslationHidden', true, 'conversationTimeline.hudBoundary');
+    validateExpected(boundary, 'g2SpeakerLabelsHidden', true, 'conversationTimeline.hudBoundary');
+    validateExpected(boundary, 'hudStatesCueOnly', true, 'conversationTimeline.hudBoundary');
+    validateEvidenceLink(boundary, 'evidenceRef', 'conversationTimeline.hudBoundary');
+    validateEvidenceLink(boundary, 'videoEvidence', 'conversationTimeline.hudBoundary', {
+      extensions: VIDEO_EXTENSIONS,
+    });
+  }
+}
+
+function validateTimelineSegmentationSource(evidence, pointer, expectedSource) {
+  if (!validateObject(evidence, pointer)) return;
+
+  validateExpected(evidence, 'source', expectedSource, pointer);
+  validateExpected(evidence, 'speakerRolesCaptured', true, pointer);
+  validateCountMetric(evidence, { key: 'learnerTurnCount', min: 1 }, pointer);
+  validateCountMetric(evidence, { key: 'partnerTurnCount', min: 1 }, pointer);
+  validateCountMetric(evidence, { key: 'unknownTurnCount', min: 0 }, pointer);
+  validateExpected(evidence, 'orderedTimingCaptured', true, pointer);
+  validateExpected(evidence, 'finalityCaptured', true, pointer);
+  validateExpected(evidence, 'confidencePolicyRecorded', true, pointer);
+  validateEvidenceLink(evidence, 'evidenceRef', pointer);
+}
+
 function validateDelayedProxy(manifestObject) {
   if (!validateObject(manifestObject.delayedProxy, 'delayedProxy')) return;
   if (!validateObject(manifestObject.delayedProxy.scenarios, 'delayedProxy.scenarios')) return;
@@ -797,6 +859,7 @@ validateLifecycle(manifest);
 validateHud(manifest);
 validateAssist(manifest);
 validateAudioSources(manifest);
+validateConversationTimeline(manifest);
 validateDelayedProxy(manifest);
 validateVoiceRuntime(manifest);
 

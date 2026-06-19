@@ -284,6 +284,55 @@
       "evidenceRef": "TBD"
     }
   },
+  "conversationTimeline": {
+    "g2MicSegmentation": {
+      "source": "TBD",
+      "speakerRolesCaptured": null,
+      "learnerTurnCount": null,
+      "partnerTurnCount": null,
+      "unknownTurnCount": null,
+      "orderedTimingCaptured": null,
+      "finalityCaptured": null,
+      "confidencePolicyRecorded": null,
+      "evidenceRef": "TBD"
+    },
+    "phoneMicSegmentation": {
+      "source": "TBD",
+      "speakerRolesCaptured": null,
+      "learnerTurnCount": null,
+      "partnerTurnCount": null,
+      "unknownTurnCount": null,
+      "orderedTimingCaptured": null,
+      "finalityCaptured": null,
+      "confidencePolicyRecorded": null,
+      "evidenceRef": "TBD"
+    },
+    "importSegmentation": {
+      "source": "TBD",
+      "speakerPrefixesTested": null,
+      "learnerTurnCount": null,
+      "partnerTurnCount": null,
+      "malformedRowsSkipped": null,
+      "deterministicIds": null,
+      "evidenceRef": "TBD"
+    },
+    "translationReview": {
+      "koreanTranslationShown": null,
+      "failedTranslationNonBlocking": null,
+      "manualSpeakerCorrectionPersisted": null,
+      "correctedByUserExported": null,
+      "evidenceRef": "TBD"
+    },
+    "hudBoundary": {
+      "phoneTimelineVisible": null,
+      "g2ConversationHistoryHidden": null,
+      "g2TranslationHidden": null,
+      "g2SpeakerLabelsHidden": null,
+      "hudStatesCueOnly": null,
+      "evidenceRef": "TBD",
+      "videoEvidence": "TBD"
+    }
+  },
   "delayedProxy": {
     "scenarios": {
       "endPractice": {
