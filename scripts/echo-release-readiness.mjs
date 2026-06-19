@@ -528,12 +528,20 @@ function readCompletedPilotManifest() {
   return readJson(pilotPath);
 }
 
-function validateReadmePortfolioLinks(readmeText, completedPilot) {
+export function validateReadmePortfolioLinks(readmeText, completedPilot) {
   const findings = [];
-  const lines = readmeText.split(/\r?\n/);
+  const portfolioBlock = extractReadmePortfolioBlock(readmeText);
+
+  if (!portfolioBlock) {
+    findings.push('Missing README portfolio evidence link block');
+    return findings;
+  }
+
+  const lines = portfolioBlock.split(/\r?\n/);
 
   for (const requirement of README_PORTFOLIO_LINKS) {
-    const line = lines.find((candidate) => candidate.includes(requirement.marker));
+    const markerComment = `<!-- ${requirement.marker} -->`;
+    const line = lines.find((candidate) => candidate.includes(markerComment));
     if (!line) {
       findings.push(`Missing README marker ${requirement.marker}`);
       continue;
@@ -564,6 +572,16 @@ function validateReadmePortfolioLinks(readmeText, completedPilot) {
   }
 
   return findings;
+}
+
+function extractReadmePortfolioBlock(readmeText) {
+  const lines = readmeText.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === '<!-- project-echo-portfolio-links:start -->');
+  const endIndex = lines.findIndex((line) => line.trim() === '<!-- project-echo-portfolio-links:end -->');
+
+  if (startIndex === -1 || endIndex <= startIndex) return null;
+
+  return lines.slice(startIndex, endIndex + 1).join('\n');
 }
 
 function extractMarkdownLinkTarget(line) {

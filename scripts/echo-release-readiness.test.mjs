@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 import {
   HARDWARE_QA_EVIDENCE_ISSUES,
+  validateReadmePortfolioLinks,
   validateProxySmokeEvidenceOut,
 } from './echo-release-readiness.mjs';
 
@@ -44,3 +45,50 @@ test('tracks only open issue numbers in the hardware QA evidence blocker', () =>
   assert.equal(HARDWARE_QA_EVIDENCE_ISSUES, '#2/#3/#6/#12/#13/#14/#28');
   assert.equal(HARDWARE_QA_EVIDENCE_ISSUES.includes('#4'), false);
 });
+
+test('does not treat README marker prose as final portfolio links', () => {
+  const findings = validateReadmePortfolioLinks(readmeMarkerProseFixture(), completedPilotFixture());
+
+  assert.deepEqual(findings, ['Missing README portfolio evidence link block']);
+});
+
+test('validates README portfolio links only inside the generated block', () => {
+  const pilot = completedPilotFixture();
+  const findings = validateReadmePortfolioLinks(`
+# even-toolkit
+
+<!-- project-echo-portfolio-links:start -->
+Final Project ECHO portfolio evidence links:
+- [Project ECHO case study (KO)](${pilot.caseStudy.koreanCaseStudyUrl}) <!-- project-echo-case-study-ko -->
+- [Project ECHO case study (EN)](${pilot.caseStudy.englishCaseStudyUrl}) <!-- project-echo-case-study-en -->
+- [Project ECHO real G2 video](${pilot.caseStudy.realG2VideoUrl}) <!-- project-echo-real-g2-video -->
+<!-- project-echo-portfolio-links:end -->
+
+Final portfolio links must carry \`project-echo-case-study-ko\`,
+\`project-echo-case-study-en\`, and \`project-echo-real-g2-video\`.
+`, pilot);
+
+  assert.deepEqual(findings, []);
+});
+
+function readmeMarkerProseFixture() {
+  return `
+# even-toolkit
+
+## Project ECHO Evidence
+
+Final portfolio links must be markdown links carrying the markers
+\`project-echo-case-study-ko\`,
+\`project-echo-case-study-en\`, and \`project-echo-real-g2-video\`.
+`;
+}
+
+function completedPilotFixture() {
+  return {
+    caseStudy: {
+      koreanCaseStudyUrl: 'https://portfolio.project-echo.test/project-echo-case-study.ko.md',
+      englishCaseStudyUrl: 'https://portfolio.project-echo.test/project-echo-case-study.en.md',
+      realG2VideoUrl: 'https://portfolio.project-echo.test/project-echo-real-g2-video.mp4',
+    },
+  };
+}
