@@ -690,7 +690,7 @@ function hideChunkDisplay(): void {
   const chunkDisplay = document.getElementById('chunk-display');
   if (chunkDisplay) {
     chunkDisplay.style.display = 'none';
-    chunkDisplay.innerHTML = '';
+    chunkDisplay.replaceChildren();
   }
 }
 
@@ -805,10 +805,18 @@ async function handleChunkGenerated(result: ChunkResult): Promise<void> {
   const chunkDisplay = document.getElementById('chunk-display');
   if (chunkDisplay && result.chunk) {
     chunkDisplay.style.display = 'block';
-    chunkDisplay.innerHTML = `<div class="chunk-flash">${result.chunk}</div>
-      <div class="text-detail" style="text-align: center; color: var(--color-text-muted); margin-top: var(--spacing-same);">
-        Cue ready in ${result.latencyMs}ms
-      </div>`;
+    const chunk = document.createElement('div');
+    chunk.className = 'chunk-flash';
+    chunk.textContent = result.chunk;
+
+    const detail = document.createElement('div');
+    detail.className = 'text-detail';
+    detail.style.textAlign = 'center';
+    detail.style.color = 'var(--color-text-muted)';
+    detail.style.marginTop = 'var(--spacing-same)';
+    detail.textContent = `Cue ready in ${result.latencyMs}ms`;
+
+    chunkDisplay.replaceChildren(chunk, detail);
   }
 
   if (currentWeek === 3) {
@@ -894,12 +902,30 @@ function showExpressionTracker(expressions: string[]): void {
   tracker.style.display = 'block';
   if (score) score.textContent = `0/${expressions.length} used`;
 
-  list.innerHTML = expressions
-    .map((expr) => `<div class="expr-item" data-expr="${expr}" style="padding: 3px 0; display: flex; align-items: center; gap: 6px;">
-      <span class="expr-check" style="color: var(--color-text-muted); font-size: 11px;">○</span>
-      <span style="color: var(--color-text-dim);">${expr}</span>
-    </div>`)
-    .join('');
+  list.replaceChildren(...expressions.map((expr) => createExpressionTrackerItem(expr)));
+}
+
+function createExpressionTrackerItem(expr: string): HTMLElement {
+  const item = document.createElement('div');
+  item.className = 'expr-item';
+  item.dataset.expr = expr;
+  item.style.padding = '3px 0';
+  item.style.display = 'flex';
+  item.style.alignItems = 'center';
+  item.style.gap = '6px';
+
+  const check = document.createElement('span');
+  check.className = 'expr-check';
+  check.style.color = 'var(--color-text-muted)';
+  check.style.fontSize = '11px';
+  check.textContent = '-';
+
+  const label = document.createElement('span');
+  label.style.color = 'var(--color-text-dim)';
+  label.textContent = expr;
+
+  item.append(check, label);
+  return item;
 }
 
 function checkExpressionUsage(userText: string): void {

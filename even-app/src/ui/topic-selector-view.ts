@@ -117,10 +117,20 @@ export function fillTopicDetail(scenario: TopicScenario): void {
 
   const exprList = el('topic-detail-expressions');
   if (exprList) {
-    exprList.innerHTML = scenario.keyExpressions
-      .map((expr) => `<li style="padding: 4px 0; color: var(--color-text); font-size: 13px; border-bottom: 1px solid var(--color-border);">
-        <span style="color: var(--phase2); margin-right: 6px;">-</span>${expr}
-      </li>`)
-      .join('');
+    exprList.replaceChildren(...scenario.keyExpressions.map((expr) => {
+      const item = document.createElement('li');
+      item.style.padding = '4px 0';
+      item.style.color = 'var(--color-text)';
+      item.style.fontSize = '13px';
+      item.style.borderBottom = '1px solid var(--color-border)';
+
+      const bullet = document.createElement('span');
+      bullet.style.color = 'var(--phase2)';
+      bullet.style.marginRight = '6px';
+      bullet.textContent = '-';
+
+      item.append(bullet, document.createTextNode(expr));
+      return item;
+    }));
   }
 }

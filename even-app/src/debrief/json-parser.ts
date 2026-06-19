@@ -33,6 +33,13 @@ export interface ScheduledPush {
 }
 
 const DEBRIEF_STORE_KEY = 'echo_debriefs';
+const MAX_RAW_DEBRIEF_CHARS = 200_000;
+const MAX_SESSION_DATE_CHARS = 64;
+const MAX_BOTTLENECK_CHUNKS = 100;
+const MAX_TARGET_CHARS = 240;
+const MAX_INTERVALS_PER_CHUNK = 12;
+const MAX_INTERVAL_MINUTES = 7 * 24 * 60;
+const HTML_TAG_PATTERN = /<[a-z][\s\S]*>/i;
 
 // ── Parsing ──
 
@@ -41,6 +48,10 @@ const DEBRIEF_STORE_KEY = 'echo_debriefs';
  * Throws on invalid format.
  */
 export function parseDebriefJSON(raw: string): DebriefReport {
+  if (raw.length > MAX_RAW_DEBRIEF_CHARS) {
+    throw new Error('Debrief JSON is too large.');
+  }
+
   const trimmed = raw.trim();
 
   // Handle markdown code blocks
@@ -66,6 +77,7 @@ export function parseDebriefJSON(raw: string): DebriefReport {
   if (typeof obj.session_date !== 'string') {
     throw new Error('Missing or invalid "session_date" field.');
   }
+  const sessionDate = parseSafeText(obj.session_date, 'session_date', MAX_SESSION_DATE_CHARS);
 
   const validLevels = ['Low', 'Medium', 'High'];
   if (!validLevels.includes(obj.fsi_stress_level as string)) {
@@ -75,6 +87,9 @@ export function parseDebriefJSON(raw: string): DebriefReport {
   if (!Array.isArray(obj.bottleneck_chunks)) {
     throw new Error('Missing or invalid "bottleneck_chunks" array.');
   }
+  if (obj.bottleneck_chunks.length > MAX_BOTTLENECK_CHUNKS) {
+    throw new Error(`Too many bottleneck_chunks. Maximum is ${MAX_BOTTLENECK_CHUNKS}.`);
+  }
 
   const chunks: BottleneckChunk[] = [];
   for (const item of obj.bottleneck_chunks) {
@@ -82,9 +97,24 @@ export function parseDebriefJSON(raw: string): DebriefReport {
     const c = item as Record<string, unknown>;
     if (typeof c.target !== 'string') continue;
     if (!Array.isArray(c.interval)) continue;
+    const target = parseSafeText(c.target, 'bottleneck_chunks.target', MAX_TARGET_CHARS);
+    if (c.interval.length > MAX_INTERVALS_PER_CHUNK) {
+      throw new Error(`Too many intervals for bottleneck chunk. Maximum is ${MAX_INTERVALS_PER_CHUNK}.`);
+    }
+
+    const intervals = c.interval.filter((n): n is number => (
+      typeof n === 'number'
+      && Number.isFinite(n)
+      && Number.isInteger(n)
+      && n > 0
+      && n <= MAX_INTERVAL_MINUTES
+    ));
+
+    if (intervals.length === 0) continue;
+
     chunks.push({
-      target: c.target,
-      interval: (c.interval as unknown[]).filter((n): n is number => typeof n === 'number'),
+      target,
+      interval: intervals,
     });
   }
 
@@ -93,10 +123,24 @@ export function parseDebriefJSON(raw: string): DebriefReport {
   }
 
   return {
-    session_date: obj.session_date as string,
+    session_date: sessionDate,
     fsi_stress_level: obj.fsi_stress_level as 'Low' | 'Medium' | 'High',
     bottleneck_chunks: chunks,
   };
+}
+
+function parseSafeText(value: string, field: string, maxLength: number): string {
+  const text = value.trim();
+  if (!text) {
+    throw new Error(`Missing or invalid "${field}" field.`);
+  }
+  if (text.length > maxLength) {
+    throw new Error(`"${field}" is too long. Maximum is ${maxLength} characters.`);
+  }
+  if (HTML_TAG_PATTERN.test(text)) {
+    throw new Error(`"${field}" must not contain HTML tags.`);
+  }
+  return text;
 }
 
 // ── Storage ──

@@ -73,6 +73,7 @@ function updatePendingList(items: PendingItem[]): void {
   if (count) count.textContent = String(items.length);
 
   if (items.length === 0) {
+    container.replaceChildren();
     container.style.display = 'none';
     if (empty) empty.style.display = 'block';
     return;
@@ -81,15 +82,23 @@ function updatePendingList(items: PendingItem[]): void {
   container.style.display = 'block';
   if (empty) empty.style.display = 'none';
 
-  container.innerHTML = items
+  container.replaceChildren(...items
     .slice(0, 10)
     .map((item) => {
       const mins = Math.ceil(item.timeUntilMs / 60000);
       const timeStr = mins > 60 ? `${Math.round(mins / 60)}h` : `${mins}m`;
-      return `<li class="schedule-item">
-        <span class="time">${timeStr}</span>
-        <span class="chunk">${item.chunk}</span>
-      </li>`;
-    })
-    .join('');
+      const listItem = document.createElement('li');
+      listItem.className = 'schedule-item';
+
+      const time = document.createElement('span');
+      time.className = 'time';
+      time.textContent = timeStr;
+
+      const chunk = document.createElement('span');
+      chunk.className = 'chunk';
+      chunk.textContent = item.chunk;
+
+      listItem.append(time, chunk);
+      return listItem;
+    }));
 }

@@ -8,6 +8,8 @@ export interface DebriefControllerContext {
   getHud: () => HUDController | null;
 }
 
+type SessionSummary = ReturnType<typeof TranscriptStore.getSummaries>[number];
+
 export function bindDebriefEvents(context: DebriefControllerContext): void {
   document.getElementById('btn-import-debrief')?.addEventListener('click', async () => {
     const input = document.getElementById('debrief-input') as HTMLTextAreaElement;
@@ -61,9 +63,14 @@ function showDebriefResult(stored: StoredDebrief): void {
 
   const list = document.getElementById('debrief-chunk-list');
   if (list) {
-    list.innerHTML = stored.report.bottleneck_chunks
-      .map((c) => `<li>${c.target} <span style="color: var(--color-text-muted)">| intervals: ${c.interval.join(', ')}min</span></li>`)
-      .join('');
+    list.replaceChildren(...stored.report.bottleneck_chunks.map((chunk) => {
+      const item = document.createElement('li');
+      const meta = document.createElement('span');
+      meta.style.color = 'var(--color-text-muted)';
+      meta.textContent = `| intervals: ${chunk.interval.join(', ')}min`;
+      item.append(document.createTextNode(`${chunk.target} `), meta);
+      return item;
+    }));
   }
 }
 
@@ -75,35 +82,17 @@ function renderSessionExportList(): void {
   const summaries = TranscriptStore.getSummaries();
 
   if (summaries.length === 0) {
-    listEl.innerHTML = '';
+    listEl.replaceChildren();
     if (emptyEl) emptyEl.style.display = 'block';
     return;
   }
 
   if (emptyEl) emptyEl.style.display = 'none';
 
-  listEl.innerHTML = summaries
+  listEl.replaceChildren(...summaries
     .slice()
     .reverse()
-    .map((s) => {
-      const date = new Date(s.startTime);
-      const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-      const durationSec = s.endTime ? Math.round((s.endTime - s.startTime) / 1000) : 0;
-      const durationStr = durationSec > 60 ? `${Math.floor(durationSec / 60)}m${durationSec % 60}s` : `${durationSec}s`;
-      return `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; margin-bottom: 6px; background: var(--color-surface-light); border-radius: var(--radius); border-left: 3px solid var(--phase2);">
-          <div style="flex: 1; min-width: 0;">
-            <div class="text-normal-body" style="color: var(--color-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">W${s.week} · ${s.topic}</div>
-            <div class="text-detail" style="color: var(--color-text-muted);">${dateStr} · ${durationStr} · turns ${s.speechCount} · cues ${s.hintCount}</div>
-          </div>
-          <div style="display: flex; gap: 6px;">
-            <button class="btn" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-export-session="${s.sessionId}">Export</button>
-            <button class="btn btn-neutral" style="padding: 4px 12px; font-size: 12px; min-width: auto;" data-delete-session="${s.sessionId}">Delete</button>
-          </div>
-        </div>
-      `;
-    })
-    .join('');
+    .map((summary) => createSessionSummaryItem(summary)));
 
   listEl.querySelectorAll('[data-export-session]').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -137,6 +126,66 @@ function renderSessionExportList(): void {
       setSessionExportStatus(`Deleted session ${sessionId}.`, 'success');
     });
   });
+}
+
+function createSessionSummaryItem(summary: SessionSummary): HTMLElement {
+  const date = new Date(summary.startTime);
+  const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  const durationSec = summary.endTime ? Math.round((summary.endTime - summary.startTime) / 1000) : 0;
+  const durationStr = durationSec > 60 ? `${Math.floor(durationSec / 60)}m${durationSec % 60}s` : `${durationSec}s`;
+
+  const item = document.createElement('div');
+  item.style.display = 'flex';
+  item.style.alignItems = 'center';
+  item.style.justifyContent = 'space-between';
+  item.style.padding = '10px';
+  item.style.marginBottom = '6px';
+  item.style.background = 'var(--color-surface-light)';
+  item.style.borderRadius = 'var(--radius)';
+  item.style.borderLeft = '3px solid var(--phase2)';
+
+  const content = document.createElement('div');
+  content.style.flex = '1';
+  content.style.minWidth = '0';
+
+  const title = document.createElement('div');
+  title.className = 'text-normal-body';
+  title.style.color = 'var(--color-text)';
+  title.style.whiteSpace = 'nowrap';
+  title.style.overflow = 'hidden';
+  title.style.textOverflow = 'ellipsis';
+  title.textContent = `W${summary.week} - ${summary.topic}`;
+
+  const detail = document.createElement('div');
+  detail.className = 'text-detail';
+  detail.style.color = 'var(--color-text-muted)';
+  detail.textContent = `${dateStr} - ${durationStr} - turns ${summary.speechCount} - cues ${summary.hintCount}`;
+
+  content.append(title, detail);
+
+  const actions = document.createElement('div');
+  actions.style.display = 'flex';
+  actions.style.gap = '6px';
+
+  const exportButton = document.createElement('button');
+  exportButton.className = 'btn';
+  exportButton.style.padding = '4px 12px';
+  exportButton.style.fontSize = '12px';
+  exportButton.style.minWidth = 'auto';
+  exportButton.dataset.exportSession = summary.sessionId;
+  exportButton.textContent = 'Export';
+
+  const deleteButton = document.createElement('button');
+  deleteButton.className = 'btn btn-neutral';
+  deleteButton.style.padding = '4px 12px';
+  deleteButton.style.fontSize = '12px';
+  deleteButton.style.minWidth = 'auto';
+  deleteButton.dataset.deleteSession = summary.sessionId;
+  deleteButton.textContent = 'Delete';
+
+  actions.append(exportButton, deleteButton);
+  item.append(content, actions);
+  return item;
 }
 
 function setSessionExportStatus(
