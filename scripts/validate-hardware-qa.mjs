@@ -52,6 +52,7 @@ const EVIDENCE_EXTENSIONS = ['md', 'txt', 'log', 'json', 'png', 'jpg', 'jpeg', '
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const LOG_EXTENSIONS = ['md', 'txt', 'log', 'json'];
 const REPORT_EXTENSIONS = ['md', 'txt', 'log', 'json'];
+const INITIAL_JS_LIMIT_KB = 500;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -261,6 +262,19 @@ function validateNonNegativeNumber(object, key, pointer) {
 
   if (value < 0) {
     addError(fieldPointer, 'must be >= 0');
+  }
+}
+
+function validatePositiveNumber(object, key, pointer) {
+  validateNonNegativeNumber(object, key, pointer);
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    return;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value) && value <= 0) {
+    addError(`${pointer}.${key}`, 'must be > 0');
   }
 }
 
@@ -477,6 +491,47 @@ function validateVoiceRuntime(manifestObject) {
     extensions: REPORT_EXTENSIONS,
   });
   validateEvidenceLink(manifestObject.voiceRuntime, 'deviceEvidenceRef', 'voiceRuntime');
+  validateVoiceRuntimeBundleMetrics(manifestObject.voiceRuntime.bundleMetrics, 'voiceRuntime.bundleMetrics');
+}
+
+function validateVoiceRuntimeBundleMetrics(metrics, pointer) {
+  if (!validateObject(metrics, pointer)) return;
+
+  validateNonNegativeNumber(metrics, 'largestInitialJsKb', pointer);
+  validateExpectedNumber(metrics, 'initialJsLimitKb', INITIAL_JS_LIMIT_KB, pointer);
+  validatePositiveNumber(metrics, 'voiceRuntimeJsKb', pointer);
+  validatePositiveNumber(metrics, 'voiceRuntimeGzipKb', pointer);
+  validatePositiveNumber(metrics, 'onnxWasmKb', pointer);
+  validatePositiveNumber(metrics, 'onnxWasmGzipKb', pointer);
+  validateExpected(metrics, 'voiceRuntimeLoad', 'on demand', pointer);
+  validateExpected(metrics, 'onnxWasmLoad', 'on demand', pointer);
+  validateExpected(metrics, 'distHtmlPreloadsVoiceRuntime', false, pointer);
+
+  const largestInitialJsKb = metrics.largestInitialJsKb;
+  if (
+    typeof largestInitialJsKb === 'number'
+    && Number.isFinite(largestInitialJsKb)
+    && largestInitialJsKb > INITIAL_JS_LIMIT_KB
+  ) {
+    addError(`${pointer}.largestInitialJsKb`, `must be <= ${INITIAL_JS_LIMIT_KB}`);
+  }
+
+  validateSizePair(metrics, 'voiceRuntimeGzipKb', 'voiceRuntimeJsKb', pointer);
+  validateSizePair(metrics, 'onnxWasmGzipKb', 'onnxWasmKb', pointer);
+}
+
+function validateSizePair(metrics, gzipKey, sizeKey, pointer) {
+  const gzipValue = metrics[gzipKey];
+  const sizeValue = metrics[sizeKey];
+  if (
+    typeof gzipValue === 'number'
+    && Number.isFinite(gzipValue)
+    && typeof sizeValue === 'number'
+    && Number.isFinite(sizeValue)
+    && gzipValue > sizeValue
+  ) {
+    addError(`${pointer}.${gzipKey}`, `must be <= ${sizeKey}`);
+  }
 }
 
 validateManifestRoot(manifest);

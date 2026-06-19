@@ -304,6 +304,17 @@
     "audioSourceSwitchWorks": null,
     "noSilentPhoneFallback": null,
     "bundleReportRef": "TBD",
-    "deviceEvidenceRef": "TBD"
+    "deviceEvidenceRef": "TBD",
+    "bundleMetrics": {
+      "largestInitialJsKb": null,
+      "initialJsLimitKb": null,
+      "voiceRuntimeJsKb": null,
+      "voiceRuntimeGzipKb": null,
+      "onnxWasmKb": null,
+      "onnxWasmGzipKb": null,
+      "voiceRuntimeLoad": "TBD",
+      "onnxWasmLoad": "TBD",
+      "distHtmlPreloadsVoiceRuntime": null
+    }
   }
 }

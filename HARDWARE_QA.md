@@ -205,6 +205,11 @@ initialization, or audio source switching.
 - Confirm the report marks `voice-runtime-*` and ONNX/WASM runtime assets as `on demand`.
 - Confirm `dist/index.html` does not preload a `voice-runtime-*` chunk.
 - Confirm the largest initial JS chunk remains under the Vite warning threshold.
+- Record `voiceRuntime.bundleMetrics` from the bundle report: largest initial JS
+  kB, initial JS limit kB, voice-runtime JS/gzip kB, ONNX/WASM kB/gzip kB,
+  `voiceRuntimeLoad`, `onnxWasmLoad`, and whether `dist/index.html` preloads
+  the voice runtime. Final hardware QA requires the initial JS chunk to stay at
+  or below `500` kB and both runtime assets to remain `on demand`.
 - Start a physical G2 Mic session and confirm G2 audio/VAD starts without opening Phone Mic.
 - Select Phone Mic explicitly and confirm the voice runtime loads only after that user action.
 - Pause and resume the session; confirm no duplicate VAD/runtime initialization occurs.
