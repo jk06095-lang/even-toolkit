@@ -425,6 +425,7 @@ Automated coverage added on 2026-06-19:
 - `hud-controller` verifies the short `ACK` state clears its return timer before
   session stop or standby, preventing a late `LISTENING` render after cleanup.
 - `hud-controller` verifies transcript text, grammar feedback, and achievement detail do not render on the live G2 surface.
+- `session-engine-core` verifies live interim/final transcript text is not sent to the G2 HUD transcript callback.
 - `hud-controller` verifies long cues are clipped to a glanceable phrase.
 
 Still requires real G2 validation:

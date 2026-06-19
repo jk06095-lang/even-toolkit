@@ -1020,6 +1020,7 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       isFinal: true,
       confidence: 0.88,
     });
+    expect(harness.hud.events.some((event) => event.startsWith('showLiveTranscript:'))).toBe(false);
   });
 
   it('emits live phone conversation timeline snapshots with unknown speaker until corrected', async () => {

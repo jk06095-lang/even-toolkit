@@ -67,6 +67,9 @@ This boundary follows the current Even Hub device model: the glasses render a
 small fixed-canvas container UI, while richer review state belongs on the phone.
 The HUD therefore stays cue/status-only and does not show full conversation
 history, speaker labels, or Korean translations.
+`SessionEngine` no longer forwards live interim or final transcript text to the
+HUD adapter; transcript detail is emitted through the phone callbacks and
+`ConversationTurn` snapshots only.
 
 The Live Practice timeline also exposes a compact speaker selector for each
 final turn. Changing `Me`, `Partner`, or `Unknown` updates the active in-memory

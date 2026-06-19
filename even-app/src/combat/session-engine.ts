@@ -539,10 +539,6 @@ export class SessionEngine {
     this.emitConversationTimeline();
     this.analyzer?.addUtterance(trimmed, true);
 
-    if (this.hudRef) {
-      this.hudRef.showLiveTranscript(`✓ ${trimmed}`);
-    }
-
     this.resolveActiveHintFromTranscript(trimmed);
   }
 
@@ -1225,9 +1221,8 @@ export class SessionEngine {
           this.resetTranscriptActivity();
         }
 
-        // Show live text on glasses bottom zone + volume bars on top
+        // Keep transcript detail on the phone timeline; the G2 HUD stays status/cue-only.
         if (this.hudRef) {
-          this.hudRef.showLiveTranscript(text);
           this.hudRef.showSpeechActive(this.lastVolume);
         }
       },
