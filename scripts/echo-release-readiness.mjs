@@ -189,6 +189,72 @@ async function checkKeyRotationEvidence() {
   return true;
 }
 
+function checkPortfolioAttributionDocs() {
+  const readmePath = path.resolve(repoRoot, 'README.md');
+  const creditsPath = path.resolve(repoRoot, 'CREDITS.md');
+  const findings = [];
+
+  if (!existsSync(readmePath)) {
+    findings.push('Missing README.md');
+  }
+
+  if (!existsSync(creditsPath)) {
+    findings.push('Missing CREDITS.md');
+  }
+
+  if (findings.length === 0) {
+    const readmeText = readFileSync(readmePath, 'utf8');
+    const creditsText = readFileSync(creditsPath, 'utf8');
+
+    const readmeRequirements = [
+      '## My role',
+      'Product concept and UX architecture',
+      'G2 HUD interaction design',
+      'Audio/VAD integration',
+      'AI cue policy',
+      'Hardware usability testing',
+      '## Built with',
+      'Even Hub SDK',
+      'even-toolkit, MIT License',
+      'CREDITS.md',
+    ];
+
+    const creditsRequirements = [
+      '## Original toolkit scope',
+      'G2 bridge helpers',
+      'Shared web components',
+      'Shared icon catalog',
+      'fabioglimb/even-toolkit',
+      'MIT',
+      '## Project ECHO contribution scope',
+      'SessionEngine orchestration',
+      'G2 microphone and VAD connection',
+      'AI cue policy and fallback cue behavior',
+      'Release-safety checks',
+    ];
+
+    for (const requirement of readmeRequirements) {
+      if (!readmeText.includes(requirement)) {
+        findings.push(`README.md must include ${requirement}`);
+      }
+    }
+
+    for (const requirement of creditsRequirements) {
+      if (!creditsText.includes(requirement)) {
+        findings.push(`CREDITS.md must include ${requirement}`);
+      }
+    }
+  }
+
+  if (findings.length > 0) {
+    addCheck('portfolio attribution docs', 'blocked', findings.slice(0, 3).join('; '), '#19');
+    return false;
+  }
+
+  addCheck('portfolio attribution docs', 'passed', 'README and CREDITS distinguish original toolkit scope from Project ECHO contribution scope.', '#19');
+  return true;
+}
+
 function checkEchoAppManifest() {
   const packagePath = path.resolve(repoRoot, 'even-app/package.json');
   const appPath = path.resolve(repoRoot, 'even-app/app.json');
@@ -366,6 +432,7 @@ await validateFinalManifest({
 });
 
 checkEchoAppManifest();
+checkPortfolioAttributionDocs();
 
 await validateFinalManifest({
   label: 'completed hardware QA manifest',
