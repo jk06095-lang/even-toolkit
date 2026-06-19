@@ -76,6 +76,14 @@ segmentation still requires the hardware/simulator evidence listed below. New
 live G2/Phone turns therefore default to `speaker: "unknown"` until the learner
 corrects them in the phone timeline; the app no longer treats a recognized live
 turn as `learner` merely because it came from the active microphone path.
+Each new turn also carries optional `inputEvidence` in the ECHO domain v2
+contract. G2 turns record `inputMode: "g2_bridge_pcm"`, `sampleRateHz: 16000`,
+`channelCount: 1`, and `encoding: "pcm_s16le_mono"` so downstream code cannot
+mistake the single G2 PCM stream for channel-level diarization. Phone turns use
+`inputMode: "phone_web_speech"`, and imported transcript rows use
+`inputMode: "imported_text"`. Speaker attribution remains
+`single_stream_unresolved` until a user correction or imported speaker label
+provides stronger evidence.
 
 Cue recovery is evaluated in the `SessionEngine` outcome path. The phone
 controller no longer emits ACKs from exact hint-string matches, so the glasses

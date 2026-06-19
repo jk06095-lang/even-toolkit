@@ -14,6 +14,7 @@ import {
 } from '../privacy/settings';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  createConversationInputEvidence,
   isAssistEpisode,
   isConversationTurn,
   isCue,
@@ -242,6 +243,7 @@ export class TranscriptStore {
       conversationTurns: this.session.conversationTurns?.map((turn) => ({
         ...turn,
         piiFlags: [...(turn.piiFlags ?? [])],
+        inputEvidence: turn.inputEvidence ? { ...turn.inputEvidence } : undefined,
       })),
       cues: this.session.cues?.map((cue) => ({
         ...cue,
@@ -293,6 +295,7 @@ export class TranscriptStore {
     const text = input.transcript.trim();
     if (!text) return null;
     const startedAt = coerceTimestamp(input.startedAt, this.now());
+    const source = input.source ?? this.defaultTurnSource;
     const turn: ConversationTurn = {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       id: this.idFactory(),
@@ -300,7 +303,7 @@ export class TranscriptStore {
       speaker: input.speaker ?? 'unknown',
       startedAt,
       endedAt: coerceTimestamp(input.endedAt, startedAt),
-      source: input.source ?? this.defaultTurnSource,
+      source,
       language: input.language ?? this.defaultLanguage,
       transcript: text,
       translationKo: cleanOptionalPlainText(input.translationKo, 1000),
@@ -308,6 +311,10 @@ export class TranscriptStore {
       isFinal: input.isFinal ?? true,
       correctedByUser: input.correctedByUser,
       piiFlags: input.piiFlags ?? [],
+      inputEvidence: createConversationInputEvidence(
+        source,
+        input.correctedByUser === true ? 'user_corrected' : 'single_stream_unresolved',
+      ),
     };
 
     if (!isConversationTurn(turn)) return null;
@@ -788,6 +795,9 @@ function applyConversationTurnUpdate(
       delete updated.translationKo;
     }
   }
+  if (patch.correctedByUser === true) {
+    updated.inputEvidence = createConversationInputEvidence(updated.source, 'user_corrected');
+  }
 
   if (!isConversationTurn(updated)) return null;
   return updated;
@@ -823,6 +833,7 @@ function createConversationTurnFromEntry(
     confidence: normalizeConfidence(entry.confidence),
     isFinal: entry.isFinal ?? true,
     piiFlags: [],
+    inputEvidence: createConversationInputEvidence(source),
   };
 }
 

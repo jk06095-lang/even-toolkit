@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   ECHO_DOMAIN_V2_SCHEMAS,
+  createConversationInputEvidence,
   isAssistEpisode,
   isConversationTurn,
   isCue,
@@ -32,6 +33,7 @@ const conversationTurn = {
   isFinal: true,
   correctedByUser: false,
   piiFlags: [],
+  inputEvidence: createConversationInputEvidence('g2'),
 };
 
 const cue = {
@@ -136,6 +138,7 @@ assert.equal(ECHO_DOMAIN_V2_SCHEMA_VERSION, '2.0.0');
 assert.deepEqual(Object.keys(ECHO_DOMAIN_V2_SCHEMAS).sort(), [
   'assistDecision',
   'assistEpisode',
+  'conversationInputEvidence',
   'conversationTurn',
   'cue',
   'dialogueExample',
@@ -144,6 +147,13 @@ assert.deepEqual(Object.keys(ECHO_DOMAIN_V2_SCHEMAS).sort(), [
 ]);
 
 assert.ok(isConversationTurn(conversationTurn), 'valid partner ConversationTurn should pass');
+assert.deepEqual(conversationTurn.inputEvidence, {
+  inputMode: 'g2_bridge_pcm',
+  speakerAttribution: 'single_stream_unresolved',
+  sampleRateHz: 16000,
+  channelCount: 1,
+  encoding: 'pcm_s16le_mono',
+});
 assert.ok(isCue(cue), 'valid stepped Cue should pass');
 assert.ok(isAssistEpisode(assistEpisode), 'valid AssistEpisode should pass');
 assert.ok(isLearningItem(learningItem), 'valid LearningItem should pass');
@@ -176,6 +186,42 @@ assert.equal(extraTurnFieldResult.ok, false, 'runtime guards must reject unknown
 assert.ok(
   extraTurnFieldResult.issues.some((entry) => entry.path === 'rawTranscriptDebug'),
   'unknown ConversationTurn fields should be reported by name',
+);
+
+const mismatchedInputEvidence = {
+  ...conversationTurn,
+  id: 'turn-bad-input-evidence',
+  source: 'phone',
+  inputEvidence: createConversationInputEvidence('g2'),
+};
+const mismatchedInputEvidenceResult = validateConversationTurn(mismatchedInputEvidence);
+assert.equal(
+  mismatchedInputEvidenceResult.ok,
+  false,
+  'ConversationTurn input evidence must match source provenance',
+);
+assert.ok(
+  mismatchedInputEvidenceResult.issues.some((entry) => entry.path === 'inputEvidence.inputMode'),
+  'mismatched input evidence should report the input mode',
+);
+
+const incompleteG2PcmEvidence = {
+  ...conversationTurn,
+  id: 'turn-incomplete-g2-pcm',
+  inputEvidence: {
+    inputMode: 'g2_bridge_pcm',
+    speakerAttribution: 'single_stream_unresolved',
+  },
+};
+const incompleteG2PcmEvidenceResult = validateConversationTurn(incompleteG2PcmEvidence);
+assert.equal(
+  incompleteG2PcmEvidenceResult.ok,
+  false,
+  'G2 bridge input evidence must carry the 16 kHz mono PCM contract',
+);
+assert.ok(
+  incompleteG2PcmEvidenceResult.issues.some((entry) => entry.path === 'inputEvidence.sampleRateHz'),
+  'incomplete G2 PCM evidence should report the missing sample rate',
 );
 
 const extraLearningItemField = {

@@ -176,6 +176,10 @@ describe('transcript privacy controls', () => {
       confidence: 0.82,
       isFinal: true,
       piiFlags: [],
+      inputEvidence: {
+        inputMode: 'phone_web_speech',
+        speakerAttribution: 'single_stream_unresolved',
+      },
     });
     expect(isConversationTurn(turn)).toBe(true);
   });
@@ -197,6 +201,10 @@ describe('transcript privacy controls', () => {
       speaker: 'unknown',
       source: 'phone',
       transcript: 'phone mic sentence',
+      inputEvidence: {
+        inputMode: 'phone_web_speech',
+        speakerAttribution: 'single_stream_unresolved',
+      },
     });
   });
 
@@ -219,6 +227,10 @@ describe('transcript privacy controls', () => {
       confidence: 0.87,
       correctedByUser: true,
       piiFlags: ['redacted-name'],
+      inputEvidence: {
+        inputMode: 'phone_web_speech',
+        speakerAttribution: 'user_corrected',
+      },
     });
 
     expect(turn).toMatchObject({

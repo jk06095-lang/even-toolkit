@@ -1,5 +1,6 @@
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  createConversationInputEvidence,
   isConversationTurn,
   type ConversationTurn,
   type SpeakerRole,
@@ -70,6 +71,10 @@ export function parseImportedConversationTranscript(
         transcript: parsed.text,
         isFinal: true,
         piiFlags: [],
+        inputEvidence: createConversationInputEvidence(
+          'import',
+          parsed.hasExplicitSpeaker ? 'provided_by_import' : 'single_stream_unresolved',
+        ),
       };
 
       return isConversationTurn(turn) ? turn : null;
@@ -83,16 +88,21 @@ export function speakerLabel(speaker: SpeakerRole): string {
   return 'Unknown';
 }
 
-function parseImportedLine(line: string, fallbackSpeaker: SpeakerRole): { speaker: SpeakerRole; text: string } {
+function parseImportedLine(
+  line: string,
+  fallbackSpeaker: SpeakerRole,
+): { speaker: SpeakerRole; text: string; hasExplicitSpeaker: boolean } {
   const match = line.match(/^([A-Za-z0-9 _-]{1,32}):\s*(.+)$/);
   if (!match) {
-    return { speaker: fallbackSpeaker, text: line };
+    return { speaker: fallbackSpeaker, text: line, hasExplicitSpeaker: false };
   }
 
-  const speaker = importedSpeakerRole(match[1] ?? '') ?? fallbackSpeaker;
+  const explicitSpeaker = importedSpeakerRole(match[1] ?? '');
+  const speaker = explicitSpeaker ?? fallbackSpeaker;
   return {
     speaker,
     text: (match[2] ?? '').trim(),
+    hasExplicitSpeaker: explicitSpeaker !== null,
   };
 }
 

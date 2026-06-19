@@ -336,6 +336,11 @@ Still requires real G2 validation:
   transcript flow that each produce ordered `ConversationTurn` records.
 - Confirm each source records at least one learner turn and one partner turn
   with timing, finality, source, language, and confidence-policy metadata.
+- Confirm each source records the expected `inputEvidence`: G2 Mic turns use
+  `inputMode: "g2_bridge_pcm"` with `sampleRateHz: 16000`, `channelCount: 1`,
+  and `encoding: "pcm_s16le_mono"`; Phone Mic turns use
+  `inputMode: "phone_web_speech"`; imported transcript rows use
+  `inputMode: "imported_text"`.
 - Confirm `unknownTurnCount` is recorded as a number, even when it is `0`, so
   diarization uncertainty is explicit instead of hidden.
 - Confirm imported transcript rows exercise speaker prefixes such as `Partner:`,

@@ -770,6 +770,7 @@ function validateConversationTimeline(manifestObject) {
     validateCountMetric(imported, { key: 'partnerTurnCount', min: 1 }, 'conversationTimeline.importSegmentation');
     validateExpected(imported, 'malformedRowsSkipped', true, 'conversationTimeline.importSegmentation');
     validateExpected(imported, 'deterministicIds', true, 'conversationTimeline.importSegmentation');
+    validateTimelineInputEvidence(imported, 'conversationTimeline.importSegmentation', 'import');
     validateEvidenceLink(imported, 'evidenceRef', 'conversationTimeline.importSegmentation');
   }
 
@@ -809,7 +810,40 @@ function validateTimelineSegmentationSource(evidence, pointer, expectedSource) {
   validateExpected(evidence, 'orderedTimingCaptured', true, pointer);
   validateExpected(evidence, 'finalityCaptured', true, pointer);
   validateExpected(evidence, 'confidencePolicyRecorded', true, pointer);
+  validateTimelineInputEvidence(evidence, pointer, expectedSource);
   validateEvidenceLink(evidence, 'evidenceRef', pointer);
+}
+
+function validateTimelineInputEvidence(evidence, pointer, expectedSource) {
+  const evidencePointer = `${pointer}.inputEvidence`;
+  if (!validateObject(evidence.inputEvidence, evidencePointer)) return;
+
+  const expectedModes = {
+    g2: 'g2_bridge_pcm',
+    phone: 'phone_web_speech',
+    import: 'imported_text',
+  };
+  const inputEvidence = evidence.inputEvidence;
+  validateExpected(inputEvidence, 'inputMode', expectedModes[expectedSource], evidencePointer);
+  validateExpected(
+    inputEvidence,
+    'speakerAttribution',
+    expectedSource === 'import' ? 'provided_by_import' : 'single_stream_unresolved',
+    evidencePointer,
+  );
+
+  if (expectedSource === 'g2') {
+    validateExpectedNumber(inputEvidence, 'sampleRateHz', 16000, evidencePointer);
+    validateExpectedNumber(inputEvidence, 'channelCount', 1, evidencePointer);
+    validateExpected(inputEvidence, 'encoding', 'pcm_s16le_mono', evidencePointer);
+    return;
+  }
+
+  for (const field of ['sampleRateHz', 'channelCount', 'encoding']) {
+    if (hasOwn(inputEvidence, field) && inputEvidence[field] !== null && !isPlaceholder(inputEvidence[field])) {
+      addError(`${evidencePointer}.${field}`, 'PCM format metadata is only valid for G2 bridge PCM evidence');
+    }
+  }
 }
 
 function validateDelayedProxy(manifestObject) {

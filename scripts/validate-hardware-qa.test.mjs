@@ -101,6 +101,27 @@ test('rejects audio-source evidence that silently opens Phone Mic for G2 session
   assert.match(output, /audioSources\.g2Failure\.cancelKeepsAudioOff: must be true/);
 });
 
+test('rejects conversation timeline evidence without source-specific input evidence', async () => {
+  const fixture = writeCompletedHardwareFixture('conversation-input-evidence');
+  const invalidTimeline = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  delete invalidTimeline.conversationTimeline.g2MicSegmentation.inputEvidence.sampleRateHz;
+  invalidTimeline.conversationTimeline.phoneMicSegmentation.inputEvidence.inputMode = 'g2_bridge_pcm';
+  invalidTimeline.conversationTimeline.importSegmentation.inputEvidence.speakerAttribution = 'single_stream_unresolved';
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-conversation-input-evidence.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidTimeline, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /conversationTimeline\.g2MicSegmentation\.inputEvidence\.sampleRateHz: missing required value 16000/);
+  assert.match(output, /conversationTimeline\.phoneMicSegmentation\.inputEvidence\.inputMode: must be "phone_web_speech"/);
+  assert.match(output, /conversationTimeline\.importSegmentation\.inputEvidence\.speakerAttribution: must be "provided_by_import"/);
+});
+
 test('rejects wear-state evidence that treats connection as wearing', async () => {
   const template = JSON.parse(readFileSync(templatePath, 'utf8'));
   const invalidWear = structuredClone(template);
@@ -420,6 +441,10 @@ function writeCompletedHardwareFixture(name) {
         partnerTurnCount: 1,
         malformedRowsSkipped: true,
         deterministicIds: true,
+        inputEvidence: {
+          inputMode: 'imported_text',
+          speakerAttribution: 'provided_by_import',
+        },
         evidenceRef: evidence,
       },
       translationReview: {
@@ -496,6 +521,18 @@ function timelineSegmentation(source, evidenceRef) {
     orderedTimingCaptured: true,
     finalityCaptured: true,
     confidencePolicyRecorded: true,
+    inputEvidence: source === 'g2'
+      ? {
+          inputMode: 'g2_bridge_pcm',
+          speakerAttribution: 'single_stream_unresolved',
+          sampleRateHz: 16000,
+          channelCount: 1,
+          encoding: 'pcm_s16le_mono',
+        }
+      : {
+          inputMode: 'phone_web_speech',
+          speakerAttribution: 'single_stream_unresolved',
+        },
     evidenceRef,
   };
 }

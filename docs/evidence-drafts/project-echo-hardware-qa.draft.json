@@ -325,6 +325,13 @@
       "orderedTimingCaptured": null,
       "finalityCaptured": null,
       "confidencePolicyRecorded": null,
+      "inputEvidence": {
+        "inputMode": "TBD",
+        "speakerAttribution": "TBD",
+        "sampleRateHz": null,
+        "channelCount": null,
+        "encoding": "TBD"
+      },
       "evidenceRef": "TBD"
     },
     "phoneMicSegmentation": {
@@ -336,6 +343,10 @@
       "orderedTimingCaptured": null,
       "finalityCaptured": null,
       "confidencePolicyRecorded": null,
+      "inputEvidence": {
+        "inputMode": "TBD",
+        "speakerAttribution": "TBD"
+      },
       "evidenceRef": "TBD"
     },
     "importSegmentation": {
@@ -345,6 +356,10 @@
       "partnerTurnCount": null,
       "malformedRowsSkipped": null,
       "deterministicIds": null,
+      "inputEvidence": {
+        "inputMode": "TBD",
+        "speakerAttribution": "TBD"
+      },
       "evidenceRef": "TBD"
     },
     "translationReview": {

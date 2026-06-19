@@ -292,6 +292,10 @@ describe('conversation timeline rows', () => {
       transcript: 'I think we can start with onboarding.',
       isFinal: true,
       piiFlags: [],
+      inputEvidence: {
+        inputMode: 'imported_text',
+        speakerAttribution: 'provided_by_import',
+      },
     });
   });
 });

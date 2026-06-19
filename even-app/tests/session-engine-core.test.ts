@@ -867,6 +867,10 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       transcript: 'Could you clarify the customer segment?',
       confidence: 0.87,
       isFinal: true,
+      inputEvidence: {
+        inputMode: 'phone_web_speech',
+        speakerAttribution: 'single_stream_unresolved',
+      },
     });
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
@@ -884,6 +888,13 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       transcript: 'I can start with the onboarding risk.',
       confidence: 0.81,
       isFinal: true,
+      inputEvidence: {
+        inputMode: 'g2_bridge_pcm',
+        speakerAttribution: 'single_stream_unresolved',
+        sampleRateHz: 16000,
+        channelCount: 1,
+        encoding: 'pcm_s16le_mono',
+      },
     });
     expect(harness.hud.events.some((event) => event.includes('conversation'))).toBe(false);
   });
@@ -953,6 +964,10 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       correctedByUser: true,
       source: 'phone',
       transcript: 'Could you clarify the customer segment?',
+      inputEvidence: {
+        inputMode: 'phone_web_speech',
+        speakerAttribution: 'user_corrected',
+      },
     });
   });
 

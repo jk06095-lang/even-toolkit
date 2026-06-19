@@ -3,6 +3,13 @@ export const ECHO_DOMAIN_V2_SCHEMA_BASE_ID = 'https://even-toolkit.dev/schemas/e
 
 export type SpeakerRole = 'learner' | 'partner' | 'unknown';
 export type ConversationTurnSource = 'g2' | 'phone' | 'import';
+export type ConversationInputMode = 'g2_bridge_pcm' | 'phone_web_speech' | 'imported_text';
+export type ConversationPcmEncoding = 'pcm_s16le_mono';
+export type SpeakerAttributionMode =
+  | 'single_stream_unresolved'
+  | 'user_corrected'
+  | 'provided_by_import'
+  | 'provider_estimated';
 export type AssistAction = 'none' | 'prefetch' | 'show';
 export type AssistTrigger =
   | 'manual'
@@ -43,6 +50,15 @@ export interface ConversationTurn {
   isFinal: boolean;
   correctedByUser?: boolean;
   piiFlags?: string[];
+  inputEvidence?: ConversationInputEvidence;
+}
+
+export interface ConversationInputEvidence {
+  inputMode: ConversationInputMode;
+  speakerAttribution: SpeakerAttributionMode;
+  sampleRateHz?: 16000;
+  channelCount?: 1;
+  encoding?: ConversationPcmEncoding;
 }
 
 export interface AssistDecision {
@@ -168,6 +184,14 @@ const ISO_DATETIME_PATTERN = '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\
 
 const speakerRoles = ['learner', 'partner', 'unknown'] as const;
 const turnSources = ['g2', 'phone', 'import'] as const;
+const conversationInputModes = ['g2_bridge_pcm', 'phone_web_speech', 'imported_text'] as const;
+const conversationPcmEncodings = ['pcm_s16le_mono'] as const;
+const speakerAttributionModes = [
+  'single_stream_unresolved',
+  'user_corrected',
+  'provided_by_import',
+  'provider_estimated',
+] as const;
 const assistActions = ['none', 'prefetch', 'show'] as const;
 const assistTriggers = [
   'manual',
@@ -205,6 +229,14 @@ const conversationTurnFields = [
   'isFinal',
   'correctedByUser',
   'piiFlags',
+  'inputEvidence',
+] as const;
+const conversationInputEvidenceFields = [
+  'inputMode',
+  'speakerAttribution',
+  'sampleRateHz',
+  'channelCount',
+  'encoding',
 ] as const;
 const cueFields = [
   'schemaVersion',
@@ -345,6 +377,44 @@ export const conversationTurnSchema = {
     isFinal: { type: 'boolean' },
     correctedByUser: { type: 'boolean' },
     piiFlags: plainTextArrayProperty,
+    inputEvidence: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['inputMode', 'speakerAttribution'],
+      properties: {
+        inputMode: { enum: conversationInputModes },
+        speakerAttribution: { enum: speakerAttributionModes },
+        sampleRateHz: { const: 16000 },
+        channelCount: { const: 1 },
+        encoding: { enum: conversationPcmEncodings },
+      },
+      allOf: [
+        {
+          if: {
+            properties: { inputMode: { const: 'g2_bridge_pcm' } },
+            required: ['inputMode'],
+          },
+          then: {
+            required: ['sampleRateHz', 'channelCount', 'encoding'],
+          },
+        },
+        {
+          if: {
+            properties: { inputMode: { enum: ['phone_web_speech', 'imported_text'] } },
+            required: ['inputMode'],
+          },
+          then: {
+            not: {
+              anyOf: [
+                { required: ['sampleRateHz'] },
+                { required: ['channelCount'] },
+                { required: ['encoding'] },
+              ],
+            },
+          },
+        },
+      ],
+    },
   },
 } as const satisfies JsonSchema;
 
@@ -566,6 +636,7 @@ export const learnerProfileSchema = {
 
 export const ECHO_DOMAIN_V2_SCHEMAS = {
   conversationTurn: conversationTurnSchema,
+  conversationInputEvidence: conversationTurnSchema.properties.inputEvidence,
   assistDecision: assistDecisionSchema,
   cue: cueSchema,
   assistEpisode: assistEpisodeSchema,
@@ -769,6 +840,7 @@ export function validateConversationTurn(value: unknown): ValidationResult {
   validateBooleanField(record, 'isFinal', issues, true);
   validateBooleanField(record, 'correctedByUser', issues);
   validateStringArrayField(record, 'piiFlags', issues, { maxItems: 32, maxLength: 160, noHtml: true });
+  validateConversationInputEvidence(record.inputEvidence, record.source, issues);
 
   if (
     typeof record.startedAt === 'number' &&
@@ -779,6 +851,46 @@ export function validateConversationTurn(value: unknown): ValidationResult {
   }
 
   return result(issues);
+}
+
+function validateConversationInputEvidence(
+  value: unknown,
+  source: unknown,
+  issues: ValidationIssue[],
+): void {
+  if (value === undefined || value === null) return;
+  const record = asRecord(value, 'inputEvidence', issues);
+  if (!record) return;
+
+  validateKnownFields(record, conversationInputEvidenceFields, issues, 'inputEvidence');
+  const nestedIssues: ValidationIssue[] = [];
+  validateEnumField(record, 'inputMode', conversationInputModes, nestedIssues);
+  validateEnumField(record, 'speakerAttribution', speakerAttributionModes, nestedIssues);
+
+  if (record.inputMode === 'g2_bridge_pcm') {
+    validateNumberField(record, 'sampleRateHz', nestedIssues, { required: true, min: 16000, max: 16000, integer: true });
+    validateNumberField(record, 'channelCount', nestedIssues, { required: true, min: 1, max: 1, integer: true });
+    validateEnumField(record, 'encoding', conversationPcmEncodings, nestedIssues);
+  } else {
+    for (const field of ['sampleRateHz', 'channelCount', 'encoding']) {
+      if (record[field] !== undefined) {
+        issues.push(issue(`inputEvidence.${field}`, 'PCM format metadata is only valid for g2_bridge_pcm input.'));
+      }
+    }
+  }
+  issues.push(...nestedIssues.map((entry) => issue(`inputEvidence.${entry.path}`, entry.message)));
+
+  const expectedModeBySource: Record<ConversationTurnSource, ConversationInputMode> = {
+    g2: 'g2_bridge_pcm',
+    phone: 'phone_web_speech',
+    import: 'imported_text',
+  };
+  if (
+    (source === 'g2' || source === 'phone' || source === 'import') &&
+    record.inputMode !== expectedModeBySource[source]
+  ) {
+    issues.push(issue('inputEvidence.inputMode', `Expected ${expectedModeBySource[source]} for source ${source}.`));
+  }
 }
 
 export function validateCue(value: unknown): ValidationResult {
@@ -966,4 +1078,33 @@ export function isLearningItem(value: unknown): value is LearningItem {
 
 export function isLearnerProfile(value: unknown): value is LearnerProfile {
   return validateLearnerProfile(value).ok;
+}
+
+export function createConversationInputEvidence(
+  source: ConversationTurnSource,
+  speakerAttribution: SpeakerAttributionMode = source === 'import'
+    ? 'provided_by_import'
+    : 'single_stream_unresolved',
+): ConversationInputEvidence {
+  if (source === 'g2') {
+    return {
+      inputMode: 'g2_bridge_pcm',
+      speakerAttribution,
+      sampleRateHz: 16000,
+      channelCount: 1,
+      encoding: 'pcm_s16le_mono',
+    };
+  }
+
+  if (source === 'phone') {
+    return {
+      inputMode: 'phone_web_speech',
+      speakerAttribution,
+    };
+  }
+
+  return {
+    inputMode: 'imported_text',
+    speakerAttribution,
+  };
 }
