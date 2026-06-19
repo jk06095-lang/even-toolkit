@@ -40,6 +40,10 @@ const MAX_TARGET_CHARS = 240;
 const MAX_INTERVALS_PER_CHUNK = 12;
 const MAX_INTERVAL_MINUTES = 7 * 24 * 60;
 const HTML_TAG_PATTERN = /<[a-z][\s\S]*>/i;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const URL_SCHEME_PATTERN = /\b(?:javascript|data|vbscript):/i;
+const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+const PHONE_PATTERN = /(?:\+?\d[\s().-]*){7,}\d/;
 
 // ── Parsing ──
 
@@ -130,15 +134,25 @@ export function parseDebriefJSON(raw: string): DebriefReport {
 }
 
 function parseSafeText(value: string, field: string, maxLength: number): string {
-  const text = value.trim();
+  const text = value.replace(/\s+/g, ' ').trim();
+  const rejectsDirectIdentifiers = field !== 'session_date';
   if (!text) {
     throw new Error(`Missing or invalid "${field}" field.`);
   }
   if (text.length > maxLength) {
     throw new Error(`"${field}" is too long. Maximum is ${maxLength} characters.`);
   }
+  if (CONTROL_CHARACTER_PATTERN.test(text)) {
+    throw new Error(`"${field}" must not contain control characters.`);
+  }
   if (HTML_TAG_PATTERN.test(text)) {
     throw new Error(`"${field}" must not contain HTML tags.`);
+  }
+  if (URL_SCHEME_PATTERN.test(text)) {
+    throw new Error(`"${field}" must not contain executable URL schemes.`);
+  }
+  if (rejectsDirectIdentifiers && (EMAIL_PATTERN.test(text) || PHONE_PATTERN.test(text))) {
+    throw new Error(`"${field}" must not contain direct contact identifiers.`);
   }
   return text;
 }

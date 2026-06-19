@@ -38,6 +38,42 @@ describe('debrief import safety', () => {
     }))).toThrow(/must not contain HTML tags/);
   });
 
+  it('rejects direct contact identifiers before storing imported review phrases', () => {
+    for (const target of [
+      'Email me at learner@example.com',
+      'Call me at +1 415 555 0199',
+    ]) {
+      expect(() => parseDebriefJSON(JSON.stringify({
+        session_date: '2026-06-19',
+        fsi_stress_level: 'Low',
+        bottleneck_chunks: [
+          {
+            target,
+            interval: [10],
+          },
+        ],
+      }))).toThrow(/direct contact identifiers/);
+    }
+  });
+
+  it('rejects executable URL schemes and control characters in imported phrases', () => {
+    for (const target of [
+      'javascript:alert(1)',
+      'Safe phrase\u0007with bell',
+    ]) {
+      expect(() => parseDebriefJSON(JSON.stringify({
+        session_date: '2026-06-19',
+        fsi_stress_level: 'Medium',
+        bottleneck_chunks: [
+          {
+            target,
+            interval: [10],
+          },
+        ],
+      }))).toThrow(/executable URL schemes|control characters/);
+    }
+  });
+
   it('rejects overlarge import arrays before scheduling reminders', () => {
     expect(() => parseDebriefJSON(JSON.stringify({
       session_date: '2026-06-19',
