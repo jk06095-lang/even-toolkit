@@ -90,6 +90,36 @@ describe('active recall learning loop', () => {
     expect(JSON.stringify(snapshot)).not.toContain('test@example.com');
   });
 
+  it('does not count answer reveal without a captured attempt as mastery', () => {
+    const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
+      now: () => dueNow,
+    });
+    expect(item).toBeDefined();
+
+    const attempt = recordActiveRecallAttempt(
+      item!.learningItem,
+      'easy',
+      '   <b></b>   ',
+      { now: () => dueNow },
+    );
+
+    expect(attempt).toMatchObject({
+      grade: 'again',
+      userAttempt: undefined,
+      evaluation: {
+        recommendedGrade: 'again',
+        note: 'No attempt captured.',
+      },
+    });
+    expect(Date.parse(attempt.dueAtAfter) - dueNow.getTime()).toBe(10 * 60 * 1000);
+    expect(loadActiveRecallSnapshot().states[item!.learningItem.id]).toMatchObject({
+      reps: 0,
+      lapses: 1,
+      lastGrade: 'again',
+      transferSuccessCount: 0,
+    });
+  });
+
   it('suggests a grade from local semantic coverage without requiring exact copy', () => {
     const [item] = buildActiveRecallQueue([makeSession([['assisted_exact', 2, 'Could you say that again?']])], {
       now: () => dueNow,

@@ -198,10 +198,12 @@ export function recordActiveRecallAttempt(
   const current = snapshot.states[item.id] ?? createInitialReviewState(item);
   const prompt = createActiveRecallPrompt(item, current);
   const mode = options.mode ?? prompt.mode;
-  const nextState = advanceActiveRecallState(current, grade, now, mode);
   const evaluation = evaluateActiveRecallAttempt(item, userAttempt, {
     pronunciationConfidence: options.pronunciationConfidence,
   });
+  const savedUserAttempt = sanitizeOptional(userAttempt, 1000);
+  const effectiveGrade = gradeForCapturedAttempt(grade, savedUserAttempt);
+  const nextState = advanceActiveRecallState(current, effectiveGrade, now, mode);
   const captureSource = options.captureSource ??
     (options.pronunciationConfidence !== undefined ? 'phone_web_speech' : 'typed');
   const attempt: ActiveRecallAttempt = {
@@ -209,10 +211,10 @@ export function recordActiveRecallAttempt(
     itemId: item.id,
     mode,
     captureSource,
-    grade,
+    grade: effectiveGrade,
     prompt: prompt.prompt,
     expectedExpression: sanitizePlainText(item.canonicalExpression, 240),
-    userAttempt: sanitizeOptional(userAttempt, 1000),
+    userAttempt: savedUserAttempt,
     attemptedAt: now.toISOString(),
     dueAtBefore: current.dueAt,
     dueAtAfter: nextState.dueAt,
@@ -226,6 +228,13 @@ export function recordActiveRecallAttempt(
   }
   saveActiveRecallSnapshot(snapshot);
   return attempt;
+}
+
+function gradeForCapturedAttempt(
+  selectedGrade: ActiveRecallGrade,
+  savedUserAttempt: string | undefined,
+): ActiveRecallGrade {
+  return savedUserAttempt ? selectedGrade : 'again';
 }
 
 export function evaluateActiveRecallAttempt(

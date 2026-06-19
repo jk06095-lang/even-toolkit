@@ -49,8 +49,11 @@ items are present without exposing the answer before recall.
 
 Each saved attempt also carries a local text evaluation: keyword coverage,
 precision, a semantic score, and a suggested grade. The suggestion is a
-privacy-safe client-side aid, not an automatic mastery decision; the learner's
-chosen Again / Hard / Good / Easy grade is still the scheduling input.
+privacy-safe client-side aid, not an automatic mastery decision. A captured
+production attempt is required before mastery can increase: if the learner
+reveals the answer and grades an empty attempt as Hard / Good / Easy, the store
+saves the review as `Again`, keeps `reps` unchanged, and schedules a short
+retry instead of counting answer viewing as recall.
 
 Voice attempts on the phone use a small active-recall Web Speech adapter. It is
 gated behind the existing microphone and cloud-processing privacy settings and
