@@ -81,7 +81,9 @@ suggestion`, and C=`3-5 word cue`, missing VAD environment results, missing real
 G2 video evidence, non-link case-study/video references, or README links not
 marked as updated. Case-study links must be `https://` URLs or repo paths such
 as `docs/project-echo-case-study.ko.md`; video evidence must be an `https://`
-URL or a repo path to a video file.
+URL or a repo path to a video file. Repo-path evidence must point to a file that
+exists in the repository; a future path or filename-only placeholder is not
+accepted.
 VAD calibration evidence must also be internally consistent: speech floor above
 noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.

@@ -13,7 +13,9 @@ npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json
 Every final `evidenceRef`, `videoEvidence`, `debugLogRef`, `bundleReportRef`,
 and `deviceEvidenceRef` must be a non-placeholder `https://` URL or a repo path
 to an evidence file such as `.md`, `.json`, `.log`, image, or video. Plain
-status text such as `done` is not accepted as evidence.
+status text such as `done` is not accepted as evidence. Repo-path evidence must
+point to a file that exists in the repository; future filenames are not accepted
+as completed evidence.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
 

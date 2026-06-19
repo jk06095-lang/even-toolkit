@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const REQUIRED_CONDITIONS = ['A', 'B', 'C'];
@@ -169,6 +169,11 @@ function validateEvidenceLink(object, key, pointer, options = {}) {
       fieldPointer,
       `must be an https URL or repo path ending in one of: ${extensions.join(', ')}`,
     );
+    return;
+  }
+
+  if (!evidenceTargetExists(value)) {
+    addError(fieldPointer, 'repo path evidence must point to an existing file');
   }
 }
 
@@ -183,6 +188,17 @@ function looksLikeEvidenceLink(value, extensions) {
     'i',
   );
   return relativePathPattern.test(trimmed);
+}
+
+function evidenceTargetExists(value) {
+  const trimmed = String(value ?? '').trim();
+  if (/^https:\/\/\S+$/i.test(trimmed)) return true;
+  const resolvedPath = path.resolve(process.cwd(), trimmed);
+  const repoRoot = `${process.cwd()}${path.sep}`;
+  if (resolvedPath !== process.cwd() && !resolvedPath.startsWith(repoRoot)) {
+    return false;
+  }
+  return existsSync(resolvedPath);
 }
 
 function validateBooleanTrue(object, key, pointer) {
