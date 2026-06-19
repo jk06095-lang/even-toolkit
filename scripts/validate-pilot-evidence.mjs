@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const REQUIRED_CONDITIONS = ['A', 'B', 'C'];
 const REQUIRED_VAD_ENVIRONMENTS = ['quiet_room', 'cafe_background', 'air_conditioner', 'outdoor_wind'];
+const NOISY_VAD_ENVIRONMENTS = ['cafe_background', 'air_conditioner', 'outdoor_wind'];
 
 const SYSTEM_METRICS = [
   { key: 'g2MicSuccessRate', min: 0, max: 1 },
@@ -345,9 +346,90 @@ function validateVadCalibration(manifestObject) {
     }
 
     validateMetricGroup(environment.metrics, VAD_METRICS, `${pointer}.metrics`);
+    validateVadMetricRelationships(environment.metrics, `${pointer}.metrics`);
     validateText(environment, 'qaExportPath', pointer);
     validateText(environment, 'notes', pointer);
   });
+
+  validateVadEnvironmentRelationships(manifestObject.vadCalibration.environments);
+}
+
+function validateVadMetricRelationships(metrics, pointer) {
+  if (!isPlainObject(metrics)) return;
+
+  const {
+    vadSpeechThreshold,
+    vadNoiseFloorRms,
+    vadSpeechFloorRms,
+  } = metrics;
+
+  if (
+    allowDraft
+    && [vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFloorRms].some(
+      (value) => value === null || value === 'TBD',
+    )
+  ) {
+    return;
+  }
+
+  if (
+    ![vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFloorRms].every(
+      (value) => typeof value === 'number' && Number.isFinite(value),
+    )
+  ) {
+    return;
+  }
+
+  if (vadSpeechFloorRms <= vadNoiseFloorRms) {
+    addError(`${pointer}.vadSpeechFloorRms`, 'must be greater than vadNoiseFloorRms');
+  }
+
+  if (vadSpeechThreshold < vadNoiseFloorRms) {
+    addError(`${pointer}.vadSpeechThreshold`, 'must be >= vadNoiseFloorRms');
+  }
+
+  if (vadSpeechThreshold > vadSpeechFloorRms) {
+    addError(`${pointer}.vadSpeechThreshold`, 'must be <= vadSpeechFloorRms');
+  }
+}
+
+function validateVadEnvironmentRelationships(environments) {
+  const byName = new Map();
+  for (const environment of environments) {
+    if (environment && typeof environment.name === 'string') {
+      byName.set(environment.name, environment);
+    }
+  }
+
+  const quiet = byName.get('quiet_room');
+  if (!quiet || !isPlainObject(quiet.metrics)) return;
+
+  const quietNoise = quiet.metrics.vadNoiseFloorRms;
+  const quietThreshold = quiet.metrics.vadSpeechThreshold;
+  if (
+    ![quietNoise, quietThreshold].every(
+      (value) => typeof value === 'number' && Number.isFinite(value),
+    )
+  ) {
+    return;
+  }
+
+  for (const environmentName of NOISY_VAD_ENVIRONMENTS) {
+    const environment = byName.get(environmentName);
+    if (!environment || !isPlainObject(environment.metrics)) continue;
+
+    const pointer = `vadCalibration.environments.${environmentName}.metrics`;
+    const noise = environment.metrics.vadNoiseFloorRms;
+    const threshold = environment.metrics.vadSpeechThreshold;
+
+    if (typeof noise === 'number' && Number.isFinite(noise) && noise < quietNoise) {
+      addError(`${pointer}.vadNoiseFloorRms`, 'must be >= quiet_room vadNoiseFloorRms');
+    }
+
+    if (typeof threshold === 'number' && Number.isFinite(threshold) && threshold < quietThreshold) {
+      addError(`${pointer}.vadSpeechThreshold`, 'must be >= quiet_room vadSpeechThreshold');
+    }
+  }
 }
 
 function validateManifest(manifestObject) {

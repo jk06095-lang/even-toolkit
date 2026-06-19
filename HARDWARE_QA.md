@@ -83,6 +83,10 @@ Still requires real G2 validation:
 - Air-conditioner noise: record threshold, false starts, and missed speech.
 - Outdoor stationary wind: record threshold, false starts, and missed speech.
 - Confirm higher noise-floor environments produce a higher BridgeVAD threshold than quiet room.
+- Final pilot evidence must keep `vadSpeechFloorRms` greater than
+  `vadNoiseFloorRms`, keep `vadSpeechThreshold` between the two floors, and keep
+  cafe/air-conditioner/outdoor noise floor and threshold values at or above the
+  quiet-room values.
 - If calibration is skipped or produces too few samples, confirm fallback threshold `0.015` is used.
 - After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
 - Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json`.
