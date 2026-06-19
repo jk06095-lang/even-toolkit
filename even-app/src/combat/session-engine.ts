@@ -1154,8 +1154,6 @@ export class SessionEngine {
     // Check if user missed the active hint (silence = they didn't use it)
     if (this.analyzer?.getActiveHint()) {
       const activeHint = this.analyzer.getActiveHint()!;
-      this.analyzer.resolveActiveHint('missed');
-      this.transcriptStore?.addHintMissed(activeHint.text);
 
       // Try to simplify the missed hint
       this.isGenerating = true;
@@ -1181,6 +1179,7 @@ export class SessionEngine {
           if (simplified && simplified !== activeHint.text) {
           // Show simplified hint
           this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
+          this.analyzer?.resolveActiveHint('simplified', simplified);
           this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1));
 
           this.hintCount++;
@@ -1214,6 +1213,8 @@ export class SessionEngine {
           }, this.weekConfig.hintFlashDurationMs);
         } else {
           // Simplification failed — generate a new contextual hint
+          this.analyzer?.resolveActiveHint('missed');
+          this.transcriptStore?.addHintMissed(activeHint.text);
           await this.generateContextualHint('auto');
         }
       } catch {
@@ -1324,6 +1325,8 @@ export class SessionEngine {
     // Ignore speech if paused or ended
     if (this._state === 'paused' || (this._state as any) === 'session_end') return;
 
+    const countsAsIndependentRecovery = this._state === 'silence_detected' && !this.cueVisible;
+
     this.speechCount++;
     this.callbacks.onSpeechDetected();
 
@@ -1333,8 +1336,8 @@ export class SessionEngine {
     }
     this.cueVisible = false;
 
-    // If user spoke while in silence/hint state, count as self-response
-    if (this._state === 'silence_detected' || this._state === 'listening') {
+    // Count only recovery speech after a no-cue silence prompt, not every ordinary listening turn.
+    if (countsAsIndependentRecovery) {
       this.selfResponses++;
     }
 

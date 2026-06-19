@@ -14,6 +14,7 @@ import {
 import type { VADConfig } from '../src/combat/vad-manager';
 import type { ChunkRequest, ChunkResult } from '../src/combat/chunk-generator';
 import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } from '../src/combat/hybrid-recognizer';
+import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
 
 class FakeClock implements Clock {
   current = 1_000;
@@ -457,6 +458,50 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.engine.dismissActiveCue()).toBe(false);
   });
 
+  it('does not count ordinary listening speech as an independent recovery', async () => {
+    const harness = createHarness();
+    await harness.engine.start(harness.hud);
+
+    harness.vad.triggerSpeech();
+    await harness.engine.stop();
+
+    expect(harness.logs[0]).toMatchObject({
+      totalSpeechEvents: 1,
+      selfResponseRate: 0,
+    });
+  });
+
+  it('records simplified hints as simplified instead of missed', async () => {
+    const harness = createHarness({
+      chunkResult: {
+        chunk: 'Complex original cue',
+        source: 'gemini',
+        latencyMs: 8,
+      },
+      simplifiedHint: 'Simple cue',
+    });
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    await harness.engine.requestManualCue();
+    harness.clock.advance(2_100);
+    harness.clock.advance(5_200);
+    await harness.vad.triggerSilence();
+    await Promise.resolve();
+
+    expect(harness.cueProvider.simplifyCalls).toBe(1);
+
+    harness.recognizers[0]!.emitFinalResult('simple cue');
+    await harness.engine.stop();
+
+    expect(harness.analyses[0]).toMatchObject({
+      totalHints: 2,
+      hintsUsed: 1,
+      hintsMissed: 0,
+      hintsSimplified: 1,
+    });
+  });
+
   it('ignores late cue responses after session stop', async () => {
     const deferredCue = deferred<ChunkResult>();
     const harness = createHarness({ pendingChunk: deferredCue.promise });
@@ -656,6 +701,7 @@ function createHarness(options: {
   chunkResult?: ChunkResult;
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
+  simplifiedHint?: string | null;
   vadStartError?: Error;
   clock?: FakeClock;
   rejectChunkOnAbort?: boolean;
@@ -664,6 +710,7 @@ function createHarness(options: {
   const states: string[] = [];
   const chunks: ChunkResult[] = [];
   const logs: SessionLog[] = [];
+  const analyses: SessionAnalysis[] = [];
   const liveTranscripts: { text: string; isFinal: boolean }[] = [];
   const hud = new FakeHud();
   let vad!: FakeAudioDetector;
@@ -696,6 +743,9 @@ function createHarness(options: {
     onSessionLog: (log) => logs.push(log),
     onLiveTranscript: (text, isFinal) => {
       liveTranscripts.push({ text, isFinal });
+    },
+    onSessionAnalysis: (analysis) => {
+      analyses.push(analysis);
     },
   };
 
@@ -732,6 +782,7 @@ function createHarness(options: {
     states,
     chunks,
     logs,
+    analyses,
     liveTranscripts,
     recognizers,
     recognizerOptions,
@@ -742,10 +793,12 @@ function createCueProvider(options: {
   chunkResult?: ChunkResult;
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
+  simplifiedHint?: string | null;
   rejectChunkOnAbort?: boolean;
 }) {
   const provider = {
     generateCalls: 0,
+    simplifyCalls: 0,
     requests: [] as ChunkRequest[],
     signals: [] as AbortSignal[],
     async generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
@@ -775,11 +828,17 @@ function createCueProvider(options: {
       return null;
     },
     async simplifyHint() {
-      return null;
+      this.simplifyCalls++;
+      return options.simplifiedHint ?? null;
     },
   };
 
-  return provider as CueProvider & { generateCalls: number; requests: ChunkRequest[]; signals: AbortSignal[] };
+  return provider as CueProvider & {
+    generateCalls: number;
+    simplifyCalls: number;
+    requests: ChunkRequest[];
+    signals: AbortSignal[];
+  };
 }
 
 function deferred<T>() {

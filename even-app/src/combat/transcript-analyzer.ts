@@ -49,6 +49,8 @@ export interface HintUsageRecord {
   status: 'used' | 'missed' | 'simplified';
   /** What the user actually said (if captured). */
   userResponse?: string;
+  /** Easier replacement shown after this hint was simplified. */
+  simplifiedTo?: string;
   /** Timestamp (ms) of resolution. */
   timestamp: number;
   /** Difficulty level of the hint. */
@@ -212,18 +214,25 @@ export class TranscriptAnalyzer {
    * @param status       Outcome — 'used' or 'missed'.
    * @param userResponse Optional: what the user actually said.
    */
-  resolveActiveHint(status: 'used' | 'missed', userResponse?: string): void {
+  resolveActiveHint(status: 'used' | 'missed' | 'simplified', detail?: string): void {
     if (!this.activeHint) return;
 
     this.activeHint.status = status;
 
-    this.hintHistory.push({
+    const record: HintUsageRecord = {
       hint: this.activeHint.text,
       status,
-      userResponse,
       timestamp: Date.now(),
       difficulty: this.activeHint.difficulty,
-    });
+    };
+
+    if (status === 'simplified') {
+      record.simplifiedTo = detail;
+    } else if (detail) {
+      record.userResponse = detail;
+    }
+
+    this.hintHistory.push(record);
 
     this.activeHint = null;
   }
