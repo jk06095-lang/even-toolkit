@@ -4,6 +4,19 @@ import path from 'node:path';
 
 const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'PAUSED'];
 const REQUIRED_DELAYED_PROXY_SCENARIOS = ['endPractice', 'pause', 'exitEcho'];
+const LIFECYCLE_CYCLE_ZERO_METRICS = [
+  'activeMicStreamsAfterEnd',
+  'activeVadDetectorsAfterEnd',
+  'pendingTimeoutCount',
+  'pendingIntervalCount',
+  'lateHudUpdatesAfterEnd',
+];
+const LIFECYCLE_EXIT_ZERO_METRICS = [
+  'activeAudioCapturesAfterExit',
+  'pendingTimeoutCount',
+  'pendingIntervalCount',
+  'lateHudUpdatesAfterExit',
+];
 
 const PLACEHOLDER_PATTERNS = [
   /^$/,
@@ -162,6 +175,38 @@ function validateExpected(object, key, expected, pointer) {
   }
 }
 
+function validateExpectedNumber(object, key, expected, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, `missing required value ${expected}`);
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || value === 'TBD')) {
+    addWarning(fieldPointer, `draft value must become ${expected}`);
+    return;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    addError(fieldPointer, 'must be a finite number');
+    return;
+  }
+
+  if (value !== expected) {
+    addError(fieldPointer, `must be ${expected}`);
+  }
+}
+
+function validateAllowedKeys(object, allowedKeys, pointer) {
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(object)) {
+    if (!allowed.has(key)) {
+      addError(`${pointer}.${key}`, `unexpected key; allowed keys: ${allowedKeys.join(', ')}`);
+    }
+  }
+}
+
 function validateManifestRoot(manifestObject) {
   if (!validateObject(manifestObject, 'manifest')) return;
 
@@ -200,6 +245,9 @@ function validateLifecycle(manifestObject) {
       validateExpected(run, 'duplicateMicStreams', false, pointer);
       validateExpected(run, 'duplicateHudCallbacks', false, pointer);
       validateExpected(run, 'pendingTimers', false, pointer);
+      for (const metric of LIFECYCLE_CYCLE_ZERO_METRICS) {
+        validateExpectedNumber(run, metric, 0, pointer);
+      }
       validateEvidenceLink(run, 'evidenceRef', pointer);
     });
   }
@@ -211,6 +259,9 @@ function validateLifecycle(manifestObject) {
     validateExpected(run, 'statusListenersCleared', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'audioCaptureStopped', true, 'lifecycle.exitEchoRun');
     validateExpected(run, 'lateResponsesIgnored', true, 'lifecycle.exitEchoRun');
+    for (const metric of LIFECYCLE_EXIT_ZERO_METRICS) {
+      validateExpectedNumber(run, metric, 0, 'lifecycle.exitEchoRun');
+    }
     validateEvidenceLink(run, 'evidenceRef', 'lifecycle.exitEchoRun');
   }
 }
@@ -218,6 +269,8 @@ function validateLifecycle(manifestObject) {
 function validateHud(manifestObject) {
   if (!validateObject(manifestObject.hud, 'hud')) return;
   if (!validateObject(manifestObject.hud.states, 'hud.states')) return;
+
+  validateAllowedKeys(manifestObject.hud.states, REQUIRED_HUD_STATES, 'hud.states');
 
   for (const state of REQUIRED_HUD_STATES) {
     const pointer = `hud.states.${state}`;

@@ -13,6 +13,8 @@ Every final `evidenceRef`, `videoEvidence`, `debugLogRef`, `bundleReportRef`,
 and `deviceEvidenceRef` must be a non-placeholder `https://` URL or a repo path
 to an evidence file such as `.md`, `.json`, `.log`, image, or video. Plain
 status text such as `done` is not accepted as evidence.
+For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
+plain boolean pass is not enough for the completed hardware evidence.
 
 ## Session lifecycle
 
@@ -21,6 +23,9 @@ status text such as `done` is not accepted as evidence.
 - Confirm no duplicate HUD callbacks remain.
 - Confirm pause and resume do not multiply timers.
 - Confirm ending a session clears active cue state.
+- For every cycle, record zero active mic streams, zero active VAD detectors,
+  zero pending timeouts, zero pending intervals, and zero late HUD updates after
+  `END PRACTICE`.
 
 ## End Practice vs Exit ECHO
 
@@ -66,6 +71,8 @@ Still requires real G2 validation:
 
 - Confirm `END PRACTICE` returns glasses to `READY` standby after physical G2 audio capture stops.
 - Confirm `EXIT ECHO` calls Even Hub shutdown target `1`, clears status/audio subscriptions, and leaves no active hardware capture.
+- Confirm `EXIT ECHO` records zero active audio captures, zero pending timeouts,
+  zero pending intervals, and zero late HUD updates after shutdown.
 - Capture the 10-cycle hardware notes under issue #10.
 
 ## Audio source separation
@@ -160,6 +167,8 @@ Still requires real G2 validation:
 - Cue display shows `CUE` plus one short phrase only.
 - Pause/menu flow never overlaps transcript, cue history, or status metrics.
 - Resume returns to `LISTENING`; End Practice returns to `READY`.
+- The completed hardware QA manifest must contain exactly `READY`, `LISTENING`,
+  `CUE`, and `PAUSED` under `hud.states`; extra live G2 HUD states are rejected.
 
 Automated coverage added on 2026-06-19:
 
