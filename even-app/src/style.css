@@ -615,7 +615,8 @@ body {
   min-height: 80px;
 }
 .active-recall-actions,
-.active-recall-grade-row {
+.active-recall-grade-row,
+.active-recall-speech-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--spacing-same);
@@ -638,6 +639,10 @@ body {
 .active-recall-evaluation {
   color: var(--color-text-dim);
   line-height: 1.4;
+  min-height: 18px;
+}
+.active-recall-speech-status {
+  color: var(--color-text-muted);
   min-height: 18px;
 }
 

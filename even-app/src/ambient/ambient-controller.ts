@@ -2,6 +2,7 @@ import { AmbientScheduler, type PendingItem } from './scheduler';
 import type { EchoDisplay } from './echo-display';
 import type { HUDController } from '../hud/hud-controller';
 import { TranscriptStore } from '../combat/transcript-store';
+import { loadPrivacySettings } from '../privacy/settings';
 import {
   buildActiveRecallQueue,
   evaluateActiveRecallAttempt,
@@ -10,6 +11,10 @@ import {
   type ActiveRecallAttemptEvaluation,
   type ActiveRecallQueueItem,
 } from '../learning/active-recall';
+import {
+  ActiveRecallSpeechCapture,
+  type ActiveRecallSpeechStatus,
+} from '../learning/active-recall-speech';
 
 export interface AmbientControllerContext {
   getHud: () => HUDController | null;
@@ -23,6 +28,8 @@ export function bindAmbientEvents(context: AmbientControllerContext): void {
   document.getElementById('btn-stop-ambient')?.addEventListener('click', () => stopAmbient(context));
   document.getElementById('btn-refresh-recall')?.addEventListener('click', () => renderActiveRecallPanel());
   document.getElementById('btn-recall-reveal')?.addEventListener('click', () => revealActiveRecallAnswer());
+  document.getElementById('btn-recall-speech-start')?.addEventListener('click', () => startActiveRecallSpeech());
+  document.getElementById('btn-recall-speech-stop')?.addEventListener('click', () => stopActiveRecallSpeech());
   document.querySelectorAll('[data-recall-grade]').forEach((button) => {
     button.addEventListener('click', () => {
       const grade = (button as HTMLElement).dataset.recallGrade;
@@ -125,6 +132,7 @@ function updatePendingList(items: PendingItem[]): void {
 }
 
 let currentRecallItem: ActiveRecallQueueItem | null = null;
+let recallSpeechCapture: ActiveRecallSpeechCapture | null = null;
 
 function renderActiveRecallPanel(statusMessage = ''): void {
   const promptEl = document.getElementById('active-recall-prompt');
@@ -138,6 +146,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   const gradeRow = document.getElementById('active-recall-grade-row');
   const dueCount = document.getElementById('active-recall-count');
   const statusEl = document.getElementById('active-recall-status');
+  const speechStatusEl = document.getElementById('active-recall-speech-status');
 
   if (!promptEl || !answerEl || !answerTextEl || !metaEl || !attemptEl) return;
 
@@ -145,6 +154,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   currentRecallItem = queue[0] ?? null;
   if (dueCount) dueCount.textContent = String(queue.length);
   if (statusEl) statusEl.textContent = statusMessage;
+  if (speechStatusEl) speechStatusEl.textContent = '';
   answerEl.style.display = 'none';
   if (evaluationEl) evaluationEl.textContent = '';
   if (gradeRow) gradeRow.style.display = 'none';
@@ -156,6 +166,7 @@ function renderActiveRecallPanel(statusMessage = ''): void {
     metaEl.textContent = '';
     attemptEl.disabled = true;
     if (revealButton) revealButton.disabled = true;
+    setSpeechButtons(false);
     if (emptyEl) emptyEl.style.display = 'block';
     return;
   }
@@ -171,7 +182,57 @@ function renderActiveRecallPanel(statusMessage = ''): void {
   ].join(' | ');
   attemptEl.disabled = false;
   if (revealButton) revealButton.disabled = false;
+  setSpeechButtons(false, true);
   if (emptyEl) emptyEl.style.display = 'none';
+}
+
+function startActiveRecallSpeech(): void {
+  if (!currentRecallItem) return;
+  const settings = loadPrivacySettings();
+  if (!settings.useMicrophone) {
+    setSpeechStatus('Enable microphone in Live Practice privacy settings before voice recall.');
+    return;
+  }
+  if (!settings.allowCloudProcessing) {
+    setSpeechStatus('Enable cloud processing before Web Speech voice recall.');
+    return;
+  }
+
+  stopActiveRecallSpeech();
+  const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
+  recallSpeechCapture = new ActiveRecallSpeechCapture({
+    onInterim: (text) => {
+      setSpeechStatus(`Listening: ${text}`);
+    },
+    onFinal: (text) => {
+      if (attemptEl) {
+        attemptEl.value = mergeAttemptText(attemptEl.value, text);
+      }
+      setSpeechStatus('Voice attempt captured.');
+    },
+    onStatus: (status) => {
+      setSpeechButtons(status === 'listening', Boolean(currentRecallItem));
+      if (status !== 'idle' && status !== 'listening') {
+        setSpeechStatus(statusMessageForSpeechStatus(status));
+      }
+    },
+    onError: (message) => {
+      setSpeechStatus(`Voice capture failed: ${message}`);
+    },
+  });
+
+  const result = recallSpeechCapture.start();
+  if (!result.ok) {
+    setSpeechStatus(statusMessageForSpeechStartReason(result.reason));
+    recallSpeechCapture = null;
+    setSpeechButtons(false, Boolean(currentRecallItem));
+  }
+}
+
+function stopActiveRecallSpeech(): void {
+  recallSpeechCapture?.stop();
+  recallSpeechCapture = null;
+  setSpeechButtons(false, Boolean(currentRecallItem));
 }
 
 function revealActiveRecallAnswer(): void {
@@ -190,6 +251,7 @@ function revealActiveRecallAnswer(): void {
 
 function gradeActiveRecallItem(grade: ActiveRecallGrade): void {
   if (!currentRecallItem) return;
+  stopActiveRecallSpeech();
   const attemptEl = document.getElementById('active-recall-attempt') as HTMLTextAreaElement | null;
   const attempt = recordActiveRecallAttempt(
     currentRecallItem.learningItem,
@@ -212,6 +274,45 @@ function formatDueTime(date: Date): string {
 
 function isActiveRecallGrade(value: string | undefined): value is ActiveRecallGrade {
   return value === 'again' || value === 'hard' || value === 'good' || value === 'easy';
+}
+
+function setSpeechStatus(message: string): void {
+  const statusEl = document.getElementById('active-recall-speech-status');
+  if (statusEl) statusEl.textContent = message;
+}
+
+function setSpeechButtons(listening: boolean, enabled = true): void {
+  const start = document.getElementById('btn-recall-speech-start') as HTMLButtonElement | null;
+  const stop = document.getElementById('btn-recall-speech-stop') as HTMLButtonElement | null;
+  if (start) {
+    start.disabled = !enabled || listening;
+  }
+  if (stop) {
+    stop.disabled = !enabled || !listening;
+  }
+}
+
+function mergeAttemptText(existing: string, next: string): string {
+  const trimmedExisting = existing.trim();
+  const trimmedNext = next.trim();
+  if (!trimmedNext) return trimmedExisting;
+  if (!trimmedExisting) return trimmedNext;
+  if (trimmedExisting.toLowerCase().includes(trimmedNext.toLowerCase())) return trimmedExisting;
+  return `${trimmedExisting} ${trimmedNext}`;
+}
+
+function statusMessageForSpeechStatus(status: ActiveRecallSpeechStatus): string {
+  if (status === 'unsupported') return 'Voice recall is not supported in this browser.';
+  if (status === 'secure_origin_required') return 'Voice recall needs HTTPS or localhost.';
+  if (status === 'error') return 'Voice recall stopped after an error.';
+  return '';
+}
+
+function statusMessageForSpeechStartReason(reason: string | undefined): string {
+  if (reason === 'secure_origin_required') return 'Voice recall needs HTTPS or localhost.';
+  if (reason === 'not_supported') return 'Voice recall is not supported in this browser.';
+  if (reason === 'start_failed') return 'Voice recall could not start.';
+  return 'Voice recall is already active.';
 }
 
 function formatEvaluation(evaluation: ActiveRecallAttemptEvaluation): string {

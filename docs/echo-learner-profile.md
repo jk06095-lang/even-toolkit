@@ -36,6 +36,11 @@ precision, a semantic score, and a suggested grade. The suggestion is a
 privacy-safe client-side aid, not an automatic mastery decision; the learner's
 chosen Again / Hard / Good / Easy grade is still the scheduling input.
 
+Voice attempts on the phone use a small active-recall Web Speech adapter. It is
+gated behind the existing microphone and cloud-processing privacy settings and
+falls back to typed attempts when Web Speech is unavailable or the page is not
+running on HTTPS / localhost.
+
 ## Custom GPT Handoff
 
 `generateCustomGptHandoffFiles()` returns the manual Custom GPT v1 bundle:
@@ -50,6 +55,6 @@ and phone-like values are replaced before profile generation.
 ## Remaining Work
 
 This is the data foundation and first phone review surface for the
-active-recall loop. Remaining work is to add real speech-attempt capture,
-pronunciation scoring, richer transfer scenarios, and later write-back from
-roleplay or Custom GPT Action flows.
+active-recall loop. Remaining work is to add pronunciation scoring, richer
+transfer scenarios, G2/bridge-based recall capture evidence, and later
+write-back from roleplay or Custom GPT Action flows.
