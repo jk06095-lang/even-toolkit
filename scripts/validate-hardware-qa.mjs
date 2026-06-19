@@ -696,6 +696,8 @@ function validateAssist(manifestObject) {
     'silenceOnlyDoesNotAutoCue',
     'breakdownSignalRequired',
     'graceCancelWorks',
+    'autoCueLevelCap',
+    'manualLevelThreeRequiresExplicitRequest',
     'twoDismissAutoPause',
     'interventionCapEnforced',
     'metricsCaptured',

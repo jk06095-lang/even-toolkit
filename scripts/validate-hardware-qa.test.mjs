@@ -343,6 +343,8 @@ function writeCompletedHardwareFixture(name) {
       silenceOnlyDoesNotAutoCue: true,
       breakdownSignalRequired: true,
       graceCancelWorks: true,
+      autoCueLevelCap: true,
+      manualLevelThreeRequiresExplicitRequest: true,
       twoDismissAutoPause: true,
       interventionCapEnforced: true,
       metricsCaptured: true,

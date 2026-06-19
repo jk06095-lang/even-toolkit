@@ -121,4 +121,33 @@ describe('generateChunk fallback behavior', () => {
     });
     expect(isCue(result.cue)).toBe(true);
   });
+
+  it('caps proxy cue difficulty and provider cue level when maxCueLevel is set', async () => {
+    echoApiMock.requestCue.mockResolvedValueOnce({
+      cueId: 'proxy-cue-2',
+      cue: 'Here is the full structure.',
+      speechAct: 'answer',
+      level: 3,
+      meaningKo: 'Meaning unavailable',
+      expiresAfterMs: 1200,
+    });
+
+    const result = await generateChunk({
+      topic: 'General',
+      week: 4,
+      category: 'general',
+      allowCloudProcessing: true,
+      requestId: 'request-2',
+      adaptiveDifficulty: 3,
+      maxCueLevel: 2,
+      targetTurnId: 'turn-2',
+    });
+
+    expect(echoApiMock.requestCue).toHaveBeenCalledWith(
+      expect.objectContaining({ difficulty: 2 }),
+      undefined,
+    );
+    expect(result.cue?.level).toBe(2);
+    expect(isCue(result.cue)).toBe(true);
+  });
 });

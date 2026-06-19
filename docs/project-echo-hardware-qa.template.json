@@ -273,6 +273,8 @@
     "silenceOnlyDoesNotAutoCue": null,
     "breakdownSignalRequired": null,
     "graceCancelWorks": null,
+    "autoCueLevelCap": null,
+    "manualLevelThreeRequiresExplicitRequest": null,
     "twoDismissAutoPause": null,
     "interventionCapEnforced": null,
     "metricsCaptured": null,

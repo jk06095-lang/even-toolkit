@@ -33,6 +33,7 @@ export interface ChunkRequest {
   scenarioContext?: string;
   conversationContext?: string;
   adaptiveDifficulty?: number;
+  maxCueLevel?: CueLevel;
   missedHint?: string;
   targetTurnId?: string;
   cueId?: string;
@@ -79,7 +80,7 @@ export async function generateChunk(req: ChunkRequest, signal?: AbortSignal): Pr
   try {
     const result = await requestCue({
       topic: req.topic,
-      difficulty: req.adaptiveDifficulty ?? req.week,
+      difficulty: resolveRequestedDifficulty(req),
       category: req.category,
       clientSessionId: req.clientSessionId,
       requestId: req.requestId,
@@ -138,7 +139,7 @@ export async function evaluateSpeech(
     const result = await requestTranscription({
       task: 'speech_evaluation',
       topic: req.topic,
-      difficulty: req.adaptiveDifficulty ?? req.week,
+      difficulty: resolveRequestedDifficulty(req),
       clientSessionId: req.clientSessionId,
       requestId: req.requestId,
       language: 'en-US',
@@ -298,7 +299,7 @@ function createCueFromResponse(input: unknown, phrase: string, req: ChunkRequest
       `cue-${Date.now()}`,
     ),
     speechAct: readSpeechAct(record.speechAct) ?? inferSpeechAct(phrase),
-    level: readCueLevel(record.level) ?? clampCueLevel(req.adaptiveDifficulty ?? req.week),
+    level: resolveCueLevel(record.level, req),
     phrase,
     meaningKo: cleanPlainText(
       extractText(input, ['meaningKo', 'meaning_ko', 'meaning', 'translationKo', 'translation']) ||
@@ -355,6 +356,17 @@ function readCueLevel(value: unknown): CueLevel | null {
 function clampCueLevel(value: number): CueLevel {
   const level = Math.max(1, Math.min(3, Math.round(value)));
   return level as CueLevel;
+}
+
+function resolveRequestedDifficulty(req: ChunkRequest): number {
+  const requested = req.adaptiveDifficulty ?? req.week;
+  return req.maxCueLevel === undefined ? requested : Math.min(requested, req.maxCueLevel);
+}
+
+function resolveCueLevel(providerLevel: unknown, req: ChunkRequest): CueLevel {
+  const requestedLevel = readCueLevel(providerLevel) ?? clampCueLevel(resolveRequestedDifficulty(req));
+  const maxLevel = req.maxCueLevel ?? 3;
+  return clampCueLevel(Math.min(requestedLevel, maxLevel));
 }
 
 function readSpeechAct(value: unknown): SpeechAct | null {

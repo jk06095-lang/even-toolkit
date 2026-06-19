@@ -381,10 +381,12 @@ video URL.
 | 8 | Auto Assist stays quiet on silence alone | TBD |
 | 9 | Auto Assist shows a cue only after a breakdown phrase plus silence | TBD |
 | 10 | Auto Assist cancels the pending cue when speech resumes within the grace window | TBD |
-| 11 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
-| 12 | End Practice returns to READY without duplicate audio capture | TBD |
-| 13 | Exit ECHO shuts down the Even Hub page container | TBD |
-| 14 | Phone review shows timeline/details while G2 stays minimal | TBD |
+| 11 | Auto and speech-evaluation cues stay at level 2 or lower | TBD |
+| 12 | Level 3/full-structure cue appears only after an explicit Manual Assist request | TBD |
+| 13 | Pause menu shows separate End Practice and Exit ECHO paths | TBD |
+| 14 | End Practice returns to READY without duplicate audio capture | TBD |
+| 15 | Exit ECHO shuts down the Even Hub page container | TBD |
+| 16 | Phone review shows timeline/details while G2 stays minimal | TBD |
 
 ## File Requirements
 
@@ -511,7 +513,9 @@ G2/audio-level recall evidence are also captured.
    separation, delayed proxy behavior, voice runtime, wear status, and
    conversation timeline boundaries. For Assist, prove silence-only Auto stays
    quiet, a breakdown signal is required before Auto shows a cue, and the 400 ms
-   grace window cancels the pending cue when speech resumes.
+   grace window cancels the pending cue when speech resumes. Also prove Auto
+   and speech-evaluation cues stay at level 2 or lower, while level 3/full
+   structure appears only after an explicit Manual Assist request.
 7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
 8. Fill final Korean/English case studies, architecture evidence, and the real
    G2 video target.

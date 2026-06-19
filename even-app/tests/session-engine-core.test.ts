@@ -12,11 +12,12 @@ import {
   type SpeechRecognizerFactory,
 } from '../src/combat/session-engine';
 import type { VADConfig } from '../src/combat/vad-manager';
-import type { ChunkRequest, ChunkResult } from '../src/combat/chunk-generator';
+import type { ChunkRequest, ChunkResult, SpeechEvaluationResult } from '../src/combat/chunk-generator';
 import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } from '../src/combat/hybrid-recognizer';
 import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
 import type { SessionTranscript, TranscriptStoreOptions } from '../src/combat/transcript-store';
 import {
+  ECHO_DOMAIN_V2_SCHEMA_VERSION,
   isAssistEpisode,
   isCue,
 } from '@toolkit/echo-domain-v2';
@@ -144,6 +145,10 @@ class FakeAudioDetector implements AudioDetector {
 
   async triggerSilence(): Promise<void> {
     await Promise.resolve((this.config.onSilenceThreshold as () => unknown)());
+  }
+
+  async triggerSpeechEnd(audio = new Float32Array(16_000)): Promise<void> {
+    await Promise.resolve(this.config.onSpeechEnd(audio));
   }
 
   triggerSpeech(): void {
@@ -393,6 +398,80 @@ describe('SessionEngine core behavior with injected dependencies', () => {
       'Auto cue two',
       'Auto cue three',
     ]);
+  });
+
+  it('caps Auto Assist cue levels at 2 even when provider returns level 3', async () => {
+    const clock = new FakeClock();
+    const harness = createHarness({
+      week: 4,
+      clock,
+      chunkResult: {
+        chunk: 'Use this complete structure.',
+        source: 'gemini',
+        latencyMs: 5,
+        cue: {
+          schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+          cueId: 'provider-auto-level-3',
+          speechAct: 'answer',
+          level: 3,
+          phrase: 'Use this complete structure.',
+          meaningKo: 'Meaning unavailable',
+          alternatives: [],
+          expiresAfterMs: 1200,
+          targetTurnId: 'turn-auto-cap-1',
+        },
+      },
+      transcriptOptions: {
+        saveRawTranscript: true,
+        retentionPolicy: '7d',
+        now: () => clock.now(),
+        idFactory: () => 'turn-auto-cap-1',
+      },
+    });
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I think maybe...');
+    await triggerAutoSilence(harness, 2_200);
+
+    expect(harness.cueProvider.requests[0]?.adaptiveDifficulty).toBe(2);
+    expect(harness.cueProvider.requests[0]?.maxCueLevel).toBe(2);
+    expect(harness.chunks[0]?.cue?.cueId).toBe('provider-auto-level-3');
+    expect(harness.chunks[0]?.cue?.level).toBe(2);
+  });
+
+  it('keeps level 3 available for explicit Manual Assist requests', async () => {
+    const harness = createHarness({ week: 4 });
+    await harness.engine.start(harness.hud);
+
+    await harness.engine.requestManualCue();
+
+    expect(harness.cueProvider.requests[0]?.adaptiveDifficulty).toBe(3);
+    expect(harness.cueProvider.requests[0]?.maxCueLevel).toBe(3);
+    expect(harness.chunks[0]?.cue?.level).toBe(3);
+  });
+
+  it('caps speech-evaluation cues at level 2', async () => {
+    const harness = createHarness({
+      week: 4,
+      speechEvaluationResult: {
+        transcript: 'I think maybe',
+        chunk: 'Try a short repair.',
+        source: 'gemini',
+        latencyMs: 8,
+        networkLatencyMs: 6,
+        generationLatencyMs: 2,
+        confidence: 0.84,
+      },
+    });
+    await harness.engine.start(harness.hud);
+
+    await harness.vad.triggerSpeechEnd();
+
+    expect(harness.cueProvider.evaluateCalls).toBe(1);
+    expect(harness.cueProvider.evaluationRequests[0]?.adaptiveDifficulty).toBe(2);
+    expect(harness.cueProvider.evaluationRequests[0]?.maxCueLevel).toBe(2);
+    expect(harness.chunks[0]?.cue?.level).toBe(2);
   });
 
   it('shows a fallback manual cue without real hardware', async () => {
@@ -899,6 +978,7 @@ function createHarness(options: {
   chunkResult?: ChunkResult;
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
+  speechEvaluationResult?: SpeechEvaluationResult | null;
   simplifiedHint?: string | null;
   vadStartError?: Error;
   clock?: FakeClock;
@@ -1018,13 +1098,16 @@ function createCueProvider(options: {
   chunkResult?: ChunkResult;
   chunkResults?: ChunkResult[];
   pendingChunk?: Promise<ChunkResult>;
+  speechEvaluationResult?: SpeechEvaluationResult | null;
   simplifiedHint?: string | null;
   rejectChunkOnAbort?: boolean;
 }) {
   const provider = {
     generateCalls: 0,
+    evaluateCalls: 0,
     simplifyCalls: 0,
     requests: [] as ChunkRequest[],
+    evaluationRequests: [] as ChunkRequest[],
     signals: [] as AbortSignal[],
     async generateChunk(req: ChunkRequest, signal?: AbortSignal): Promise<ChunkResult> {
       this.generateCalls++;
@@ -1049,8 +1132,11 @@ function createCueProvider(options: {
         latencyMs: 10,
       };
     },
-    async evaluateSpeech() {
-      return null;
+    async evaluateSpeech(_audio: Float32Array, req: ChunkRequest, signal?: AbortSignal) {
+      this.evaluateCalls++;
+      this.evaluationRequests.push(req);
+      if (signal) this.signals.push(signal);
+      return options.speechEvaluationResult ?? null;
     },
     async simplifyHint() {
       this.simplifyCalls++;
@@ -1060,8 +1146,10 @@ function createCueProvider(options: {
 
   return provider as CueProvider & {
     generateCalls: number;
+    evaluateCalls: number;
     simplifyCalls: number;
     requests: ChunkRequest[];
+    evaluationRequests: ChunkRequest[];
     signals: AbortSignal[];
   };
 }

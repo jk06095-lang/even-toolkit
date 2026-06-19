@@ -145,6 +145,7 @@ data. Only explicit true/false wear sensor tokens are accepted as
 - `Auto Assist` is explicit opt-in from the phone UI.
 - Auto Assist does not show a cue from silence alone. It requires a recent breakdown signal such as repeated filler words or an incomplete learner utterance.
 - After silence is detected, Auto Assist waits a 400 ms grace window before requesting a cue. Speech during that window cancels the automatic cue.
+- Automatic and other non-manual cue paths are capped at level 2. Level 3/full-structure cues are reserved for explicit Manual Assist requests.
 - Auto Assist is capped at 3 automatic interventions per session.
 - Swiping while a cue is visible dismisses it. Two dismissed auto cues pause Auto Assist for the rest of the session.
 - Speech start immediately clears the visible cue from the HUD while preserving local usage tracking for the next final transcript.

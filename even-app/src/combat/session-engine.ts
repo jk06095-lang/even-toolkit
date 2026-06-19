@@ -612,12 +612,17 @@ export class SessionEngine {
     result: ChunkResult,
     request: ReturnType<SessionEngine['beginRequest']>,
     targetTurnId: string,
-    difficulty: number,
+    maxCueLevel: CueLevel,
   ): ChunkResult {
     const cue = result.cue?.targetTurnId === targetTurnId
-      ? result.cue
-      : this.createCueFromChunk(result.chunk, request.requestId, targetTurnId, difficulty);
+      ? this.normalizeCueLevel(result.cue, maxCueLevel)
+      : this.createCueFromChunk(result.chunk, request.requestId, targetTurnId, maxCueLevel);
     return { ...result, cue };
+  }
+
+  private normalizeCueLevel(cue: Cue, maxCueLevel: CueLevel): Cue {
+    if (cue.level <= maxCueLevel) return cue;
+    return { ...cue, level: maxCueLevel };
   }
 
   private createCueFromChunk(
@@ -685,6 +690,12 @@ export class SessionEngine {
       trigger: domainTrigger,
       maxCueLevel,
     };
+  }
+
+  private maxCueLevelForTrigger(trigger: CueTrigger, requestedDifficulty: number): CueLevel {
+    const requestedLevel = clampCueLevel(requestedDifficulty);
+    if (trigger === 'manual') return requestedLevel;
+    return clampCueLevel(Math.min(requestedLevel, 2));
   }
 
   private markActiveAssistEpisodeShown(shownAt: number, latencyMs: number): void {
@@ -838,6 +849,7 @@ export class SessionEngine {
         this.isGenerating = true;
         const request = this.beginRequest('transcription');
         try {
+          const requestedCueLevel = this.maxCueLevelForTrigger('speech-evaluation', this.weekConfig.week);
           const result = await this.cueProvider.evaluateSpeech(audio, {
             topic: this._topic,
             week: this.weekConfig.week,
@@ -848,6 +860,8 @@ export class SessionEngine {
             lastUtterance: this.lastLiveTranscript || undefined,
             usedHints: this.usedHintChunks,
             scenarioContext: this._scenarioContext || undefined,
+            adaptiveDifficulty: requestedCueLevel,
+            maxCueLevel: requestedCueLevel,
           }, request.controller.signal);
           const responseReceivedAt = this.clock.now();
 
@@ -894,7 +908,7 @@ export class SessionEngine {
                 },
                 request,
                 targetTurnId,
-                this.weekConfig.week,
+                requestedCueLevel,
               );
               this.hintCount++;
               this.usedHintChunks.push(cueResult.chunk);
@@ -908,7 +922,7 @@ export class SessionEngine {
 
               // Record hint to cache
               this.transcriptStore?.addHint(cueResult.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
-              this.analyzer?.setActiveHint(cueResult.chunk, this.weekConfig.week, cueResult.cue);
+              this.analyzer?.setActiveHint(cueResult.chunk, requestedCueLevel, cueResult.cue);
 
               // Check if session was stopped during evaluation
               if ((this._state as any) === 'session_end') return;
@@ -1442,13 +1456,14 @@ export class SessionEngine {
 
           if (simplified && simplified !== activeHint.text) {
             const targetTurnId = activeHint.cue?.targetTurnId ?? this.resolveTargetTurnId(request.requestId);
+            const simplifiedLevel = this.maxCueLevelForTrigger('simplified', Math.max(1, activeHint.difficulty - 1));
             const cueResult = this.withDomainCue({
               chunk: simplified,
               source: 'gemini',
               latencyMs: responseReceivedAt - request.startedAt,
               networkLatencyMs: responseReceivedAt - request.startedAt,
               generationLatencyMs: null,
-            }, request, targetTurnId, Math.max(1, activeHint.difficulty - 1));
+            }, request, targetTurnId, simplifiedLevel);
 
             // Show simplified hint
             this.transcriptStore?.addHintSimplified(activeHint.text, simplified);
@@ -1459,7 +1474,7 @@ export class SessionEngine {
               acceptedPhrase: simplified,
             });
             this.analyzer?.resolveActiveHint('simplified', simplified);
-            this.analyzer?.setActiveHint(simplified, Math.max(1, activeHint.difficulty - 1), cueResult.cue);
+            this.analyzer?.setActiveHint(simplified, simplifiedLevel, cueResult.cue);
 
             this.hintCount++;
             this.usedHintChunks.push(simplified);
@@ -1525,6 +1540,7 @@ export class SessionEngine {
 
     try {
       const adaptiveDifficulty = this.analyzer?.getAdaptiveDifficulty() ?? this.weekConfig.week;
+      const requestedCueLevel = this.maxCueLevelForTrigger(trigger, adaptiveDifficulty);
       const conversationContext = this.analyzer?.getConversationContext() ?? undefined;
 
       const generatedResult = await this.cueProvider.generateChunk({
@@ -1538,7 +1554,8 @@ export class SessionEngine {
         usedHints: this.usedHintChunks,
         scenarioContext: this._scenarioContext || undefined,
         conversationContext,
-        adaptiveDifficulty,
+        adaptiveDifficulty: requestedCueLevel,
+        maxCueLevel: requestedCueLevel,
         targetTurnId,
         cueId: `${request.requestId}:cue`,
         expiresAfterMs: this.weekConfig.hintFlashDurationMs,
@@ -1547,7 +1564,7 @@ export class SessionEngine {
 
       if (!this.isCurrentRequest(request)) return;
 
-      const result = this.withDomainCue(generatedResult, request, targetTurnId, adaptiveDifficulty);
+      const result = this.withDomainCue(generatedResult, request, targetTurnId, requestedCueLevel);
       if (result.chunk) {
         this.hintCount++;
         this.usedHintChunks.push(result.chunk);
@@ -1560,7 +1577,7 @@ export class SessionEngine {
         });
 
         // Register with TranscriptAnalyzer for tracking
-        this.analyzer?.setActiveHint(result.chunk, adaptiveDifficulty, result.cue);
+        this.analyzer?.setActiveHint(result.chunk, requestedCueLevel, result.cue);
 
         this.transcriptStore?.addHint(result.chunk, result.source === 'gemini' ? 'gemini_eval' : 'fallback');
 
