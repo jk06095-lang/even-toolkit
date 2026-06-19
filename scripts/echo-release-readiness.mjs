@@ -558,7 +558,7 @@ await validateFinalManifest({
   filePath: 'docs/project-echo-hardware-qa.completed.json',
   npmScript: 'validate:hardware-qa',
   issue: '#2/#3/#4/#6/#12/#13/#14',
-  missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, and explicit G2/Phone audio-source evidence.',
+  missingDetail: 'Missing docs/project-echo-hardware-qa.completed.json with .ehpk build-artifact hash, physical G2 lifecycle, wear status, HUD, Assist, delayed-proxy, lazy-loaded voice runtime, and explicit G2/Phone audio-source evidence.',
 });
 
 checkManifestSummaries();

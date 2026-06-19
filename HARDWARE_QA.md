@@ -16,6 +16,10 @@ to an evidence file such as `.md`, `.json`, `.log`, image, or video. Plain
 status text such as `done` is not accepted as evidence. Repo-path evidence must
 point to a file that exists in the repository; future filenames are not accepted
 as completed evidence.
+Final hardware QA must also record `buildArtifact.packagePath` as the exact
+`.ehpk` installed for the run, a 64-character SHA-256 digest, the packaging
+command, and confirmation that the same artifact was installed through a
+private or beta build before the physical G2 checks.
 For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
 The final `device.appVersion` must match the current `even-app/package.json`
@@ -28,6 +32,27 @@ screenshots and headless automation as pre-submission smoke evidence only;
 timing, BLE behavior, background lifecycle, locked-phone operation, and
 microphone permission behavior must be confirmed on real G2 hardware through a
 private or beta build before release.
+The official Even beta-testing flow uses an `.ehpk` package for a review-like
+private install, so preserve the package hash and install evidence with the
+completed manifest.
+
+## Build artifact evidence
+
+- Run `cd even-app && npm run verify` to build, bundle-check, and package
+  `echo.ehpk`.
+- Record the exact package path in `buildArtifact.packagePath`.
+- Record the SHA-256 digest in `buildArtifact.sha256`.
+- Record the packaging command in `buildArtifact.packCommand`.
+- Confirm `sourceAppJson` is `even-app/app.json` and `sourceDistDir` is
+  `even-app/dist`.
+- Install the same `.ehpk` through the private or beta build path before
+  hardware QA.
+- Confirm the physical G2 QA run used the same package digest, not a local dev
+  server or simulator-only preview.
+- Keep the phone locked for at least 5 minutes during a session and confirm the
+  package behaves like the reviewer path, not only an unlocked dev session.
+- Preserve install notes, package digest output, and screenshots/logs under
+  `buildArtifact.evidenceRef`.
 
 ## Session lifecycle
 

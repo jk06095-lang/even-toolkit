@@ -8,6 +8,18 @@
     "appVersion": "TBD",
     "bridgeVersion": "TBD"
   },
+  "buildArtifact": {
+    "packagePath": "TBD",
+    "sha256": "TBD",
+    "packCommand": "TBD",
+    "sourceAppJson": "even-app/app.json",
+    "sourceDistDir": "even-app/dist",
+    "installedViaBetaOrPrivateBuild": null,
+    "sameArtifactUsedForHardwareQa": null,
+    "reviewerParityConfirmed": null,
+    "lockedPhoneFiveMinuteRun": null,
+    "evidenceRef": "TBD"
+  },
   "wearingState": {
     "connectedWearing": {
       "inputStatus": {

@@ -74,10 +74,12 @@ const PLACEHOLDER_PATTERNS = [
 ];
 
 const EVIDENCE_EXTENSIONS = ['md', 'txt', 'log', 'json', 'png', 'jpg', 'jpeg', 'webp', 'svg', 'mp4', 'mov', 'webm', 'mkv'];
+const PACKAGE_EXTENSIONS = ['ehpk'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const LOG_EXTENSIONS = ['md', 'txt', 'log', 'json'];
 const REPORT_EXTENSIONS = ['md', 'txt', 'log', 'json'];
 const INITIAL_JS_LIMIT_KB = 500;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -161,6 +163,24 @@ function validateText(object, key, pointer, options = {}) {
 
   if (options.includes && !value.includes(options.includes)) {
     addError(fieldPointer, `must include ${options.includes}`);
+  }
+}
+
+function validateSha256(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required SHA-256 field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft SHA-256 placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !SHA256_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a 64-character hex SHA-256 digest');
   }
 }
 
@@ -414,6 +434,25 @@ function validateManifestRoot(manifestObject) {
     validateCurrentAppVersion(manifestObject.device, 'appVersion', 'device');
     validateText(manifestObject.device, 'bridgeVersion', 'device');
   }
+}
+
+function validateBuildArtifact(manifestObject) {
+  if (!validateObject(manifestObject.buildArtifact, 'buildArtifact')) return;
+
+  validateEvidenceLink(manifestObject.buildArtifact, 'packagePath', 'buildArtifact', {
+    extensions: PACKAGE_EXTENSIONS,
+  });
+  validateSha256(manifestObject.buildArtifact, 'sha256', 'buildArtifact');
+  validateText(manifestObject.buildArtifact, 'packCommand', 'buildArtifact', {
+    includes: 'pack',
+  });
+  validateExpected(manifestObject.buildArtifact, 'sourceAppJson', 'even-app/app.json', 'buildArtifact');
+  validateExpected(manifestObject.buildArtifact, 'sourceDistDir', 'even-app/dist', 'buildArtifact');
+  validateExpected(manifestObject.buildArtifact, 'installedViaBetaOrPrivateBuild', true, 'buildArtifact');
+  validateExpected(manifestObject.buildArtifact, 'sameArtifactUsedForHardwareQa', true, 'buildArtifact');
+  validateExpected(manifestObject.buildArtifact, 'reviewerParityConfirmed', true, 'buildArtifact');
+  validateExpected(manifestObject.buildArtifact, 'lockedPhoneFiveMinuteRun', true, 'buildArtifact');
+  validateEvidenceLink(manifestObject.buildArtifact, 'evidenceRef', 'buildArtifact');
 }
 
 function validateWearingState(manifestObject) {
@@ -722,6 +761,7 @@ function validateSizePair(metrics, gzipKey, sizeKey, pointer) {
 }
 
 validateManifestRoot(manifest);
+validateBuildArtifact(manifest);
 validateWearingState(manifest);
 validateLifecycle(manifest);
 validateHud(manifest);
