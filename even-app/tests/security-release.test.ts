@@ -4,6 +4,17 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const dynamicTextBoundaryDirs = [
+  path.join(appRoot, 'src', 'ambient'),
+  path.join(appRoot, 'src', 'calibration'),
+  path.join(appRoot, 'src', 'combat'),
+  path.join(appRoot, 'src', 'debrief'),
+  path.join(appRoot, 'src', 'hud'),
+  path.join(appRoot, 'src', 'learning'),
+  path.join(appRoot, 'src', 'live-practice'),
+  path.join(appRoot, 'src', 'services'),
+];
+const htmlInjectionSinkPattern = /\b(?:innerHTML|outerHTML|insertAdjacentHTML|createContextualFragment)\b/;
 
 function readJson<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, 'utf8')) as T;
@@ -40,6 +51,17 @@ describe('release safety checks', () => {
     expect(recognizerSource).not.toContain('Bridge transcript: "');
     expect(recognizerSource).not.toContain('Bridge interim transcript: "');
     expect(recognizerSource).not.toMatch(/console\.(?:log|info|warn|error|debug)\([^)]*\$\{clean\}/);
+  });
+
+  it('keeps imported, learner, and model text away from HTML injection sinks', () => {
+    const offenders = dynamicTextBoundaryDirs
+      .filter((dir) => existsSync(dir))
+      .flatMap((dir) => walkFiles(dir))
+      .filter((file) => file.endsWith('.ts'))
+      .filter((file) => htmlInjectionSinkPattern.test(readFileSync(file, 'utf8')))
+      .map((file) => path.relative(appRoot, file).replace(/\\/g, '/'));
+
+    expect(offenders).toEqual([]);
   });
 
   it('keeps live grammar analysis out of the SessionEngine real-time path', () => {
