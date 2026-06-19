@@ -278,9 +278,22 @@ function requireConditionSet(values, pointer) {
     return;
   }
 
+  if (values.length !== REQUIRED_CONDITIONS.length) {
+    addError(pointer, `must contain exactly ${REQUIRED_CONDITIONS.length} conditions`);
+  }
+
   for (const condition of REQUIRED_CONDITIONS) {
-    if (!values.includes(condition)) {
+    const count = values.filter((value) => value === condition).length;
+    if (count === 0) {
       addError(pointer, `missing condition ${condition}`);
+    } else if (count > 1) {
+      addError(pointer, `condition ${condition} must appear exactly once`);
+    }
+  }
+
+  for (const value of values) {
+    if (!REQUIRED_CONDITIONS.includes(value)) {
+      addError(pointer, `unexpected condition ${String(value)}`);
     }
   }
 }
