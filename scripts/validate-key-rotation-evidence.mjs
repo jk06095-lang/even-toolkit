@@ -414,6 +414,7 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
     allowsPost: true,
     allowsAuthorization: true,
     allowsSessionToken: true,
+    allowsIdempotencyKey: true,
   });
   validateSmokeCheck(checks.missingSessionToken, 'missingSessionToken', {
     status: 401,
@@ -435,6 +436,7 @@ function validateSmokeEvidenceObject(evidence, proxyUrl) {
   if (safeStatus !== 400 && safeStatus !== 503) {
     addError(`${pointer}.checks.safeError.status`, 'must be 400 or 503');
   }
+  validateSmokeRetryPolicy(checks.healthz);
 }
 
 function validateSmokeCheck(check, key, expectedFields) {
@@ -458,6 +460,30 @@ function validateSmokeTokenPolicy(healthz) {
   validateNumberRange(healthz.tokenPolicyTtlSeconds, 1, 86_400, `${pointer}.tokenPolicyTtlSeconds`);
   validateNumberRange(healthz.tokenPolicyRotationDays, 1, 30, `${pointer}.tokenPolicyRotationDays`);
   validateNumberRange(healthz.tokenPolicyActiveTokenCount, 1, 1_000, `${pointer}.tokenPolicyActiveTokenCount`);
+}
+
+function validateSmokeRetryPolicy(healthz) {
+  const pointer = 'deploymentSmokeEvidence.checks.healthz';
+  if (!healthz || typeof healthz !== 'object' || Array.isArray(healthz)) return;
+
+  validateNumberRange(healthz.idempotencyTtlMs, 1, 86_400_000, `${pointer}.idempotencyTtlMs`);
+  validateNumberRange(healthz.idempotencyMaxEntries, 1, 100_000, `${pointer}.idempotencyMaxEntries`);
+  validateNumberRange(
+    healthz.circuitBreakerFailureThreshold,
+    1,
+    100,
+    `${pointer}.circuitBreakerFailureThreshold`,
+  );
+  validateNumberRange(
+    healthz.circuitBreakerCooldownMs,
+    1,
+    3_600_000,
+    `${pointer}.circuitBreakerCooldownMs`,
+  );
+
+  if (healthz.circuitBreakerOpen !== false) {
+    addError(`${pointer}.circuitBreakerOpen`, 'must be false for production smoke evidence');
+  }
 }
 
 function validateNumberRange(value, min, max, pointer) {

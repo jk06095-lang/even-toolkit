@@ -82,6 +82,32 @@ test('rejects deployment smoke evidence without configured session-token policy'
   assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.tokenPolicyConfigured/);
 });
 
+test('rejects deployment smoke evidence without retry guard metadata', async () => {
+  const fixture = writeFixture('missing-retry-guards', smokeEvidence({
+    checks: {
+      healthz: {
+        idempotencyTtlMs: null,
+        idempotencyMaxEntries: 0,
+        circuitBreakerFailureThreshold: 0,
+        circuitBreakerCooldownMs: null,
+        circuitBreakerOpen: true,
+      },
+      options: {
+        allowsIdempotencyKey: false,
+      },
+    },
+  }));
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.idempotencyTtlMs/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.idempotencyMaxEntries/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.circuitBreakerFailureThreshold/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.circuitBreakerCooldownMs/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.circuitBreakerOpen/);
+  assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.options\.allowsIdempotencyKey/);
+});
+
 function writeFixture(name, evidence) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -126,6 +152,11 @@ function smokeEvidence(overrides = {}) {
         tokenPolicyRotationDays: 7,
         tokenPolicyActiveTokenCount: 1,
         tokenPolicySignedTokenConfigured: true,
+        idempotencyTtlMs: 300000,
+        idempotencyMaxEntries: 500,
+        circuitBreakerFailureThreshold: 3,
+        circuitBreakerCooldownMs: 30000,
+        circuitBreakerOpen: false,
         corsOriginMatches: true,
         cacheControlNoStore: true,
       },
@@ -135,6 +166,7 @@ function smokeEvidence(overrides = {}) {
         allowsPost: true,
         allowsAuthorization: true,
         allowsSessionToken: true,
+        allowsIdempotencyKey: true,
       },
       missingSessionToken: {
         status: 401,

@@ -179,6 +179,7 @@ async function checkHealthz() {
   assertNumberInRange(body?.idempotency?.maxEntries, 1, 100_000, 'GET /healthz idempotency.maxEntries');
   assertNumberInRange(body?.circuitBreaker?.failureThreshold, 1, 100, 'GET /healthz circuitBreaker.failureThreshold');
   assertNumberInRange(body?.circuitBreaker?.cooldownMs, 1, 3_600_000, 'GET /healthz circuitBreaker.cooldownMs');
+  assertEqual(body?.circuitBreaker?.open ?? false, false, 'GET /healthz circuitBreaker.open');
   assertEqual(header(response, 'access-control-allow-origin'), allowedOrigin, 'GET /healthz CORS origin');
   assertIncludes(header(response, 'cache-control'), 'no-store', 'GET /healthz cache-control');
 

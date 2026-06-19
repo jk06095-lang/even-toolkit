@@ -8,7 +8,8 @@ Final confirmation fields should use clear positive results such as `true`,
 result such as `0 matches`, `no matches`, `none found`, `clean`, or `passed`.
 The production smoke command result must include the production proxy URL and
 must not use local-only override flags. Production smoke JSON must prove
-signed-token support is configured. Final evidence must use an ISO
+signed-token support, `Idempotency-Key` preflight support, idempotency metadata,
+and closed circuit-breaker metadata. Final evidence must use an ISO
 `YYYY-MM-DD` rotation date and list the current `even-app/package.json` version
 under `Client build or package version`. Final evidence must also point to the
 JSON file written by `smoke:deploy -- --evidence-out ...`. Session token

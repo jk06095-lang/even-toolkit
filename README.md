@@ -60,7 +60,8 @@ readiness command passes that evidence path to the proxy smoke runner from the
 as the key-rotation evidence template; `npm run readiness:echo` validates the
 filled evidence with `npm run validate:key-rotation-evidence`, including the ISO
 rotation date, current ECHO app package version, and checked-in deploy-smoke JSON
-evidence. Final portfolio links must be markdown links carrying the markers
+evidence for signed-token, idempotency, and closed circuit-breaker behavior.
+Final portfolio links must be markdown links carrying the markers
 `project-echo-case-study-ko`,
 `project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
 match the completed pilot manifest targets. Repo-path targets on those README

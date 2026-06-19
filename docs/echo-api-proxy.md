@@ -196,9 +196,10 @@ Manifest:
    The smoke check requires HTTPS, `/healthz` with `configured: true`, allowed
    CORS, `authConfigured: true`, signed-token support, a supplied smoke session
    token, blocked untrusted origins, missing-token rejection, `qaDelayMs: 0`,
-   configured session-token policy metadata, and safe non-echoing error responses. The
-   `--evidence-out` JSON is required by the final key-rotation evidence
-   validator and by the #1/#27 readiness blockers. Use
+   configured session-token policy metadata, `Idempotency-Key` preflight support,
+   idempotency metadata, closed circuit-breaker metadata, and safe non-echoing
+   error responses. The `--evidence-out` JSON is required by the final
+   key-rotation evidence validator and by the #1/#27 readiness blockers. Use
    `--allow-http --allow-unconfigured --allow-unauthenticated --allow-qa-delay`
    only for local dry-runs.
    When using the root readiness audit instead of running `smoke:deploy`
@@ -230,9 +231,10 @@ Manifest:
    The evidence must use a production HTTPS proxy URL, include the same URL in
    the `smoke:deploy` result, reference the checked-in deployment smoke JSON,
    mark smoke/log/session-token confirmations as passed or verified, prove a
-   TTL and rotation cadence inside policy limits, prove old-token revocation,
-   and record clean artifact scans such as `0 matches` or `no matches`. This
-   same evidence is required before both #1 and #27 can be closed.
+   TTL and rotation cadence inside policy limits, prove idempotency/circuit
+   metadata in the deployment smoke JSON, prove old-token revocation, and record
+   clean artifact scans such as `0 matches` or `no matches`. This same evidence
+   is required before both #1 and #27 can be closed.
    Before the final production run, `npm run prepare:echo-evidence-drafts`
    writes `docs/evidence-drafts/key-rotation-evidence.draft.md` with the
    current client version, follow-up issue, and local client artifact scan
@@ -256,6 +258,8 @@ smoke:deploy` performs the corresponding remote deployment checks and expects
 the deployed server to report `configured: true`, `authConfigured: true`,
 `tokenPolicy.configured: true`, `tokenPolicy.signedTokenConfigured: true`, and
 `qaDelayMs: 0` unless local-only override flags are passed for local testing.
+It also rejects release smoke when the circuit breaker is already open or when
+the deployment does not expose `Idempotency-Key` CORS/preflight support.
 For delayed-response QA, start a local or staging proxy with
 `ECHO_PROXY_QA_DELAY_MS=5000`; `/healthz` reports the active `qaDelayMs`.
 

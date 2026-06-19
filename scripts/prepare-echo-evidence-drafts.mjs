@@ -744,8 +744,14 @@ function isValidProxySmokeForDraft(smoke) {
   if (healthz?.tokenPolicyConfigured !== true || healthz?.tokenPolicySignedTokenConfigured !== true || healthz?.tokenPolicyIssuerPresent !== true) return false;
   if (!Number.isFinite(healthz?.tokenPolicyTtlSeconds) || healthz.tokenPolicyTtlSeconds < 1 || healthz.tokenPolicyTtlSeconds > 86_400) return false;
   if (!Number.isFinite(healthz?.tokenPolicyRotationDays) || healthz.tokenPolicyRotationDays < 1 || healthz.tokenPolicyRotationDays > 30) return false;
+  if (!Number.isFinite(healthz?.idempotencyTtlMs) || healthz.idempotencyTtlMs < 1 || healthz.idempotencyTtlMs > 86_400_000) return false;
+  if (!Number.isFinite(healthz?.idempotencyMaxEntries) || healthz.idempotencyMaxEntries < 1 || healthz.idempotencyMaxEntries > 100_000) return false;
+  if (!Number.isFinite(healthz?.circuitBreakerFailureThreshold) || healthz.circuitBreakerFailureThreshold < 1 || healthz.circuitBreakerFailureThreshold > 100) return false;
+  if (!Number.isFinite(healthz?.circuitBreakerCooldownMs) || healthz.circuitBreakerCooldownMs < 1 || healthz.circuitBreakerCooldownMs > 3_600_000) return false;
+  if (healthz?.circuitBreakerOpen !== false) return false;
   if (healthz?.corsOriginMatches !== true || healthz?.cacheControlNoStore !== true) return false;
   if (smoke.checks?.options?.status !== 204 || smoke.checks.options.corsOriginMatches !== true) return false;
+  if (smoke.checks.options.allowsIdempotencyKey !== true) return false;
   if (smoke.checks?.missingSessionToken?.status !== 401 || smoke.checks.missingSessionToken.errorCode !== 'missing_session_token') return false;
   if (smoke.checks?.disallowedOrigin?.status !== 403 || smoke.checks.disallowedOrigin.errorCode !== 'origin_not_allowed') return false;
   if (![400, 503].includes(smoke.checks?.safeError?.status)) return false;
