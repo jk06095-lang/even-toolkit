@@ -40,6 +40,7 @@ test('reports missing final evidence without treating draft support as complete'
 
   const formatted = formatEvidenceStatus(status);
   assert.match(formatted, /Informational only/);
+  assert.match(formatted, /npm run prepare:echo-field-run/);
   assert.match(formatted, /npm run readiness:echo/);
   assert.match(formatted, /npm run report:echo-open-issues/);
   assert.match(formatted, /npm run preflight:echo-open-issues/);
@@ -48,6 +49,7 @@ test('reports missing final evidence without treating draft support as complete'
   assert.match(formatted, /Proxy smoke env preflight/);
   assert.match(formatted, /Action OAuth smoke env preflight/);
   assert.match(formatted, /MISSING #5\/#10: completed 5-user pilot manifest/);
+  assert.match(formatted, /READY: field-run prep report - docs\/evidence-drafts\/project-echo-field-run-prep-report\.draft\.md/);
   assert.match(formatted, /Draft support: docs\/evidence-drafts\/project-echo-pilot-evidence\.draft\.json \(available\)/);
   assert.match(formatted, /proxy smoke env ready: no/);
   assert.match(formatted, /Action OAuth smoke env ready: no/);

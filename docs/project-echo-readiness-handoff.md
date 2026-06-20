@@ -62,7 +62,8 @@ Useful official references:
 1. Run `npm run prepare:echo-field-run` on a clean checkout before external
    field capture. It runs the ECHO app verify/package step, regenerates draft
    evidence, validates the workspace `.ehpk` SHA against those drafts, and
-   prints final-gate status without promoting draft evidence.
+   writes `docs/evidence-drafts/project-echo-field-run-prep-report.draft.md`
+   with final-gate status without promoting draft evidence.
 2. Run `npm run verify:all` before committing any regenerated package or draft
    updates.
 3. Run `npm run status:echo-evidence` to inspect the missing final artifacts

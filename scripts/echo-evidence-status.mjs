@@ -80,6 +80,10 @@ export const DRAFT_SUPPORT_FILES = [
     path: 'docs/evidence-drafts/project-echo-field-runbook.draft.md',
   },
   {
+    name: 'field-run prep report',
+    path: 'docs/evidence-drafts/project-echo-field-run-prep-report.draft.md',
+  },
+  {
     name: 'build artifact summary',
     path: 'docs/evidence-drafts/project-echo-build-artifact.md',
   },
@@ -225,6 +229,7 @@ export function formatEvidenceStatus(status) {
 
   lines.push('');
   lines.push('Next commands:');
+  lines.push('- npm run prepare:echo-field-run');
   lines.push('- npm run prepare:echo-evidence-drafts');
   lines.push('- npm run validate:echo-evidence-drafts');
   lines.push('- npm run validate:issue-closure-ledger');

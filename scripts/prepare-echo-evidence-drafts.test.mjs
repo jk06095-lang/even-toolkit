@@ -192,6 +192,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(videoShotList, /Low-confidence transcript shows a Korean-translation review warning/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
   assert.match(fieldRunbook, /npm run prepare:echo-field-run/);
+  assert.match(fieldRunbook, /project-echo-field-run-prep-report\.draft\.md/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
   assert.match(fieldRunbook, /permission-denial recovery/);
@@ -238,6 +239,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /bounded ACK\/OK behavior/);
   assert.match(fieldRunbook, /smoke:action-oauth/);
   assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));
+  assert.match(fieldRunbook, /review\s+`docs\/evidence-drafts\/project-echo-field-run-prep-report\.draft\.md`/);
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);
   assert.doesNotMatch(caseStudyKo, /\]\(docs\/project-echo-case-study\.ko\.md\)/);
   assert.doesNotMatch(caseStudyEn, /\]\(docs\/project-echo-case-study\.en\.md\)/);

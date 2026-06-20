@@ -473,10 +473,11 @@ npm run readiness:echo
 \`\`\`
 
 \`prepare:echo-field-run\` packages the app, refreshes draft evidence, checks
-the workspace \`.ehpk\` SHA against those drafts, and prints the final-gate
-status without promoting any draft evidence. \`readiness:echo\` is expected to
-fail before the field run. Use the blocker list as the remaining evidence
-queue, not as a reason to fill placeholders.
+the workspace \`.ehpk\` SHA against those drafts, prints the final-gate status,
+and writes \`docs/evidence-drafts/project-echo-field-run-prep-report.draft.md\`
+without promoting any draft evidence. \`readiness:echo\` is expected to fail
+before the field run. Use the blocker list as the remaining evidence queue, not
+as a reason to fill placeholders.
 
 ## Production Proxy Smoke Env
 
@@ -602,8 +603,9 @@ without moving heavy review text onto the glasses:
 
 ## Field Sequence
 
-1. Run \`npm run prepare:echo-field-run\` on a clean checkout, then run
-   \`npm run verify:all\` before committing any regenerated package/draft
+1. Run \`npm run prepare:echo-field-run\` on a clean checkout, review
+   \`docs/evidence-drafts/project-echo-field-run-prep-report.draft.md\`, then
+   run \`npm run verify:all\` before committing any regenerated package/draft
    updates.
 2. Confirm the package step inside field prep completed with
    \`npm --prefix even-app run pack\`.
