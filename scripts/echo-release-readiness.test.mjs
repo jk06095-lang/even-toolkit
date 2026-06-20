@@ -1,9 +1,11 @@
 import { strict as assert } from 'node:assert';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 
 import {
   HARDWARE_QA_EVIDENCE_ISSUES,
+  READINESS_HANDOFF_PATH,
   validateReadmePortfolioLinks,
   validateProxySmokeEvidenceOut,
 } from './echo-release-readiness.mjs';
@@ -44,6 +46,17 @@ test('rejects missing, non-json, absolute, and parent-traversal smoke evidence p
 test('tracks only open issue numbers in the hardware QA evidence blocker', () => {
   assert.equal(HARDWARE_QA_EVIDENCE_ISSUES, '#2/#3/#6/#12/#13/#14/#28');
   assert.equal(HARDWARE_QA_EVIDENCE_ISSUES.includes('#4'), false);
+});
+
+test('points blocked readiness runs to the field handoff document', () => {
+  assert.equal(READINESS_HANDOFF_PATH, 'docs/project-echo-readiness-handoff.md');
+  const handoffPath = path.resolve(repoRoot, READINESS_HANDOFF_PATH);
+  assert.equal(existsSync(handoffPath), true);
+
+  const handoff = readFileSync(handoffPath, 'utf8');
+  assert.match(handoff, /Remaining Evidence Gates/);
+  assert.match(handoff, /Next Execution Order/);
+  assert.match(handoff, /Do not fabricate/);
 });
 
 test('does not treat README marker prose as final portfolio links', () => {

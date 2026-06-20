@@ -82,6 +82,7 @@ const PLACEHOLDER_PATTERNS = [
 const OFFICIAL_EVENHUB_EDITION = '202601';
 const OFFICIAL_EVENHUB_SDK_FLOOR = '0.0.10';
 const PROXY_EVIDENCE_ISSUES = '#1/#27';
+export const READINESS_HANDOFF_PATH = 'docs/project-echo-readiness-handoff.md';
 const OFFICIAL_EVENHUB_PERMISSION_NAMES = new Set([
   'album',
   'camera',
@@ -637,6 +638,8 @@ function printReport() {
     const issue = check.issue ? ` ${check.issue}` : '';
     console.info(`- ${marker}${issue}: ${check.name} - ${check.detail}`);
   }
+  console.info('');
+  console.info(`Next evidence handoff: ${READINESS_HANDOFF_PATH}`);
   console.info('');
 }
 
