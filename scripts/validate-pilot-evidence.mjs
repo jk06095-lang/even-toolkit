@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -68,9 +69,11 @@ const CASE_STUDY_EXTENSIONS = ['md', 'html', 'pdf'];
 const ARCHITECTURE_EXTENSIONS = ['md', 'html', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const PILOT_ARTIFACT_EXTENSIONS = ['json', 'md', 'txt', 'log'];
+const PACKAGE_EXTENSIONS = ['ehpk'];
 const QA_SUMMARY_EXTENSIONS = ['md', 'txt', 'log'];
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -284,6 +287,22 @@ function validateEvidenceLink(object, key, pointer, options = {}) {
   }
 }
 
+function validateRepoEvidenceFile(object, key, pointer, options = {}) {
+  const fieldPointer = `${pointer}.${key}`;
+  const value = object?.[key];
+  validateEvidenceLink(object, key, pointer, options);
+
+  if (allowDraft && (value === null || isPlaceholder(value))) return null;
+  if (typeof value !== 'string' || isPlaceholder(value)) return null;
+
+  if (/^https:\/\//i.test(value.trim())) {
+    addError(fieldPointer, 'must be a repo-local file path so the artifact can be verified');
+    return null;
+  }
+
+  return resolveRepoEvidencePath(value, fieldPointer);
+}
+
 function looksLikeEvidenceLink(value, extensions) {
   const trimmed = value.trim();
   if (/^https:\/\/\S+$/i.test(trimmed)) return true;
@@ -300,12 +319,52 @@ function looksLikeEvidenceLink(value, extensions) {
 function evidenceTargetExists(value) {
   const trimmed = String(value ?? '').trim();
   if (/^https:\/\/\S+$/i.test(trimmed)) return true;
-  const resolvedPath = path.resolve(process.cwd(), trimmed);
+  return Boolean(resolveRepoEvidencePath(trimmed));
+}
+
+function resolveRepoEvidencePath(value, pointer = null) {
+  const resolvedPath = path.resolve(process.cwd(), value);
   const repoRoot = `${process.cwd()}${path.sep}`;
   if (resolvedPath !== process.cwd() && !resolvedPath.startsWith(repoRoot)) {
-    return false;
+    if (pointer) addError(pointer, 'repo path evidence must stay inside the repository');
+    return null;
   }
-  return existsSync(resolvedPath);
+  return existsSync(resolvedPath) ? resolvedPath : null;
+}
+
+function validateSha256(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required SHA-256 field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft SHA-256 placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !SHA256_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a 64-character hex SHA-256 digest');
+  }
+}
+
+function validatePackageSha256(buildArtifact, packagePath, pointer) {
+  const digest = buildArtifact.sha256;
+  if (
+    !packagePath
+    || allowDraft
+    || typeof digest !== 'string'
+    || !SHA256_PATTERN.test(digest.trim())
+  ) {
+    return;
+  }
+
+  const actualDigest = createHash('sha256').update(readFileSync(packagePath)).digest('hex');
+  if (actualDigest !== digest.toLowerCase()) {
+    addError(`${pointer}.sha256`, 'must match the SHA-256 digest of buildArtifact.packagePath');
+  }
 }
 
 function validateBooleanTrue(object, key, pointer) {
@@ -756,6 +815,22 @@ function validateManifest(manifestObject) {
     validateText(manifestObject.hardware, 'appVersion', 'hardware');
     validateCurrentAppVersion(manifestObject.hardware, 'appVersion', 'hardware');
     validateText(manifestObject.hardware, 'bridgeVersion', 'hardware');
+  }
+
+  if (validateObject(manifestObject.buildArtifact, 'buildArtifact')) {
+    const packagePath = validateRepoEvidenceFile(manifestObject.buildArtifact, 'packagePath', 'buildArtifact', {
+      extensions: PACKAGE_EXTENSIONS,
+    });
+    validateSha256(manifestObject.buildArtifact, 'sha256', 'buildArtifact');
+    validatePackageSha256(manifestObject.buildArtifact, packagePath, 'buildArtifact');
+    validateText(manifestObject.buildArtifact, 'packCommand', 'buildArtifact', {
+      includes: 'pack',
+    });
+    validateBooleanTrue(manifestObject.buildArtifact, 'sameArtifactUsedForPilot', 'buildArtifact');
+    validateBooleanTrue(manifestObject.buildArtifact, 'sameArtifactAsHardwareQa', 'buildArtifact');
+    validateEvidenceLink(manifestObject.buildArtifact, 'evidenceRef', 'buildArtifact', {
+      extensions: PILOT_ARTIFACT_EXTENSIONS,
+    });
   }
 
   if (!Array.isArray(manifestObject.participants)) {

@@ -8,6 +8,14 @@
     "appVersion": "TBD",
     "bridgeVersion": "TBD"
   },
+  "buildArtifact": {
+    "packagePath": "TBD",
+    "sha256": "TBD",
+    "packCommand": "TBD",
+    "sameArtifactUsedForPilot": false,
+    "sameArtifactAsHardwareQa": false,
+    "evidenceRef": "TBD"
+  },
   "participants": [
     {
       "id": "P01",

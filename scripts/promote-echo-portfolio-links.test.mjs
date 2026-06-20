@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -101,6 +102,11 @@ function createEvidenceFiles() {
   const architecture = writeEvidenceFile(path.join(evidenceDir, 'project-echo-architecture.md'), '# Architecture\n');
   const outcomeSummary = writeEvidenceFile(path.join(evidenceDir, 'project-echo-outcome-summary.md'), '# Outcome summary\n');
   const video = writeEvidenceFile(path.join(videosDir, 'project-echo-real-g2-video.mp4'), 'video placeholder\n');
+  const buildPackage = writeEvidenceFile(path.join(evidenceDir, 'build', 'echo.ehpk'), 'packaged Project ECHO app\n');
+  const buildArtifactReport = writeEvidenceFile(
+    path.join(evidenceDir, 'project-echo-build-artifact.md'),
+    '# Build artifact\n',
+  );
 
   return {
     ko,
@@ -108,6 +114,14 @@ function createEvidenceFiles() {
     architecture,
     outcomeSummary,
     video,
+    buildArtifact: {
+      packagePath: buildPackage,
+      sha256: sha256File(buildPackage),
+      packCommand: 'npm --prefix even-app run pack',
+      sameArtifactUsedForPilot: true,
+      sameArtifactAsHardwareQa: true,
+      evidenceRef: buildArtifactReport,
+    },
     qaExport(condition, participantId) {
       return writeEvidenceFile(
         path.join(exportsDir, `qa-export-${participantId}-${condition}.json`),
@@ -147,6 +161,12 @@ function writeEvidenceFile(filePath, contents) {
   return repoRelative(filePath);
 }
 
+function sha256File(repoRelativePath) {
+  return createHash('sha256')
+    .update(readFileSync(path.join(repoRoot, repoRelativePath)))
+    .digest('hex');
+}
+
 function validPilotManifest(evidence) {
   const participants = ['P01', 'P02', 'P03', 'P04', 'P05'].map((participantId, index) => ({
     id: participantId,
@@ -166,6 +186,7 @@ function validPilotManifest(evidence) {
       appVersion,
       bridgeVersion: 'bridge-test-build',
     },
+    buildArtifact: evidence.buildArtifact,
     participants,
     vadCalibration: {
       environments: [

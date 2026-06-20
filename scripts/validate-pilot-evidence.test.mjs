@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -103,12 +104,45 @@ test('rejects completed pilot evidence without core outcome KPI proof', async ()
   assert.match(output, /outcomeMetrics\.evidenceRef: must be an https URL or repo path/);
 });
 
+test('rejects completed pilot evidence with stale or unverifiable package proof', async () => {
+  const fixture = writeCompletedPilotFixture('stale-package');
+  const validResult = await runValidator(fixture.manifestPath);
+  assert.equal(validResult.code, 0, combinedOutput(validResult));
+
+  const mismatched = readFixture(fixture.manifestPath);
+  mismatched.buildArtifact.sha256 = '0'.repeat(64);
+  const mismatchedPath = path.join(tmpRoot, 'pilot-mismatched-package-sha.json');
+  writeFileSync(mismatchedPath, `${JSON.stringify(mismatched, null, 2)}\n`, 'utf8');
+
+  const mismatchedResult = await runValidator(repoRelative(mismatchedPath));
+  assert.notEqual(mismatchedResult.code, 0);
+  assert.match(
+    combinedOutput(mismatchedResult),
+    /buildArtifact\.sha256: must match the SHA-256 digest of buildArtifact\.packagePath/,
+  );
+
+  const remotePackage = readFixture(fixture.manifestPath);
+  remotePackage.buildArtifact.packagePath = 'https://example.test/echo.ehpk';
+  const remotePath = path.join(tmpRoot, 'pilot-remote-package.json');
+  writeFileSync(remotePath, `${JSON.stringify(remotePackage, null, 2)}\n`, 'utf8');
+
+  const remoteResult = await runValidator(repoRelative(remotePath));
+  assert.notEqual(remoteResult.code, 0);
+  assert.match(
+    combinedOutput(remoteResult),
+    /buildArtifact\.packagePath: must be a repo-local file path so the artifact can be verified/,
+  );
+});
+
 function writeCompletedPilotFixture(name) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
 
   const refs = createEvidenceRefs(fixtureDir);
   const appVersion = JSON.parse(readFileSync(path.join(repoRoot, 'even-app/package.json'), 'utf8')).version;
+  const packagePath = path.join(fixtureDir, 'echo.ehpk');
+  writeFileSync(packagePath, 'pilot package evidence placeholder\n', 'utf8');
+  const packageSha = createHash('sha256').update(readFileSync(packagePath)).digest('hex');
   const participants = Array.from({ length: 5 }, (_, index) => participantFixture(index + 1, refs));
 
   const manifest = {
@@ -120,6 +154,14 @@ function writeCompletedPilotFixture(name) {
       firmwareVersion: 'firmware-qa',
       appVersion,
       bridgeVersion: 'bridge-qa',
+    },
+    buildArtifact: {
+      packagePath: repoRelative(packagePath),
+      sha256: packageSha,
+      packCommand: 'npm --prefix even-app run pack',
+      sameArtifactUsedForPilot: true,
+      sameArtifactAsHardwareQa: true,
+      evidenceRef: refs.qaSummary,
     },
     participants,
     vadCalibration: {

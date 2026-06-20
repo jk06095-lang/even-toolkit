@@ -189,7 +189,9 @@ without moving heavy review text onto the glasses:
    the 400 ms grace window cancels the pending cue when speech resumes. Also
    prove Auto and speech-evaluation cues stay at level 2 or lower, while level
    3/full structure appears only after an explicit Manual Assist request.
-7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
+7. Run the 5-user A/B/C pilot with the same repo-local `.ehpk` digest recorded
+   in the pilot `buildArtifact` block, then export privacy-safe QA data after
+   each run.
 8. For each VAD environment, run `npm --prefix even-app run qa:summarize-export -- <export.json>`
    and preserve both the raw `qaExportPath` and human-readable
    `qaSummaryPath`. The summary must show `Calibrated at`, and the pilot

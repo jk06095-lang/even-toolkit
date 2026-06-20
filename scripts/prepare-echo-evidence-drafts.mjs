@@ -122,6 +122,16 @@ function preparePilotDraft(manifest) {
   if (manifest.hardware) {
     manifest.hardware.appVersion = appVersion;
   }
+
+  const packagePath = 'even-app/echo.ehpk';
+  const packageAbs = path.resolve(repoRoot, packagePath);
+  const buildReportPath = writeBuildArtifactReport(packagePath, packageAbs);
+  if (existsSync(packageAbs) && manifest.buildArtifact) {
+    manifest.buildArtifact.packagePath = packagePath;
+    manifest.buildArtifact.sha256 = sha256File(packageAbs);
+    manifest.buildArtifact.packCommand = 'npm --prefix even-app run pack';
+    manifest.buildArtifact.evidenceRef = repoRelative(buildReportPath);
+  }
 }
 
 function prepareActionDraft(manifest, spec) {
@@ -600,7 +610,9 @@ without moving heavy review text onto the glasses:
    the 400 ms grace window cancels the pending cue when speech resumes. Also
    prove Auto and speech-evaluation cues stay at level 2 or lower, while level
    3/full structure appears only after an explicit Manual Assist request.
-7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
+7. Run the 5-user A/B/C pilot with the same repo-local \`.ehpk\` digest recorded
+   in the pilot \`buildArtifact\` block, then export privacy-safe QA data after
+   each run.
 8. For each VAD environment, run \`npm --prefix even-app run qa:summarize-export -- <export.json>\`
    and preserve both the raw \`qaExportPath\` and human-readable
    \`qaSummaryPath\`. The summary must show \`Calibrated at\`, and the pilot
@@ -1036,7 +1048,9 @@ function writeJson(fileName, value) {
 function writeText(outputPath, value) {
   mkdirSync(path.dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, value, 'utf8');
-  written.push(outputPath);
+  if (!written.includes(outputPath)) {
+    written.push(outputPath);
+  }
 }
 
 function sha256File(filePath) {
