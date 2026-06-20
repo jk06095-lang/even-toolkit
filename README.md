@@ -89,6 +89,8 @@ Final portfolio links must be markdown links carrying the markers
 `project-echo-case-study-en`, and `project-echo-real-g2-video`, and they must
 match the completed pilot manifest targets. Repo-path targets on those README
 links must point to files that already exist in the repository.
+For a compact issue-to-evidence handoff before field work, see
+[docs/project-echo-readiness-handoff.md](./docs/project-echo-readiness-handoff.md).
 
 Before a field run, generate draft evidence manifests and the key-rotation
 evidence draft with:
