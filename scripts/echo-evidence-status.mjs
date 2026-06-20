@@ -229,6 +229,7 @@ export function formatEvidenceStatus(status) {
   lines.push('- npm run validate:echo-evidence-drafts');
   lines.push('- npm run validate:issue-closure-ledger');
   lines.push('- npm run status:echo-evidence -- --validate-final');
+  lines.push('- npm run preflight:echo-open-issues');
   lines.push('- npm run preflight:echo-issue-close -- 10');
   lines.push('- npm run readiness:echo');
   lines.push('');

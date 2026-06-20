@@ -41,6 +41,7 @@ test('reports missing final evidence without treating draft support as complete'
   const formatted = formatEvidenceStatus(status);
   assert.match(formatted, /Informational only/);
   assert.match(formatted, /npm run readiness:echo/);
+  assert.match(formatted, /npm run preflight:echo-open-issues/);
   assert.match(formatted, /npm run preflight:echo-issue-close -- 10/);
   assert.match(formatted, /Issue closure ledger: docs\/project-echo-issue-closure-ledger\.md \(MISSING:/);
   assert.match(formatted, /Proxy smoke env preflight/);

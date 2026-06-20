@@ -3,7 +3,9 @@ import { test } from 'node:test';
 
 import {
   buildIssueClosePreflight,
+  buildOpenIssueClosePreflight,
   formatIssueClosePreflight,
+  formatOpenIssueClosePreflight,
   gateIssueNumbers,
   parseIssueNumber,
 } from './preflight-echo-issue-close.mjs';
@@ -94,6 +96,49 @@ test('blocks unknown issue numbers without mapped gates', () => {
 
   assert.equal(report.ok, false);
   assert.ok(report.findings.some((finding) => finding.includes('No Project ECHO final evidence gate')));
+});
+
+test('summarizes open GitHub issue close decisions in one report', () => {
+  const summary = buildOpenIssueClosePreflight(
+    [
+      [10, 'P2: Complete real-device QA and portfolio evidence package'],
+      [999, 'Unmapped maintenance issue'],
+    ],
+    statusFixture(),
+    {
+      readinessPassed: false,
+      readinessDetail: '[readiness] 6 blocker(s) remain',
+    },
+  );
+
+  assert.equal(summary.ok, false);
+  assert.equal(summary.issueCount, 2);
+  assert.equal(summary.closeableCount, 0);
+  assert.equal(summary.blockedCount, 2);
+  const formatted = formatOpenIssueClosePreflight(summary);
+  assert.match(formatted, /#10 DO NOT CLOSE/);
+  assert.match(formatted, /#999 DO NOT CLOSE/);
+  assert.match(formatted, /Decision: DO NOT BULK-CLOSE OPEN ISSUES/);
+});
+
+test('summarizes all open issues as closeable only when every report passes', () => {
+  const status = statusFixture({
+    finalGates: [
+      passedGate('#29', 'completed ChatGPT Action evidence manifest'),
+    ],
+  });
+  const summary = buildOpenIssueClosePreflight(
+    [[29, 'P1: Add active-recall learning loop and Custom GPT profile export']],
+    status,
+    {
+      readinessPassed: true,
+      readinessDetail: '[readiness] Project ECHO release evidence is complete',
+    },
+  );
+
+  assert.equal(summary.ok, true);
+  assert.equal(summary.closeableCount, 1);
+  assert.match(formatOpenIssueClosePreflight(summary), /Decision: ALL OPEN ISSUES ARE SAFE TO CLOSE/);
 });
 
 function statusFixture(overrides = {}) {

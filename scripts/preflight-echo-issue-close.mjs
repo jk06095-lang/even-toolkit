@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 import { buildEvidenceStatus } from './echo-evidence-status.mjs';
+import { readGitHubOpenIssues } from './validate-issue-closure-ledger.mjs';
 
 export function parseIssueNumber(value) {
   const match = String(value ?? '').trim().match(/^#?(\d+)$/);
@@ -100,6 +101,57 @@ export function formatIssueClosePreflight(report) {
   return `${lines.join('\n')}\n`;
 }
 
+export function buildOpenIssueClosePreflight(openIssues, status, options = {}) {
+  const reports = openIssues.map(([issueNumber, title]) => ({
+    title,
+    ...buildIssueClosePreflight(issueNumber, status, options),
+  }));
+
+  return {
+    readinessPassed: options.readinessPassed === true,
+    readinessDetail: options.readinessDetail || 'readiness was not run',
+    issueCount: reports.length,
+    closeableCount: reports.filter((report) => report.ok).length,
+    blockedCount: reports.filter((report) => !report.ok).length,
+    reports,
+    ok: reports.every((report) => report.ok),
+  };
+}
+
+export function formatOpenIssueClosePreflight(summary) {
+  const lines = [
+    '# Project ECHO Open Issue Close Preflight',
+    '',
+    `Global readiness: ${summary.readinessPassed ? 'passed' : 'blocked'} - ${summary.readinessDetail}`,
+    `Open issues checked: ${summary.issueCount}`,
+    `Closeable: ${summary.closeableCount}`,
+    `Blocked: ${summary.blockedCount}`,
+    '',
+    'Issue decisions:',
+  ];
+
+  for (const report of summary.reports) {
+    const decision = report.ok ? 'OK TO CLOSE' : 'DO NOT CLOSE';
+    lines.push(`- #${report.issueNumber} ${decision}: ${report.title}`);
+    if (!report.ok) {
+      const gateNames = report.gates
+        .filter((gate) => gate.status !== 'passed')
+        .map((gate) => gate.name);
+      const gateSuffix = gateNames.length > 0 ? ` (${gateNames.join('; ')})` : '';
+      lines.push(`  Reason: ${report.findings[0] || 'blocked'}${gateSuffix}`);
+    }
+  }
+
+  lines.push('');
+  if (summary.ok) {
+    lines.push('Decision: ALL OPEN ISSUES ARE SAFE TO CLOSE');
+  } else {
+    lines.push('Decision: DO NOT BULK-CLOSE OPEN ISSUES');
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 async function runReadiness() {
   const result = await runNpm(['run', 'readiness:echo']);
   return {
@@ -163,23 +215,42 @@ function firstUsefulLine(output) {
 
 async function main() {
   const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h');
+  const wantsLiveGitHub = process.argv.includes('--github-open-issues');
   const issueArg = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
   const issueNumber = parseIssueNumber(issueArg);
 
-  if (wantsHelp || !issueNumber) {
+  if (wantsHelp || (!issueNumber && !wantsLiveGitHub)) {
     console.info(`Usage: npm run preflight:echo-issue-close -- <issue-number>
+       npm run preflight:echo-open-issues
 
 Runs final-evidence status checks and npm run readiness:echo before deciding
-whether a Project ECHO issue is safe to close. Pass the number without # in
-shell commands, for example: npm run preflight:echo-issue-close -- 10`);
+whether a Project ECHO issue is safe to close. Pass the number without # for a
+single issue, for example: npm run preflight:echo-issue-close -- 10
+
+Use --github-open-issues, or npm run preflight:echo-open-issues, to check every
+currently open GitHub issue in one run.`);
     process.exit(wantsHelp ? 0 : 1);
   }
 
   const status = buildEvidenceStatus({ validateFinal: true });
   const readiness = await runReadiness();
-  const report = buildIssueClosePreflight(issueNumber, status, {
+  const readinessOptions = {
     readinessPassed: readiness.passed,
     readinessDetail: readiness.detail,
+  };
+
+  if (wantsLiveGitHub) {
+    const openIssues = readGitHubOpenIssues();
+    const summary = buildOpenIssueClosePreflight(openIssues, status, readinessOptions);
+    console.info(formatOpenIssueClosePreflight(summary));
+    if (!summary.ok) {
+      process.exit(1);
+    }
+    return;
+  }
+
+  const report = buildIssueClosePreflight(issueNumber, status, {
+    ...readinessOptions,
   });
 
   console.info(formatIssueClosePreflight(report));
