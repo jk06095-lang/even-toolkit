@@ -80,7 +80,7 @@ const steps = [
   },
   {
     label: 'Project ECHO evidence drafts current',
-    args: ['run', 'validate:echo-evidence-drafts'],
+    args: ['run', 'validate:echo-evidence-drafts:committed'],
   },
 ];
 

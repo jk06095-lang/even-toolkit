@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -8,6 +9,7 @@ const repoRoot = process.cwd();
 
 const outDir = path.resolve(repoRoot, readArg('--out-dir') ?? 'docs/evidence-drafts');
 const packagePath = normalizePath(readArg('--package') ?? 'even-app/echo.ehpk');
+const packageSource = readArg('--package-source') ?? 'workspace';
 const packageAbs = path.resolve(repoRoot, packagePath);
 const buildArtifactPath = path.join(outDir, 'project-echo-build-artifact.md');
 const hardwareQaPath = path.join(outDir, 'project-echo-hardware-qa.draft.json');
@@ -15,7 +17,16 @@ const fieldRunbookPath = path.join(outDir, 'project-echo-field-runbook.draft.md'
 
 const errors = [];
 
-if (!existsSync(packageAbs)) {
+if (packageSource !== 'workspace' && packageSource !== 'committed') {
+  errors.push(`--package-source must be "workspace" or "committed", got ${packageSource}`);
+}
+
+let packageBuffer = null;
+if (packageSource === 'committed') {
+  packageBuffer = readCommittedFile(packagePath);
+} else if (existsSync(packageAbs)) {
+  packageBuffer = readFileSync(packageAbs);
+} else {
   errors.push(`${packagePath}: package file is missing`);
 }
 if (!existsSync(buildArtifactPath)) {
@@ -33,8 +44,10 @@ if (!appVersion) {
   errors.push('even-app/package.json: missing app version');
 }
 
-const expectedSha = existsSync(packageAbs) ? sha256File(packageAbs) : null;
-const expectedBytes = existsSync(packageAbs) ? statSync(packageAbs).size : null;
+const expectedSha = packageBuffer ? sha256Buffer(packageBuffer) : null;
+const expectedBytes = packageSource === 'workspace' && existsSync(packageAbs)
+  ? statSync(packageAbs).size
+  : packageBuffer?.length ?? null;
 
 if (expectedSha && existsSync(buildArtifactPath)) {
   const buildArtifact = readFileSync(buildArtifactPath, 'utf8');
@@ -77,7 +90,7 @@ if (errors.length > 0) {
   }
   process.exitCode = 1;
 } else {
-  console.info(`[echo-evidence-drafts] drafts match ${packagePath} (${expectedSha})`);
+  console.info(`[echo-evidence-drafts] drafts match ${packageSource} ${packagePath} (${expectedSha})`);
 }
 
 function readArg(flag) {
@@ -108,9 +121,23 @@ function assertEqual(actual, expected, label) {
   }
 }
 
-function sha256File(filePath) {
+function readCommittedFile(filePath) {
+  try {
+    return execFileSync('git', ['show', `HEAD:${filePath}`], {
+      cwd: repoRoot,
+      encoding: 'buffer',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  } catch (error) {
+    errors.push(`${filePath}: could not read committed package from HEAD`);
+    return null;
+  }
+}
+
+function sha256Buffer(buffer) {
   return createHash('sha256')
-    .update(readFileSync(filePath))
+    .update(buffer)
     .digest('hex');
 }
 
