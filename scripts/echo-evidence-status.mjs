@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import {
   HARDWARE_QA_EVIDENCE_ISSUES,
   READINESS_HANDOFF_PATH,
+  validateProxySmokeEvidenceOut,
 } from './echo-release-readiness.mjs';
 
 const repoRoot = process.cwd();
@@ -105,9 +106,18 @@ export const DRAFT_SUPPORT_FILES = [
   },
 ];
 
+export const PROXY_SMOKE_ENV_VARS = [
+  'ECHO_PROXY_BASE_URL',
+  'ECHO_PROXY_SMOKE_ORIGIN',
+  'ECHO_PROXY_SMOKE_SESSION_TOKEN',
+  'ECHO_PROXY_SMOKE_EVIDENCE_OUT',
+];
+
 export function buildEvidenceStatus(options = {}) {
   const fileExists = options.fileExists ?? defaultFileExists;
   const readText = options.readText ?? defaultReadText;
+  const env = options.env ?? process.env;
+  const root = options.repoRoot ?? repoRoot;
 
   const finalGates = FINAL_EVIDENCE_GATES.map((gate) => {
     const present = gate.readmeBlock
@@ -131,10 +141,13 @@ export function buildEvidenceStatus(options = {}) {
     status: fileExists(READINESS_HANDOFF_PATH) ? 'available' : 'missing',
   };
 
+  const proxySmokeEnv = buildProxySmokeEnvStatus(env, { repoRoot: root });
+
   return {
     handoff,
     finalGates,
     draftFiles,
+    proxySmokeEnv,
     missingFinalCount: finalGates.filter((gate) => gate.status !== 'present').length,
     missingDraftCount: draftFiles.filter((draft) => draft.status !== 'available').length,
   };
@@ -146,6 +159,9 @@ export function formatEvidenceStatus(status) {
     '',
     'Informational only. `npm run readiness:echo` remains the release gate.',
     `Field handoff: ${status.handoff.path} (${status.handoff.status})`,
+    '',
+    'Proxy smoke env preflight:',
+    ...formatProxySmokeEnvLines(status.proxySmokeEnv),
     '',
     'Final evidence gates:',
   ];
@@ -175,9 +191,52 @@ export function formatEvidenceStatus(status) {
   lines.push('- npm run validate:echo-evidence-drafts');
   lines.push('- npm run readiness:echo');
   lines.push('');
-  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing.`);
+  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing, proxy smoke env ready: ${status.proxySmokeEnv.ready ? 'yes' : 'no'}.`);
 
   return `${lines.join('\n')}\n`;
+}
+
+export function buildProxySmokeEnvStatus(env, options = {}) {
+  const variables = PROXY_SMOKE_ENV_VARS.map((name) => ({
+    name,
+    status: env[name] ? 'set' : 'missing',
+    redacted: name === 'ECHO_PROXY_SMOKE_SESSION_TOKEN' && Boolean(env[name]),
+  }));
+  const evidenceOut = validateProxySmokeEvidenceOut(env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '', {
+    repoRoot: options.repoRoot ?? repoRoot,
+  });
+
+  return {
+    variables,
+    evidenceOut: evidenceOut.ok
+      ? {
+        ok: true,
+        repoRelativePath: evidenceOut.repoRelativePath,
+        proxyRelativePath: evidenceOut.proxyRelativePath,
+      }
+      : {
+        ok: false,
+        detail: evidenceOut.detail,
+      },
+    ready: variables.every((variable) => variable.status === 'set') && evidenceOut.ok,
+  };
+}
+
+function formatProxySmokeEnvLines(proxySmokeEnv) {
+  const lines = proxySmokeEnv.variables.map((variable) => {
+    const marker = variable.status === 'set' ? 'SET' : 'MISSING';
+    const redacted = variable.redacted ? ' (value redacted)' : '';
+    return `- ${marker}: ${variable.name}${redacted}`;
+  });
+
+  if (proxySmokeEnv.evidenceOut.ok) {
+    lines.push(`- OK: ECHO_PROXY_SMOKE_EVIDENCE_OUT -> ${proxySmokeEnv.evidenceOut.repoRelativePath}`);
+  } else {
+    lines.push(`- CHECK: ECHO_PROXY_SMOKE_EVIDENCE_OUT - ${proxySmokeEnv.evidenceOut.detail}`);
+  }
+  lines.push(`- Ready to attempt production proxy smoke: ${proxySmokeEnv.ready ? 'yes' : 'no'}`);
+
+  return lines;
 }
 
 function defaultFileExists(filePath) {

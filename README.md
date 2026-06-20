@@ -106,6 +106,11 @@ draft artifact, run:
 npm run status:echo-evidence
 ```
 
+The status command also preflights the production proxy smoke environment
+variables and validates that `ECHO_PROXY_SMOKE_EVIDENCE_OUT` resolves to a
+repo-local JSON path. It reports only whether
+`ECHO_PROXY_SMOKE_SESSION_TOKEN` is set; it does not print the token value.
+
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when
 available, local client artifact scan counts, and draft case-study/video
