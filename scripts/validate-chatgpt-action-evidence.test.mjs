@@ -15,7 +15,7 @@ before(() => {
   writeFileSync(path.join(tmpRoot, 'action-gpt-config.png'), 'png evidence placeholder\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'g2-recall-evidence.json'), '{"ok":true}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'recall-day-1.json'), '{"ok":true,"day":"2026-06-18"}\n', 'utf8');
-  writeFileSync(path.join(tmpRoot, 'recall-day-2.json'), '{"ok":true,"day":"2026-06-19"}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'recall-day-7.json'), '{"ok":true,"day":"2026-06-25"}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'transfer-evidence.json'), '{"ok":true,"scenarioId":"transfer:travel:repeat:1"}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'same-day-repeat.json'), '{"ok":true,"countedAsTransfer":false}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'tutor-instructions-evidence.md'), '# Tutor instructions evidence\n', 'utf8');
@@ -77,6 +77,20 @@ test('rejects completed Action evidence without spaced-recall transfer proof', a
   assert.match(result.stderr, /activeRecallDeviceEvidence\.transferScenarioEvidenceCaptured/);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.recallDates/);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.transferScenarioIds/);
+});
+
+test('rejects completed Action evidence without a day 7 transfer window', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.activeRecallDeviceEvidence.recallTransferProof.day7TransferDate = '2026-06-20';
+  manifest.activeRecallDeviceEvidence.recallTransferProof.recallDates = ['2026-06-18', '2026-06-20'];
+  const manifestPath = writeManifest('missing-day-7-transfer-window', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.day7TransferDate/);
+  assert.match(result.stderr, /at least six calendar days after day1RecallDate/);
 });
 
 test('rejects completed Action evidence without calibrated G2 threshold proof', async () => {
@@ -173,7 +187,7 @@ function completeManifest({ tokenStorageBoundary }) {
   const deviceEvidenceRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
   const pronunciationPolicyRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
   const recallDay1Ref = repoRelative(path.join(tmpRoot, 'recall-day-1.json'));
-  const recallDay2Ref = repoRelative(path.join(tmpRoot, 'recall-day-2.json'));
+  const recallDay7Ref = repoRelative(path.join(tmpRoot, 'recall-day-7.json'));
   const transferEvidenceRef = repoRelative(path.join(tmpRoot, 'transfer-evidence.json'));
   const sameDayRepeatEvidenceRef = repoRelative(path.join(tmpRoot, 'same-day-repeat.json'));
   const tutorInstructionsEvidenceRef = repoRelative(path.join(tmpRoot, 'tutor-instructions-evidence.md'));
@@ -233,8 +247,10 @@ function completeManifest({ tokenStorageBoundary }) {
       transferScenarioEvidenceCaptured: true,
       sameDayRepeatNotCountedAsTransfer: true,
       recallTransferProof: {
-        recallDates: ['2026-06-18', '2026-06-19'],
-        independentRecallAttemptRefs: [recallDay1Ref, recallDay2Ref],
+        day1RecallDate: '2026-06-18',
+        day7TransferDate: '2026-06-25',
+        recallDates: ['2026-06-18', '2026-06-25'],
+        independentRecallAttemptRefs: [recallDay1Ref, recallDay7Ref],
         transferScenarioIds: ['transfer:travel:repeat:1'],
         transferEvidenceRef,
         sameDayRepeatEvidenceRef,

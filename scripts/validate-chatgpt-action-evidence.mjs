@@ -485,11 +485,49 @@ function validateTutorBehavior() {
 
 function validateRecallTransferProof(proof, pointer) {
   if (!validateObject(proof, pointer)) return;
+  validateDay1Day7TransferDates(proof, pointer);
   validateRecallDates(proof, pointer);
   validateEvidenceLinkArray(proof, 'independentRecallAttemptRefs', pointer, 2);
   validateTransferScenarioIds(proof, pointer);
   validateEvidenceLink(proof, 'transferEvidenceRef', pointer);
   validateEvidenceLink(proof, 'sameDayRepeatEvidenceRef', pointer);
+}
+
+function validateDay1Day7TransferDates(proof, pointer) {
+  validateIsoDate(proof, 'day1RecallDate', pointer);
+  validateIsoDate(proof, 'day7TransferDate', pointer);
+
+  const day1 = isoDateToUtcDay(proof.day1RecallDate);
+  const day7 = isoDateToUtcDay(proof.day7TransferDate);
+  if (day1 === null || day7 === null) return;
+
+  if (day7 - day1 < 6) {
+    addError(`${pointer}.day7TransferDate`, 'must be at least six calendar days after day1RecallDate');
+  }
+
+  const recallDates = Array.isArray(proof.recallDates)
+    ? proof.recallDates.map((date) => (typeof date === 'string' ? date.trim() : date))
+    : [];
+  if (!recallDates.includes(proof.day1RecallDate.trim())) {
+    addError(`${pointer}.recallDates`, 'must include day1RecallDate');
+  }
+  if (!recallDates.includes(proof.day7TransferDate.trim())) {
+    addError(`${pointer}.recallDates`, 'must include day7TransferDate');
+  }
+}
+
+function isoDateToUtcDay(value) {
+  if (typeof value !== 'string' || !ISO_DATE_PATTERN.test(value.trim())) return null;
+  const [year, month, day] = value.trim().split('-').map((part) => Number.parseInt(part, 10));
+  const parsedDate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsedDate.getUTCFullYear() !== year
+    || parsedDate.getUTCMonth() !== month - 1
+    || parsedDate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return Math.floor(parsedDate.getTime() / 86_400_000);
 }
 
 function validateRecallDates(proof, pointer) {

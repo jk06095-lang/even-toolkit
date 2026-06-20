@@ -90,6 +90,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(action.activeRecallDeviceEvidence.twoSeparateRecallDaysProven, null);
   assert.equal(action.activeRecallDeviceEvidence.transferScenarioEvidenceCaptured, null);
   assert.equal(action.activeRecallDeviceEvidence.sameDayRepeatNotCountedAsTransfer, null);
+  assert.equal(action.activeRecallDeviceEvidence.recallTransferProof.day1RecallDate, 'TBD');
+  assert.equal(action.activeRecallDeviceEvidence.recallTransferProof.day7TransferDate, 'TBD');
   assert.deepEqual(action.activeRecallDeviceEvidence.recallTransferProof.recallDates, []);
   assert.deepEqual(action.activeRecallDeviceEvidence.recallTransferProof.independentRecallAttemptRefs, []);
   assert.deepEqual(action.activeRecallDeviceEvidence.recallTransferProof.transferScenarioIds, []);
@@ -198,6 +200,9 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
   assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);
   assert.match(fieldRunbook, /twoSeparateRecallDaysProven=true/);
+  assert.match(fieldRunbook, /recallTransferProof\.day1RecallDate/);
+  assert.match(fieldRunbook, /day7TransferDate/);
+  assert.match(fieldRunbook, /six calendar days later/);
   assert.match(fieldRunbook, /recallTransferProof\.recallDates/);
   assert.match(fieldRunbook, /g2AudioLevelEvidence\.speechThreshold/);
   assert.match(fieldRunbook, /calibratedG2ThresholdUsed=true/);

@@ -502,9 +502,11 @@ The completed #29 manifest must prove the learning boundary, not only endpoint
 availability:
 
 - \`twoSeparateRecallDaysProven=true\`: a hidden meaning-to-expression item is
-  recalled successfully on at least two different calendar days.
-- \`recallTransferProof.recallDates\`: at least two distinct YYYY-MM-DD dates
-  from independent recall attempts, with evidence refs for each attempt.
+  recalled successfully on Day 1 and transferred again on Day 7.
+- \`recallTransferProof.day1RecallDate\` and \`day7TransferDate\`: YYYY-MM-DD
+  dates proving a Day 1 independent recall and a Day 7 transfer attempt at
+  least six calendar days later. Both dates must also appear in
+  \`recallTransferProof.recallDates\`, with evidence refs for each attempt.
 - \`transferScenarioEvidenceCaptured=true\`: a transfer review or roleplay
   write-back records a bounded transfer scenario ID for that item.
 - \`recallTransferProof.transferScenarioIds\`: bounded scenario IDs that match
@@ -611,8 +613,9 @@ without moving heavy review text onto the glasses:
 11. Run production proxy smoke and key-rotation checks without local-only
    overrides.
 12. Deploy the OAuth-backed Custom GPT Action API and capture privacy rejection
-    plus G2/audio-level active-recall evidence, including two separate recall
-    days and at least one bounded transfer scenario or roleplay write-back.
+    plus G2/audio-level active-recall evidence, including Day 1 independent
+    recall, Day 7 transfer at least six calendar days later, and at least one
+    bounded transfer scenario or roleplay write-back.
     Capture tutor behavior evidence proving one correction per turn, keyword
     to sentence-starter to full-sentence cue ladder, at most three saved
     learning items, and bounded roleplay write-back IDs.

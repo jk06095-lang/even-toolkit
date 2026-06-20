@@ -108,6 +108,8 @@
     "transferScenarioEvidenceCaptured": null,
     "sameDayRepeatNotCountedAsTransfer": null,
     "recallTransferProof": {
+      "day1RecallDate": "TBD",
+      "day7TransferDate": "TBD",
       "recallDates": [],
       "independentRecallAttemptRefs": [],
       "transferScenarioIds": [],
