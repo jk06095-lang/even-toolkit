@@ -142,6 +142,10 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(keyRotation, /Allowed origin passed: passed/);
   assert.match(keyRotation, /Untrusted origin blocked: passed/);
   assert.match(keyRotation, /Safe non-echoing error response verified: passed/);
+  assert.match(keyRotation, /^- Provider key log exclusion:\s*$/m);
+  assert.match(keyRotation, /^- Session token log exclusion:\s*$/m);
+  assert.match(keyRotation, /^- Direct identifier log exclusion:\s*$/m);
+  assert.match(keyRotation, /^- Request ID correlation present:\s*$/m);
   assert.doesNotMatch(keyRotation, /--allow-http|--allow-unconfigured|--allow-unauthenticated|--allow-qa-delay/);
   assert.match(keyRotation, /Browser artifact key scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);
   assert.match(keyRotation, /Session token client artifact scan result: \d+ matches across \d+ file\(s\): even-app\/dist, even-app\/echo\.ehpk/);

@@ -163,6 +163,25 @@ test('rejects deployment smoke evidence without rate-limit metadata', async () =
   assert.match(result.stderr, /deploymentSmokeEvidence\.checks\.healthz\.rateLimitMax/);
 });
 
+test('rejects key-rotation evidence without production log redaction proof', async () => {
+  const fixture = writeFixture('missing-log-redaction-proof', smokeEvidence());
+  const markdownPath = path.join(repoRoot, fixture.markdownPath);
+  const markdown = readFileSync(markdownPath, 'utf8')
+    .replace('- Provider key log exclusion: verified true', '- Provider key log exclusion: checked')
+    .replace('- Session token log exclusion: verified true', '- Session token log exclusion: checked')
+    .replace('- Direct identifier log exclusion: verified true', '- Direct identifier log exclusion: checked')
+    .replace('- Request ID correlation present: verified true', '- Request ID correlation present: checked');
+  writeFileSync(markdownPath, markdown, 'utf8');
+
+  const result = await runValidator(fixture.markdownPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /field\.Provider key log exclusion/);
+  assert.match(result.stderr, /field\.Session token log exclusion/);
+  assert.match(result.stderr, /field\.Direct identifier log exclusion/);
+  assert.match(result.stderr, /field\.Request ID correlation present/);
+});
+
 function writeFixture(name, evidence) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -280,7 +299,11 @@ function keyRotationMarkdown(evidenceRelativePath) {
 - Reviewed time window: 2026-06-19T00:00:00Z to 2026-06-19T01:00:00Z
 - Log source: production proxy logs
 - Log allowlist confirmation: verified true
+- Provider key log exclusion: verified true
+- Session token log exclusion: verified true
 - Raw transcript/audio log exclusion: verified true
+- Direct identifier log exclusion: verified true
+- Request ID correlation present: verified true
 
 ## Deployment Smoke Evidence
 

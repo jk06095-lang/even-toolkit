@@ -18,6 +18,10 @@ JSON file written by `smoke:deploy -- --evidence-out ...`. Session token
 evidence must prove short-lived server-side issuance, signed-token or server
 secret-manager storage, client artifact scans, and old-token revocation after
 rotation.
+Production log evidence must prove the release log allowlist includes only
+bounded operational metadata, excludes provider keys, session tokens, raw
+transcript/audio, and direct identifiers, and preserves request-id correlation
+without logging request bodies.
 The `Development IP scan result` field is for private LAN development origins
 such as `192.168.*`; localhost strings used only for secure-origin checks are
 not release network origins and should not be treated as provider deployment
@@ -56,7 +60,11 @@ owner, key, revocation, and log-review evidence filled by the operator.
 - Reviewed time window:
 - Log source:
 - Log allowlist confirmation:
+- Provider key log exclusion:
+- Session token log exclusion:
 - Raw transcript/audio log exclusion:
+- Direct identifier log exclusion:
+- Request ID correlation present:
 
 ## Deployment Smoke Evidence
 
