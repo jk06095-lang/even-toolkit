@@ -110,6 +110,18 @@ test('rejects completed Action evidence with stale or unverifiable package proof
   );
 });
 
+test('rejects completed Action evidence that points to draft evidence files', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.privacy.evidenceRef = 'docs/evidence-drafts/project-echo-build-artifact.md';
+  const manifestPath = writeManifest('draft-evidence-ref', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /privacy\.evidenceRef: final evidence must not point to draft or template evidence files/);
+});
+
 test('rejects completed Action evidence without a day 7 transfer window', async () => {
   const manifest = completeManifest({
     tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',

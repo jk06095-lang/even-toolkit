@@ -296,6 +296,23 @@ function validateEvidenceLinkValue(value, pointer) {
 
   if (!existsSync(resolvedPath)) {
     addError(pointer, 'repo path evidence must point to an existing file');
+    return;
+  }
+
+  validateFinalEvidenceTargetNotDraft(resolvedPath, pointer);
+}
+
+function validateFinalEvidenceTargetNotDraft(resolvedPath, pointer) {
+  if (allowDraft) return;
+
+  const relativePath = path.relative(process.cwd(), resolvedPath).replace(/\\/g, '/');
+  const baseName = path.basename(relativePath).toLowerCase();
+  if (
+    relativePath.split('/').includes('evidence-drafts')
+    || baseName.includes('.draft.')
+    || baseName.includes('.template.')
+  ) {
+    addError(pointer, 'final evidence must not point to draft or template evidence files');
   }
 }
 

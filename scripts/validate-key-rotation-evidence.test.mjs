@@ -88,6 +88,21 @@ test('rejects key-rotation evidence text that includes unauthenticated smoke ove
   assert.match(result.stderr, /--allow-unauthenticated/);
 });
 
+test('rejects key-rotation evidence that points to draft deployment smoke evidence', async () => {
+  const fixtureDir = path.join(tmpRoot, 'draft-smoke-evidence');
+  mkdirSync(fixtureDir, { recursive: true });
+  const draftEvidencePath = path.join(fixtureDir, 'proxy-smoke-evidence.draft.json');
+  writeFileSync(draftEvidencePath, `${JSON.stringify(smokeEvidence(), null, 2)}\n`, 'utf8');
+  const draftEvidenceRelativePath = repoRelative(draftEvidencePath);
+  const markdownPath = path.join(fixtureDir, 'key-rotation-evidence.md');
+  writeFileSync(markdownPath, keyRotationMarkdown(draftEvidenceRelativePath), 'utf8');
+
+  const result = await runValidator(repoRelative(markdownPath));
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /field\.Deployment smoke evidence JSON: final evidence must not point to draft or template evidence files/);
+});
+
 test('rejects deployment smoke evidence that echoed sensitive learner text', async () => {
   const fixture = writeFixture('echoed-sensitive', smokeEvidence({
     checks: {

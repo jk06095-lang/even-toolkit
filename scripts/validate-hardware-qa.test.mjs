@@ -309,6 +309,25 @@ test('rejects packaged hardware QA artifact evidence with unverifiable or mismat
   );
 });
 
+test('rejects completed hardware QA evidence that points to draft evidence files', async () => {
+  const fixture = writeCompletedHardwareFixture('draft-evidence-ref');
+  const manifest = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  manifest.buildArtifact.evidenceRef = 'docs/evidence-drafts/project-echo-build-artifact.md';
+  const invalidPath = path.join(tmpRoot, 'hardware-draft-evidence-ref.json');
+  writeFileSync(invalidPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+
+  assert.notEqual(result.code, 0);
+  assert.match(
+    combinedOutput(result),
+    /buildArtifact\.evidenceRef: final evidence must not point to draft or template evidence files/,
+  );
+});
+
 function writeCompletedHardwareFixture(name) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });

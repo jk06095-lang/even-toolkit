@@ -104,6 +104,21 @@ test('rejects completed pilot evidence without core outcome KPI proof', async ()
   assert.match(output, /outcomeMetrics\.evidenceRef: must be an https URL or repo path/);
 });
 
+test('rejects completed pilot evidence that points to draft evidence files', async () => {
+  const fixture = writeCompletedPilotFixture('draft-evidence-ref');
+  const manifest = readFixture(fixture.manifestPath);
+  manifest.outcomeMetrics.evidenceRef = 'docs/evidence-drafts/project-echo-build-artifact.md';
+  writeFixtureManifest(fixture.manifestPath, manifest);
+
+  const result = await runValidator(fixture.manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(
+    combinedOutput(result),
+    /outcomeMetrics\.evidenceRef: final evidence must not point to draft or template evidence files/,
+  );
+});
+
 test('rejects completed pilot evidence with stale or unverifiable package proof', async () => {
   const fixture = writeCompletedPilotFixture('stale-package');
   const validResult = await runValidator(fixture.manifestPath);

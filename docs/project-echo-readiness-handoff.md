@@ -88,6 +88,9 @@ Useful official references:
 
 - Do not fabricate pilot, hardware, proxy, key-rotation, Action, or portfolio
   evidence.
+- Do not point completed manifests or final key-rotation evidence at
+  `docs/evidence-drafts/`, `.draft.`, or `.template.` files; final validators
+  reject those paths.
 - Do not use Web Speech confidence as G2 pronunciation evidence.
 - Do not use same-day repeat attempts as transfer proof.
 - Do not publish raw transcripts, raw audio, participant contact identifiers,

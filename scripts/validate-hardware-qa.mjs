@@ -305,6 +305,8 @@ function validateEvidenceLink(object, key, pointer, options = {}) {
   if (!evidenceTargetExists(value)) {
     addError(fieldPointer, 'repo path evidence must point to an existing file');
   }
+
+  validateFinalEvidenceTargetNotDraft(value, fieldPointer);
 }
 
 function validateRepoEvidenceFile(object, key, pointer, options = {}) {
@@ -340,6 +342,26 @@ function evidenceTargetExists(value) {
   const trimmed = String(value ?? '').trim();
   if (/^https:\/\/\S+$/i.test(trimmed)) return true;
   return Boolean(resolveRepoEvidencePath(trimmed));
+}
+
+function validateFinalEvidenceTargetNotDraft(value, pointer) {
+  if (allowDraft) return;
+
+  const trimmed = String(value ?? '').trim();
+  if (/^https:\/\/\S+$/i.test(trimmed)) return;
+
+  const resolvedPath = resolveRepoEvidencePath(trimmed);
+  if (!resolvedPath) return;
+
+  const relativePath = path.relative(process.cwd(), resolvedPath).replace(/\\/g, '/');
+  const baseName = path.basename(relativePath).toLowerCase();
+  if (
+    relativePath.split('/').includes('evidence-drafts')
+    || baseName.includes('.draft.')
+    || baseName.includes('.template.')
+  ) {
+    addError(pointer, 'final evidence must not point to draft or template evidence files');
+  }
 }
 
 function resolveRepoEvidencePath(value, pointer = null) {

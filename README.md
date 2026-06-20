@@ -127,6 +127,9 @@ checklist mapping the remaining issues to their final evidence gates and the
 Even Hub private/beta testing boundary. They stay in `draft` status and do not
 replace the required `*.completed.json` evidence files, the final
 `docs/key-rotation-evidence.md`, or the final README portfolio links.
+Final validators reject repo-local `docs/evidence-drafts/`, `.draft.`, and
+`.template.` paths as completed evidence references; copy only real captured
+artifacts to stable non-draft paths before closing a gate.
 After production proxy or Action OAuth smoke JSON exists, rerun the draft helper
 with `--proxy-smoke-evidence docs/proxy-smoke-evidence.json` and/or
 `--action-oauth-smoke docs/chatgpt-action-oauth-smoke.json` to prefill only the

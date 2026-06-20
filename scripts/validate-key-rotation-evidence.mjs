@@ -348,6 +348,7 @@ function validateDeploymentSmokeEvidence(proxyUrl) {
     addError(pointer, 'repo path must point to an existing JSON file');
     return;
   }
+  validateFinalEvidenceTargetNotDraft(evidencePath, pointer);
 
   let evidence;
   try {
@@ -369,6 +370,20 @@ function resolveRepoPath(value, pointer) {
     return null;
   }
   return resolvedPath;
+}
+
+function validateFinalEvidenceTargetNotDraft(resolvedPath, pointer) {
+  if (allowDraft) return;
+
+  const relativePath = path.relative(process.cwd(), resolvedPath).replace(/\\/g, '/');
+  const baseName = path.basename(relativePath).toLowerCase();
+  if (
+    relativePath.split('/').includes('evidence-drafts')
+    || baseName.includes('.draft.')
+    || baseName.includes('.template.')
+  ) {
+    addError(pointer, 'final evidence must not point to draft or template evidence files');
+  }
 }
 
 function validateSmokeEvidenceObject(evidence, proxyUrl) {
