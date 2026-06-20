@@ -61,6 +61,7 @@ Run these before closing any issue in this ledger:
 npm run status:echo-evidence -- --validate-final
 npm run validate:issue-closure-ledger
 npm run validate:issue-closure-ledger:github
+npm run report:echo-open-issues
 npm run preflight:echo-open-issues
 npm run preflight:echo-issue-close -- 10
 npm run readiness:echo

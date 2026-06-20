@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { buildEvidenceStatus } from './echo-evidence-status.mjs';
@@ -152,6 +154,14 @@ export function formatOpenIssueClosePreflight(summary) {
   return `${lines.join('\n')}\n`;
 }
 
+export function writePreflightReport(markdown, reportPath, options = {}) {
+  const repoRoot = path.resolve(options.repoRoot ?? process.cwd());
+  const resolvedPath = resolveRepoMarkdownPath(reportPath, repoRoot);
+  mkdirSync(path.dirname(resolvedPath), { recursive: true });
+  writeFileSync(resolvedPath, markdown, 'utf8');
+  return path.relative(repoRoot, resolvedPath).replace(/\\/g, '/');
+}
+
 async function runReadiness() {
   const result = await runNpm(['run', 'readiness:echo']);
   return {
@@ -216,7 +226,9 @@ function firstUsefulLine(output) {
 async function main() {
   const wantsHelp = process.argv.includes('--help') || process.argv.includes('-h');
   const wantsLiveGitHub = process.argv.includes('--github-open-issues');
-  const issueArg = process.argv.slice(2).find((arg) => !arg.startsWith('-'));
+  const allowBlockedReport = process.argv.includes('--allow-blocked-report');
+  const reportOut = readOption('--out') || readOption('--report-out');
+  const issueArg = readIssueArg(process.argv.slice(2));
   const issueNumber = parseIssueNumber(issueArg);
 
   if (wantsHelp || (!issueNumber && !wantsLiveGitHub)) {
@@ -228,7 +240,12 @@ whether a Project ECHO issue is safe to close. Pass the number without # for a
 single issue, for example: npm run preflight:echo-issue-close -- 10
 
 Use --github-open-issues, or npm run preflight:echo-open-issues, to check every
-currently open GitHub issue in one run.`);
+currently open GitHub issue in one run.
+
+Use --out docs/evidence-drafts/example.draft.md to write the markdown report.
+The --allow-blocked-report flag is only for report-generation commands; it lets
+the command write a blocked draft report without treating that as permission to
+close issues.`);
     process.exit(wantsHelp ? 0 : 1);
   }
 
@@ -242,8 +259,10 @@ currently open GitHub issue in one run.`);
   if (wantsLiveGitHub) {
     const openIssues = readGitHubOpenIssues();
     const summary = buildOpenIssueClosePreflight(openIssues, status, readinessOptions);
-    console.info(formatOpenIssueClosePreflight(summary));
-    if (!summary.ok) {
+    const markdown = formatOpenIssueClosePreflight(summary);
+    console.info(markdown);
+    maybeWriteReport(markdown, reportOut);
+    if (!summary.ok && !(allowBlockedReport && reportOut)) {
       process.exit(1);
     }
     return;
@@ -252,11 +271,52 @@ currently open GitHub issue in one run.`);
   const report = buildIssueClosePreflight(issueNumber, status, {
     ...readinessOptions,
   });
+  const markdown = formatIssueClosePreflight(report);
 
-  console.info(formatIssueClosePreflight(report));
-  if (!report.ok) {
+  console.info(markdown);
+  maybeWriteReport(markdown, reportOut);
+  if (!report.ok && !(allowBlockedReport && reportOut)) {
     process.exit(1);
   }
+}
+
+function maybeWriteReport(markdown, reportOut) {
+  if (!reportOut) return;
+  const writtenPath = writePreflightReport(markdown, reportOut);
+  console.info(`[issue-preflight] wrote ${writtenPath}`);
+}
+
+function readOption(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return '';
+  return process.argv[index + 1] || '';
+}
+
+export function readIssueArg(args) {
+  const optionNamesWithValues = new Set(['--out', '--report-out']);
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (optionNamesWithValues.has(arg)) {
+      index += 1;
+      continue;
+    }
+    if (!arg.startsWith('-')) return arg;
+  }
+  return '';
+}
+
+function resolveRepoMarkdownPath(value, repoRoot) {
+  if (!/^(?:\.{1,2}[\\/])?[A-Za-z0-9_.\-/\\]+\.md$/i.test(String(value ?? ''))) {
+    throw new Error('preflight report path must be a repo-local markdown file');
+  }
+
+  const resolvedPath = path.resolve(repoRoot, value);
+  const rootPrefix = `${repoRoot}${path.sep}`;
+  if (resolvedPath !== repoRoot && !resolvedPath.startsWith(rootPrefix)) {
+    throw new Error('preflight report path must stay inside the repository');
+  }
+
+  return resolvedPath;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

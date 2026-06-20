@@ -146,14 +146,17 @@ Before closing a specific Project ECHO issue, run the close preflight with the
 issue number:
 
 ```bash
+npm run report:echo-open-issues
 npm run preflight:echo-open-issues
 npm run preflight:echo-issue-close -- 10
 ```
 
-The open-issues command checks the live GitHub open issue list in one pass. The
-single-issue command checks one issue-specific final evidence gate set. Both
-also require `npm run readiness:echo` to pass, so draft files cannot
-accidentally close an issue.
+The report command writes
+`docs/evidence-drafts/project-echo-open-issue-close-preflight.draft.md` for a
+reviewable snapshot. The open-issues command checks the live GitHub open issue
+list in one pass, and the single-issue command checks one issue-specific final
+evidence gate set. Both preflight commands also require `npm run readiness:echo`
+to pass, so draft files cannot accidentally close an issue.
 
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when

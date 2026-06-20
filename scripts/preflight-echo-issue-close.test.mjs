@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert';
-import { test } from 'node:test';
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import path from 'node:path';
+import { after, before, test } from 'node:test';
 
 import {
   buildIssueClosePreflight,
@@ -8,12 +10,34 @@ import {
   formatOpenIssueClosePreflight,
   gateIssueNumbers,
   parseIssueNumber,
+  readIssueArg,
+  writePreflightReport,
 } from './preflight-echo-issue-close.mjs';
+
+const repoRoot = process.cwd();
+const tmpRoot = path.join(repoRoot, '.tmp', `echo-issue-close-preflight-${process.pid}`);
+
+before(() => {
+  mkdirSync(tmpRoot, { recursive: true });
+});
+
+after(() => {
+  const resolvedTmpRoot = path.resolve(tmpRoot);
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  if (resolvedTmpRoot.startsWith(`${resolvedRepoRoot}${path.sep}`) && existsSync(resolvedTmpRoot)) {
+    rmSync(resolvedTmpRoot, { recursive: true, force: true });
+  }
+});
 
 test('parses issue numbers with or without hash prefix', () => {
   assert.equal(parseIssueNumber('10'), 10);
   assert.equal(parseIssueNumber('#10'), 10);
   assert.equal(parseIssueNumber('issue-10'), null);
+});
+
+test('reads issue number after report output options', () => {
+  assert.equal(readIssueArg(['--out', 'docs/report.draft.md', '10']), '10');
+  assert.equal(readIssueArg(['--report-out', 'docs/report.draft.md', '#10']), '#10');
 });
 
 test('extracts all issue numbers from a readiness gate group', () => {
@@ -139,6 +163,25 @@ test('summarizes all open issues as closeable only when every report passes', ()
   assert.equal(summary.ok, true);
   assert.equal(summary.closeableCount, 1);
   assert.match(formatOpenIssueClosePreflight(summary), /Decision: ALL OPEN ISSUES ARE SAFE TO CLOSE/);
+});
+
+test('writes preflight markdown reports inside the repository', () => {
+  const reportPath = path.join('.tmp', `echo-issue-close-preflight-${process.pid}`, 'report.draft.md');
+  const relativePath = writePreflightReport('# Test Report\n', reportPath, { repoRoot });
+
+  assert.equal(relativePath, reportPath.replace(/\\/g, '/'));
+  assert.equal(readFileSync(path.resolve(repoRoot, reportPath), 'utf8'), '# Test Report\n');
+});
+
+test('rejects unsafe preflight report paths', () => {
+  assert.throws(
+    () => writePreflightReport('# Test\n', '../outside.md', { repoRoot }),
+    /must stay inside the repository/,
+  );
+  assert.throws(
+    () => writePreflightReport('# Test\n', 'docs/report.txt', { repoRoot }),
+    /repo-local markdown file/,
+  );
 });
 
 function statusFixture(overrides = {}) {

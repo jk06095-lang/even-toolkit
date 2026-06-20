@@ -93,7 +93,8 @@ Useful official references:
     present-but-invalid artifacts from validated final evidence.
 15. Run `npm run validate:issue-closure-ledger` to confirm each open issue still
     maps to the correct final evidence gate.
-16. Run `npm run preflight:echo-open-issues` to check every live GitHub open
+16. Run `npm run report:echo-open-issues` to write a reviewable draft snapshot,
+    then run `npm run preflight:echo-open-issues` to check every live GitHub open
     issue at once. For a single issue, run
     `npm run preflight:echo-issue-close -- <issue-number>` before closing it;
     pass the number without `#`, for example

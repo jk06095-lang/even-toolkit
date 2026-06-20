@@ -411,6 +411,7 @@
     "status:echo-evidence": "node scripts/echo-evidence-status.mjs",
     "preflight:echo-issue-close": "node scripts/preflight-echo-issue-close.mjs",
     "preflight:echo-open-issues": "node scripts/preflight-echo-issue-close.mjs --github-open-issues",
+    "report:echo-open-issues": "node scripts/preflight-echo-issue-close.mjs --github-open-issues --out docs/evidence-drafts/project-echo-open-issue-close-preflight.draft.md --allow-blocked-report",
     "validate:echo-evidence-drafts": "node scripts/validate-echo-evidence-drafts.mjs",
     "validate:echo-evidence-drafts:committed": "node scripts/validate-echo-evidence-drafts.mjs --package-source committed",
     "test:echo-field-run": "node --test scripts/prepare-echo-field-run.test.mjs",

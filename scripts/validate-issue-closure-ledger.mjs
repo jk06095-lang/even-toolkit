@@ -39,6 +39,7 @@ const REQUIRED_SNIPPETS = [
   ['readiness gate command', 'npm run readiness:echo'],
   ['status validation command', 'npm run status:echo-evidence -- --validate-final'],
   ['live GitHub issue set validation command', 'npm run validate:issue-closure-ledger:github'],
+  ['open issue preflight report command', 'npm run report:echo-open-issues'],
   ['open issue close preflight command', 'npm run preflight:echo-open-issues'],
   ['single issue close preflight command', 'npm run preflight:echo-issue-close'],
   ['key rotation validator command', 'npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md'],
