@@ -261,6 +261,15 @@ function caseStudyKoDraft() {
 | Interruption rating | TBD | TBD | TBD |
 | Trust rating | TBD | TBD | TBD |
 
+## 핵심 결과 지표
+
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| Conversation Recovery Rate (8초) | TBD | pilot scorecard |
+| Independent Transfer Rate Day 1 | TBD | pilot scorecard |
+| Independent Transfer Rate Day 7 | TBD | pilot scorecard |
+| Transfer scenario count | TBD | transfer evidence refs |
+
 ## 실제 G2 증거
 
 - 실제 G2 영상: TBD
@@ -327,6 +336,15 @@ stable non-draft path such as docs/project-echo-case-study.en.md.
 | False cue rate | 0 | TBD | TBD |
 | Interruption rating | TBD | TBD | TBD |
 | Trust rating | TBD | TBD | TBD |
+
+## Core Outcome Metrics
+
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| Conversation Recovery Rate (8-second window) | TBD | pilot scorecard |
+| Independent Transfer Rate Day 1 | TBD | pilot scorecard |
+| Independent Transfer Rate Day 7 | TBD | pilot scorecard |
+| Transfer scenario count | TBD | transfer evidence refs |
 
 ## Real G2 Evidence
 

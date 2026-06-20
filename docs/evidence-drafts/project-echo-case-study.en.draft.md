@@ -42,6 +42,15 @@ stable non-draft path such as docs/project-echo-case-study.en.md.
 | Interruption rating | TBD | TBD | TBD |
 | Trust rating | TBD | TBD | TBD |
 
+## Core Outcome Metrics
+
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| Conversation Recovery Rate (8-second window) | TBD | pilot scorecard |
+| Independent Transfer Rate Day 1 | TBD | pilot scorecard |
+| Independent Transfer Rate Day 7 | TBD | pilot scorecard |
+| Transfer scenario count | TBD | transfer evidence refs |
+
 ## Real G2 Evidence
 
 - Real G2 video: TBD
