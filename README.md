@@ -137,7 +137,10 @@ and input surface, production network access must be limited to whitelisted
 origins with working CORS, and released `.ehpk` bundles must not contain API
 keys or secrets. The manifest check also enforces the current official package
 shape (`edition: 202601`, `min_sdk_version: 0.0.10`, permission objects with
-human-readable descriptions, and supported language codes).
+human-readable descriptions, and supported language codes). Project ECHO's
+manifest declares both `en` and `ko` because the app uses English practice
+flows plus Korean timeline translation, learner-profile, tutor, and portfolio
+evidence surfaces.
 
 ## Built with
 

@@ -91,6 +91,7 @@ const OFFICIAL_EVENHUB_PERMISSION_NAMES = new Set([
   'phone-microphone',
 ]);
 const OFFICIAL_EVENHUB_LANGUAGES = new Set(['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'zh']);
+const PROJECT_ECHO_REQUIRED_LANGUAGES = ['en', 'ko'];
 export const HARDWARE_QA_EVIDENCE_ISSUES = '#2/#3/#6/#12/#13/#14/#28';
 
 async function validateFinalManifest({
@@ -463,6 +464,11 @@ function validateOfficialEvenHubManifestShape(appJson, packageJson, findings) {
     for (const language of appJson.supported_languages) {
       if (!OFFICIAL_EVENHUB_LANGUAGES.has(language)) {
         findings.push(`app.json supported_languages contains unsupported language ${language}`);
+      }
+    }
+    for (const language of PROJECT_ECHO_REQUIRED_LANGUAGES) {
+      if (!appJson.supported_languages.includes(language)) {
+        findings.push(`Project ECHO app.json supported_languages must include ${language}`);
       }
     }
   }

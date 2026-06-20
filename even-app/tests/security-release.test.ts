@@ -91,6 +91,7 @@ describe('release safety checks', () => {
     const appJson = readJson<{
       version: string;
       permissions: Array<{ name: string; whitelist?: string[] }>;
+      supported_languages: string[];
     }>(path.join(appRoot, 'app.json'));
 
     expect(existsSync(path.join(appRoot, 'public', 'app.json'))).toBe(false);
@@ -104,6 +105,8 @@ describe('release safety checks', () => {
     expect(networkPermission?.whitelist ?? []).toContain('https://api.project-echo.app');
     expect(networkPermission?.whitelist ?? []).not.toContain('https://generativelanguage.googleapis.com');
     expect((networkPermission?.whitelist ?? []).some((host) => host.includes('192.168.'))).toBe(false);
+
+    expect(appJson.supported_languages).toEqual(expect.arrayContaining(['en', 'ko']));
   });
 
   it('keeps packaged artifacts free of direct provider credentials and development hosts', () => {
