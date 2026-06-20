@@ -407,6 +407,7 @@
     "validate:pilot-template": "node scripts/validate-pilot-evidence.mjs docs/project-echo-pilot-evidence.template.json --allow-draft",
     "test:pilot-evidence": "node --test scripts/validate-pilot-evidence.test.mjs",
     "prepare:echo-evidence-drafts": "node scripts/prepare-echo-evidence-drafts.mjs",
+    "validate:echo-evidence-drafts": "node scripts/validate-echo-evidence-drafts.mjs",
     "test:echo-evidence-drafts": "node --test scripts/prepare-echo-evidence-drafts.test.mjs",
     "test:echo-readiness": "node --test scripts/echo-release-readiness.test.mjs",
     "promote:echo-portfolio-links": "node scripts/promote-echo-portfolio-links.mjs",

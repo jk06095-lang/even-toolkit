@@ -78,6 +78,10 @@ const steps = [
     label: 'ECHO app verify',
     args: ['--prefix', 'even-app', 'run', 'verify'],
   },
+  {
+    label: 'Project ECHO evidence drafts current',
+    args: ['run', 'validate:echo-evidence-drafts'],
+  },
 ];
 
 function npmInvocation(args) {
