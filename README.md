@@ -94,7 +94,9 @@ For a compact issue-to-evidence handoff before field work, see
 For the per-issue close/no-close mapping, use
 [docs/project-echo-issue-closure-ledger.md](./docs/project-echo-issue-closure-ledger.md);
 `npm run validate:issue-closure-ledger` keeps that ledger aligned with the open
-issue evidence gates.
+issue evidence gates. When GitHub CLI access is available, run
+`npm run validate:issue-closure-ledger:github` to compare the ledger against the
+live GitHub open issue list.
 
 Before a field run, generate draft evidence manifests and the key-rotation
 evidence draft with:

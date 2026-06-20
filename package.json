@@ -416,6 +416,7 @@
     "validate:readiness-handoff": "node scripts/validate-readiness-handoff.mjs",
     "test:readiness-handoff": "node --test scripts/validate-readiness-handoff.test.mjs",
     "validate:issue-closure-ledger": "node scripts/validate-issue-closure-ledger.mjs",
+    "validate:issue-closure-ledger:github": "node scripts/validate-issue-closure-ledger.mjs --github-open-issues",
     "test:issue-closure-ledger": "node --test scripts/validate-issue-closure-ledger.test.mjs",
     "promote:echo-portfolio-links": "node scripts/promote-echo-portfolio-links.mjs",
     "test:echo-portfolio-links": "node --test scripts/promote-echo-portfolio-links.test.mjs",

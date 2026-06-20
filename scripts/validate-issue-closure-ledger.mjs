@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +12,7 @@ import {
 export const ISSUE_CLOSURE_LEDGER_PATH = 'docs/project-echo-issue-closure-ledger.md';
 
 const repoRoot = process.cwd();
+const args = process.argv.slice(2);
 
 const OPEN_ISSUES = [
   [1, 'P0: Deploy ECHO API proxy and rotate exposed provider keys'],
@@ -36,6 +38,7 @@ const REQUIRED_SNIPPETS = [
   ['primary handoff reference', READINESS_HANDOFF_PATH],
   ['readiness gate command', 'npm run readiness:echo'],
   ['status validation command', 'npm run status:echo-evidence -- --validate-final'],
+  ['live GitHub issue set validation command', 'npm run validate:issue-closure-ledger:github'],
   ['key rotation validator command', 'npm run validate:key-rotation-evidence -- docs/key-rotation-evidence.md'],
   ['hardware QA validator command', 'npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json'],
   ['pilot validator command', 'npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json'],
@@ -58,6 +61,7 @@ export function findIssueClosureLedgerIssues(ledgerText, options = {}) {
   const issues = [];
   const openIssues = options.openIssues ?? OPEN_ISSUES;
   const requiredSnippets = options.requiredSnippets ?? REQUIRED_SNIPPETS;
+  const requireExactOpenIssueSet = options.requireExactOpenIssueSet === true;
 
   for (const [issueNumber, title] of openIssues) {
     const issue = `#${issueNumber}`;
@@ -75,7 +79,91 @@ export function findIssueClosureLedgerIssues(ledgerText, options = {}) {
     }
   }
 
+  if (requireExactOpenIssueSet) {
+    issues.push(...findOpenIssueSetDrift(ledgerText, openIssues));
+  }
+
   return issues;
+}
+
+export function extractLedgerOpenIssues(ledgerText) {
+  const match = ledgerText.match(/## Current Open Issue Set\s+([\s\S]*?)(?:\n## |\n?$)/);
+  const section = match?.[1] ?? '';
+  const issues = [];
+  for (const line of section.split(/\r?\n/)) {
+    const issueMatch = line.match(/^- #(\d+) `([^`]+)`\s*$/);
+    if (issueMatch) {
+      issues.push([Number.parseInt(issueMatch[1], 10), issueMatch[2]]);
+    }
+  }
+  return issues;
+}
+
+export function findOpenIssueSetDrift(ledgerText, openIssues) {
+  const issues = [];
+  const ledgerIssues = extractLedgerOpenIssues(ledgerText);
+  const ledgerByNumber = new Map(ledgerIssues.map(([number, title]) => [number, title]));
+  const liveByNumber = new Map(openIssues.map(([number, title]) => [number, title]));
+
+  for (const [number, title] of liveByNumber) {
+    const ledgerTitle = ledgerByNumber.get(number);
+    if (!ledgerTitle) {
+      issues.push(`Current Open Issue Set is missing live issue #${number}: ${title}`);
+    } else if (ledgerTitle !== title) {
+      issues.push(`Current Open Issue Set title mismatch for #${number}: expected "${title}", found "${ledgerTitle}"`);
+    }
+  }
+
+  for (const [number, title] of ledgerByNumber) {
+    if (!liveByNumber.has(number)) {
+      issues.push(`Current Open Issue Set contains non-open or unexpected issue #${number}: ${title}`);
+    }
+  }
+
+  return issues;
+}
+
+export function readGitHubOpenIssues(options = {}) {
+  const runCommand = options.runCommand ?? defaultRunCommand;
+  const result = runCommand('gh', [
+    'issue',
+    'list',
+    '--state',
+    'open',
+    '--limit',
+    '100',
+    '--json',
+    'number,title',
+  ]);
+
+  if (result.status !== 0) {
+    throw new Error(result.stderr.trim() || result.stdout.trim() || 'gh issue list failed');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch (error) {
+    throw new Error(`could not parse gh issue list JSON: ${error.message}`);
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('gh issue list JSON must be an array');
+  }
+
+  return parsed
+    .map((issue) => [Number.parseInt(issue.number, 10), String(issue.title || '')])
+    .filter(([number, title]) => Number.isInteger(number) && number > 0 && title.length > 0)
+    .sort((a, b) => a[0] - b[0]);
+}
+
+function defaultRunCommand(command, commandArgs) {
+  return spawnSync(command, commandArgs, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    shell: false,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 function main() {
@@ -86,7 +174,12 @@ function main() {
   }
 
   const ledgerText = readFileSync(ledgerPath, 'utf8');
-  const issues = findIssueClosureLedgerIssues(ledgerText);
+  const validateLiveGitHub = args.includes('--github-open-issues');
+  const openIssues = validateLiveGitHub ? readGitHubOpenIssues() : OPEN_ISSUES;
+  const issues = findIssueClosureLedgerIssues(ledgerText, {
+    openIssues,
+    requireExactOpenIssueSet: validateLiveGitHub,
+  });
   if (issues.length > 0) {
     console.error(`[issue-ledger] ${ISSUE_CLOSURE_LEDGER_PATH} is out of sync with the open issue closure gates:`);
     for (const issue of issues) {
@@ -95,7 +188,8 @@ function main() {
     process.exit(1);
   }
 
-  console.info(`[issue-ledger] ${ISSUE_CLOSURE_LEDGER_PATH} covers ${OPEN_ISSUES.length} open issues and ${REQUIRED_SNIPPETS.length} closure cues`);
+  const source = validateLiveGitHub ? 'live GitHub' : 'pinned';
+  console.info(`[issue-ledger] ${ISSUE_CLOSURE_LEDGER_PATH} covers ${openIssues.length} ${source} open issues and ${REQUIRED_SNIPPETS.length} closure cues`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

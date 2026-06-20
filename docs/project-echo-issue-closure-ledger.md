@@ -59,6 +59,8 @@ Run these before closing any issue in this ledger:
 
 ```bash
 npm run status:echo-evidence -- --validate-final
+npm run validate:issue-closure-ledger
+npm run validate:issue-closure-ledger:github
 npm run readiness:echo
 ```
 
