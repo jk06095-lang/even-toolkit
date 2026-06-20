@@ -79,6 +79,14 @@ const steps = [
     args: ['run', 'test:readiness-handoff'],
   },
   {
+    label: 'Project ECHO issue closure ledger contract',
+    args: ['run', 'validate:issue-closure-ledger'],
+  },
+  {
+    label: 'Project ECHO issue closure ledger tests',
+    args: ['run', 'test:issue-closure-ledger'],
+  },
+  {
     label: 'Project ECHO portfolio link promotion tests',
     args: ['run', 'test:echo-portfolio-links'],
   },

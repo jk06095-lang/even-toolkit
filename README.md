@@ -91,6 +91,10 @@ match the completed pilot manifest targets. Repo-path targets on those README
 links must point to files that already exist in the repository.
 For a compact issue-to-evidence handoff before field work, see
 [docs/project-echo-readiness-handoff.md](./docs/project-echo-readiness-handoff.md).
+For the per-issue close/no-close mapping, use
+[docs/project-echo-issue-closure-ledger.md](./docs/project-echo-issue-closure-ledger.md);
+`npm run validate:issue-closure-ledger` keeps that ledger aligned with the open
+issue evidence gates.
 
 Before a field run, generate draft evidence manifests and the key-rotation
 evidence draft with:

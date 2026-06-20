@@ -32,6 +32,10 @@ fail until these external artifacts exist and validate:
 | #29 | `docs/project-echo-chatgpt-action-evidence.completed.json` | `npm run validate:chatgpt-action-evidence -- docs/project-echo-chatgpt-action-evidence.completed.json` |
 | #10 | README portfolio link block | `npm run promote:echo-portfolio-links` after completed pilot evidence passes |
 
+For the issue-by-issue close/no-close map, keep
+`docs/project-echo-issue-closure-ledger.md` in sync with these gates and validate
+it with `npm run validate:issue-closure-ledger`.
+
 ## Official Even Hub Boundary
 
 The next work must follow the official Even Hub boundary:
@@ -82,7 +86,9 @@ Useful official references:
 12. Run `npm run promote:echo-portfolio-links`.
 13. Run `npm run status:echo-evidence -- --validate-final` to distinguish
     present-but-invalid artifacts from validated final evidence.
-14. Run `npm run readiness:echo`; only close the remaining issues after it
+14. Run `npm run validate:issue-closure-ledger` to confirm each open issue still
+    maps to the correct final evidence gate.
+15. Run `npm run readiness:echo`; only close the remaining issues after it
     passes.
 
 ## Non-Negotiables
