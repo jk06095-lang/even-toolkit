@@ -67,6 +67,14 @@ const steps = [
     args: ['run', 'test:echo-readiness'],
   },
   {
+    label: 'Project ECHO readiness handoff contract',
+    args: ['run', 'validate:readiness-handoff'],
+  },
+  {
+    label: 'Project ECHO readiness handoff validator tests',
+    args: ['run', 'test:readiness-handoff'],
+  },
+  {
     label: 'Project ECHO portfolio link promotion tests',
     args: ['run', 'test:echo-portfolio-links'],
   },
