@@ -724,9 +724,12 @@ function normalizeStoredScheduledPushes(value: unknown, report: DebriefReport): 
 }
 
 /**
- * Mark a scheduled push as completed.
+ * Mark a scheduled review reminder as delivered.
+ *
+ * This does not mark the learning item mastered; Active Recall attempts own
+ * reveal, grading, and scheduling.
  */
-export async function markPushCompleted(
+export async function markPushDelivered(
   debriefIndex: number,
   pushIndex: number,
 ): Promise<void> {
@@ -736,3 +739,5 @@ export async function markPushCompleted(
     await set(DEBRIEF_STORE_KEY, debriefs);
   }
 }
+
+export const markPushCompleted = markPushDelivered;

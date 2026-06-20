@@ -1,19 +1,22 @@
 /**
- * Echo Reminders scheduler — Phase 4 spaced repetition engine.
+ * Echo Reminders scheduler.
  *
- * Polls IndexedDB for pending pushes and fires HUD display
- * events at the scheduled times (forgetting curve intervals).
+ * Polls IndexedDB for due review reminders. The scheduler never sends the
+ * saved answer phrase to the HUD; the phone-side Active Recall panel owns
+ * reveal and grading.
  */
 
-import { getStoredDebriefs, markPushCompleted, type ScheduledPush } from '../debrief/json-parser';
+import { getStoredDebriefs, markPushDelivered, type ScheduledPush } from '../debrief/json-parser';
+
+export const ECHO_RECALL_REMINDER_TEXT = 'Review due. Open ECHO.';
 
 export interface AmbientCallbacks {
-  onEchoPush: (chunk: string) => void;
+  onEchoPush: (message: string) => void;
   onScheduleUpdate: (pending: PendingItem[]) => void;
 }
 
 export interface PendingItem {
-  chunk: string;
+  reminderText: string;
   scheduledTime: number;
   debriefIndex: number;
   pushIndex: number;
@@ -34,7 +37,7 @@ export class AmbientScheduler {
   get pendingItems(): PendingItem[] { return this._pendingItems; }
 
   /**
-   * Start the scheduler — polls every 10 seconds.
+   * Start the scheduler. Polls every 10 seconds.
    */
   start(): void {
     if (this._active) return;
@@ -74,12 +77,10 @@ export class AmbientScheduler {
           if (push.pushed) continue;
 
           if (push.scheduledTime <= now) {
-            // Time to fire!
             await this.firePush(push, di, pi);
           } else {
-            // Still pending
             pending.push({
-              chunk: push.chunk,
+              reminderText: ECHO_RECALL_REMINDER_TEXT,
               scheduledTime: push.scheduledTime,
               debriefIndex: di,
               pushIndex: pi,
@@ -101,10 +102,8 @@ export class AmbientScheduler {
     debriefIndex: number,
     pushIndex: number,
   ): Promise<void> {
-    // Mark as completed first to prevent double-fire
-    await markPushCompleted(debriefIndex, pushIndex);
+    await markPushDelivered(debriefIndex, pushIndex);
 
-    // Fire the echo callback
-    this.callbacks.onEchoPush(push.chunk);
+    this.callbacks.onEchoPush(ECHO_RECALL_REMINDER_TEXT);
   }
 }

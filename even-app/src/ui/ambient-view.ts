@@ -99,15 +99,15 @@ export function renderAmbientView(): string {
         <ul class="schedule-list" id="imported-review-list" style="display: none;"></ul>
       </div>
 
-      <div class="card" id="exposure-card">
+      <div class="card" id="reminder-log-card">
         <div class="card-header">
-          <div class="icon" style="background: var(--color-surface-light)">EX</div>
-          <h3>Exposure Log</h3>
+          <div class="icon" style="background: var(--color-surface-light)">RL</div>
+          <h3>Reminder Log</h3>
         </div>
-        <div id="exposure-stats">
+        <div id="reminder-stats">
           <div class="empty-state">
             <div class="icon">0</div>
-            <p>No exposures yet.</p>
+            <p>No reminders delivered yet.</p>
           </div>
         </div>
       </div>

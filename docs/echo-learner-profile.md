@@ -54,6 +54,10 @@ can reach the Review or Echo Reminders screens.
 The Echo Reminders screen also shows an Imported Review Items list with due
 time, meaning, speech act, and scenario tag so learners can confirm imported
 items are present without exposing the answer before recall.
+Scheduled Echo Reminders deliver only a generic `Review due. Open ECHO.`
+message to the G2 HUD. They do not flash the saved canonical expression and do
+not count as mastery; answer reveal, production evidence, grading, and
+rescheduling stay inside the phone-side Active Recall flow.
 
 Each saved attempt also carries a local text evaluation: keyword coverage,
 precision, a semantic score, and a suggested grade. The suggestion is a

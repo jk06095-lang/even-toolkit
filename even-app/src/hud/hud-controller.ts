@@ -496,12 +496,12 @@ export class HUDController {
   }
   // ── Phase 4: Ambient ──
 
-  async showAmbientEcho(chunk: string): Promise<void> {
+  async showAmbientEcho(message: string): Promise<void> {
     this._mode = 'ambient';
-    // Center the chunk vertically (approx 10 lines visible)
+    // Center the short reminder vertically (approx 10 lines visible).
     const lines = [
       '', '', '', '',
-      `      ${chunk}`,
+      `      ${message}`,
       '', '', '',
     ];
     await this.showText(lines.join('\n'));

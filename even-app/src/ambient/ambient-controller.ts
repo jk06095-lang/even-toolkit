@@ -61,9 +61,9 @@ export function bindAmbientEvents(context: AmbientControllerContext): void {
 
 function startAmbient(context: AmbientControllerContext): void {
   const scheduler = new AmbientScheduler({
-    onEchoPush: (chunk) => {
-      context.getEchoDisplay()?.flash(chunk, 2000);
-      console.log(`[Ambient Echo] ${chunk}`);
+    onEchoPush: (message) => {
+      context.getEchoDisplay()?.flash(message, 2000);
+      console.log('[Ambient Echo] reminder delivered');
     },
     onScheduleUpdate: (pending) => {
       updatePendingList(pending);
@@ -135,11 +135,11 @@ function updatePendingList(items: PendingItem[]): void {
       time.className = 'time';
       time.textContent = timeStr;
 
-      const chunk = document.createElement('span');
-      chunk.className = 'chunk';
-      chunk.textContent = item.chunk;
+      const reminder = document.createElement('span');
+      reminder.className = 'chunk';
+      reminder.textContent = item.reminderText;
 
-      listItem.append(time, chunk);
+      listItem.append(time, reminder);
       return listItem;
     }));
 }

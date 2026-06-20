@@ -66,6 +66,8 @@ describe('Project ECHO UI copy', () => {
     expect(ambientHtml).toContain('id="imported-review-count"');
     expect(ambientHtml).toContain('id="btn-recall-phone-speech-start"');
     expect(ambientHtml).toContain('id="btn-recall-g2-speech-start"');
+    expect(ambientHtml).toContain('Reminder Log');
+    expect(ambientHtml).not.toContain('Exposure Log');
   });
 
   it('keeps app shell metadata ASCII-safe for packaged output', () => {
