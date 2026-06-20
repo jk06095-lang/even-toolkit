@@ -18,6 +18,8 @@ before(() => {
   writeFileSync(path.join(tmpRoot, 'recall-day-2.json'), '{"ok":true,"day":"2026-06-19"}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'transfer-evidence.json'), '{"ok":true,"scenarioId":"transfer:travel:repeat:1"}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'same-day-repeat.json'), '{"ok":true,"countedAsTransfer":false}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'tutor-instructions-evidence.md'), '# Tutor instructions evidence\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'roleplay-writeback-evidence.json'), '{"ok":true,"boundedItemIds":["li_001"]}\n', 'utf8');
 });
 
 after(() => {
@@ -132,6 +134,30 @@ test('rejects completed Action evidence that retains raw audio for scoring proof
   assert.match(result.stderr, /activeRecallDeviceEvidence\.pronunciationScoringPolicy\.rawAudioRetained/);
 });
 
+test('rejects completed Action evidence without bounded tutor behavior proof', async () => {
+  const manifest = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  manifest.tutorBehavior.maxOneCorrectionPerTurn = false;
+  manifest.tutorBehavior.cueLadderOrderVerified = false;
+  manifest.tutorBehavior.immediateRepeatNotMastery = false;
+  manifest.tutorBehavior.maxLearningItemsPerSession = 5;
+  manifest.tutorBehavior.roleplayResultOmitsRawTranscript = false;
+  manifest.tutorBehavior.transferWriteBackUsesScenarioId = false;
+  manifest.tutorBehavior.roleplayEvidenceRef = 'roleplay checked';
+  const manifestPath = writeManifest('missing-tutor-behavior-proof', manifest);
+  const result = await runValidator(manifestPath);
+
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /tutorBehavior\.maxOneCorrectionPerTurn/);
+  assert.match(result.stderr, /tutorBehavior\.cueLadderOrderVerified/);
+  assert.match(result.stderr, /tutorBehavior\.immediateRepeatNotMastery/);
+  assert.match(result.stderr, /tutorBehavior\.maxLearningItemsPerSession/);
+  assert.match(result.stderr, /tutorBehavior\.roleplayResultOmitsRawTranscript/);
+  assert.match(result.stderr, /tutorBehavior\.transferWriteBackUsesScenarioId/);
+  assert.match(result.stderr, /tutorBehavior\.roleplayEvidenceRef: must be an https URL or repo path/);
+});
+
 function writeManifest(name, manifest) {
   const fixtureDir = path.join(tmpRoot, name);
   mkdirSync(fixtureDir, { recursive: true });
@@ -150,6 +176,8 @@ function completeManifest({ tokenStorageBoundary }) {
   const recallDay2Ref = repoRelative(path.join(tmpRoot, 'recall-day-2.json'));
   const transferEvidenceRef = repoRelative(path.join(tmpRoot, 'transfer-evidence.json'));
   const sameDayRepeatEvidenceRef = repoRelative(path.join(tmpRoot, 'same-day-repeat.json'));
+  const tutorInstructionsEvidenceRef = repoRelative(path.join(tmpRoot, 'tutor-instructions-evidence.md'));
+  const roleplayEvidenceRef = repoRelative(path.join(tmpRoot, 'roleplay-writeback-evidence.json'));
   const endpoints = {
     learnerProfile: endpoint('/v1/learner/profile', 'GET', actionEvidenceRef),
     reviewsNext: endpoint('/v1/reviews/next', 'GET', actionEvidenceRef),
@@ -230,6 +258,21 @@ function completeManifest({ tokenStorageBoundary }) {
         evidenceRef: pronunciationPolicyRef,
       },
       evidenceRef: deviceEvidenceRef,
+    },
+    tutorBehavior: {
+      flowBeforeCorrection: true,
+      maxOneCorrectionPerTurn: true,
+      cueLadderOrderVerified: true,
+      koreanExplanationBrief: true,
+      immediateRepeatNotMastery: true,
+      masteryRequiresTwoDaysAndTransfer: true,
+      maxLearningItemsPerSession: 3,
+      roleplayResultWritesBoundedItemIds: true,
+      roleplayResultOmitsRawTranscript: true,
+      roleplayResultIncludesOutcomeSummary: true,
+      transferWriteBackUsesScenarioId: true,
+      instructionsEvidenceRef: tutorInstructionsEvidenceRef,
+      roleplayEvidenceRef,
     },
   };
 }

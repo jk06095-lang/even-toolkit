@@ -104,6 +104,11 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(action.activeRecallDeviceEvidence.pronunciationScoringPolicy.scoringSource, 'TBD');
   assert.equal(action.activeRecallDeviceEvidence.pronunciationScoringPolicy.webSpeechConfidenceUsedForG2, null);
   assert.equal(action.activeRecallDeviceEvidence.pronunciationScoringPolicy.rawAudioRetained, null);
+  assert.equal(action.tutorBehavior.maxOneCorrectionPerTurn, null);
+  assert.equal(action.tutorBehavior.cueLadderOrderVerified, null);
+  assert.equal(action.tutorBehavior.maxLearningItemsPerSession, null);
+  assert.equal(action.tutorBehavior.roleplayResultWritesBoundedItemIds, null);
+  assert.equal(action.tutorBehavior.roleplayEvidenceRef, 'TBD');
   assert.equal(action.oauth.authorizationCodeConfigured, true);
   assert.equal(action.oauth.evidenceRef, repoRelative(actionSmokePath));
   assert.match(action.oauth.tokenStorageBoundary, /token-free Action smoke evidence/);
@@ -195,6 +200,11 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /pronunciationScoringPolicy\.webSpeechConfidenceUsedForG2=false/);
   assert.match(fieldRunbook, /pronunciationScoringPolicy\.rawAudioRetained=false/);
   assert.match(fieldRunbook, /sameDayRepeatNotCountedAsTransfer=true/);
+  assert.match(fieldRunbook, /tutorBehavior\.maxOneCorrectionPerTurn=true/);
+  assert.match(fieldRunbook, /tutorBehavior\.cueLadderOrderVerified=true/);
+  assert.match(fieldRunbook, /tutorBehavior\.roleplayResultWritesBoundedItemIds=true/);
+  assert.match(fieldRunbook, /tutorBehavior\.transferWriteBackUsesScenarioId=true/);
+  assert.match(fieldRunbook, /bounded roleplay write-back IDs/);
   assert.match(fieldRunbook, /Conversation Timeline Evidence/);
   assert.match(fieldRunbook, /translationReview\.partnerTurnsPrioritized=true/);
   assert.match(fieldRunbook, /translationReview\.lowConfidenceTranslationWarningShown=true/);

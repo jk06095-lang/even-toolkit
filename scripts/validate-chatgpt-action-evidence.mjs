@@ -460,6 +460,29 @@ function validateDeviceEvidence() {
   validateEvidenceLink(manifest.activeRecallDeviceEvidence, 'evidenceRef', 'activeRecallDeviceEvidence');
 }
 
+function validateTutorBehavior() {
+  if (!validateObject(manifest.tutorBehavior, 'tutorBehavior')) return;
+
+  for (const key of [
+    'flowBeforeCorrection',
+    'maxOneCorrectionPerTurn',
+    'cueLadderOrderVerified',
+    'koreanExplanationBrief',
+    'immediateRepeatNotMastery',
+    'masteryRequiresTwoDaysAndTransfer',
+    'roleplayResultWritesBoundedItemIds',
+    'roleplayResultOmitsRawTranscript',
+    'roleplayResultIncludesOutcomeSummary',
+    'transferWriteBackUsesScenarioId',
+  ]) {
+    validateExpected(manifest.tutorBehavior, key, true, 'tutorBehavior');
+  }
+
+  validateIntegerRange(manifest.tutorBehavior, 'maxLearningItemsPerSession', 'tutorBehavior', 1, 3);
+  validateEvidenceLink(manifest.tutorBehavior, 'instructionsEvidenceRef', 'tutorBehavior');
+  validateEvidenceLink(manifest.tutorBehavior, 'roleplayEvidenceRef', 'tutorBehavior');
+}
+
 function validateRecallTransferProof(proof, pointer) {
   if (!validateObject(proof, pointer)) return;
   validateRecallDates(proof, pointer);
@@ -599,6 +622,7 @@ validateOauth();
 validateEndpoints();
 validatePrivacy();
 validateDeviceEvidence();
+validateTutorBehavior();
 validateNoSecrets();
 validateOpenApiContract();
 

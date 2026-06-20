@@ -133,5 +133,20 @@
       "evidenceRef": "TBD"
     },
     "evidenceRef": "TBD"
+  },
+  "tutorBehavior": {
+    "flowBeforeCorrection": null,
+    "maxOneCorrectionPerTurn": null,
+    "cueLadderOrderVerified": null,
+    "koreanExplanationBrief": null,
+    "immediateRepeatNotMastery": null,
+    "masteryRequiresTwoDaysAndTransfer": null,
+    "maxLearningItemsPerSession": null,
+    "roleplayResultWritesBoundedItemIds": null,
+    "roleplayResultOmitsRawTranscript": null,
+    "roleplayResultIncludesOutcomeSummary": null,
+    "transferWriteBackUsesScenarioId": null,
+    "instructionsEvidenceRef": "TBD",
+    "roleplayEvidenceRef": "TBD"
   }
 }

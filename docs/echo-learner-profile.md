@@ -216,6 +216,16 @@ OAuth smoke JSON is endpoint evidence only; it does not replace screenshots or
 exports proving that the Custom GPT itself is configured against the deployed
 schema and privacy policy.
 
+The completed Action manifest must also fill `tutorBehavior`. That block proves
+the Custom GPT follows the ECHO tutoring rules from
+`integrations/chatgpt-action/gpt-instructions.md`: conversation flow before
+correction, at most one correction per turn, keyword -> sentence starter -> full
+sentence cue ladder, brief Korean explanations, no mastery from immediate
+repeat-after-reveal, mastery only after two recall days plus transfer, at most
+three saved learning items per session, and roleplay write-back that cites
+bounded learning item IDs and transfer scenario IDs without sending raw
+transcripts.
+
 ## Remaining Work
 
 This is the data foundation, first phone review surface, and server-backed

@@ -108,6 +108,15 @@ availability:
   confidence is not reused as G2 pronunciation evidence.
 - `pronunciationScoringPolicy.rawAudioRetained=false`: scoring evidence uses
   bounded G2 PCM metrics or a reviewed evaluator output, not retained raw audio.
+- `tutorBehavior.maxOneCorrectionPerTurn=true`,
+  `tutorBehavior.cueLadderOrderVerified=true`, and
+  `tutorBehavior.maxLearningItemsPerSession<=3`: the live Custom GPT follows
+  the ECHO tutoring rules instead of turning roleplay into an unbounded
+  correction transcript.
+- `tutorBehavior.roleplayResultWritesBoundedItemIds=true` and
+  `tutorBehavior.transferWriteBackUsesScenarioId=true`: roleplay write-back
+  cites bounded learning item IDs and transfer scenario IDs without raw
+  transcript text.
 
 ## Conversation Timeline Evidence
 
@@ -184,6 +193,9 @@ without moving heavy review text onto the glasses:
 11. Deploy the OAuth-backed Custom GPT Action API and capture privacy rejection
     plus G2/audio-level active-recall evidence, including two separate recall
     days and at least one bounded transfer scenario or roleplay write-back.
+    Capture tutor behavior evidence proving one correction per turn, keyword
+    to sentence-starter to full-sentence cue ladder, at most three saved
+    learning items, and bounded roleplay write-back IDs.
 12. Validate all completed manifests, then run `npm run promote:echo-portfolio-links`.
 13. Run `npm run readiness:echo`; only close the remaining issues after it
     passes and the linked evidence is committed or stable.
