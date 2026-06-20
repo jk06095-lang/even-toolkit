@@ -132,6 +132,12 @@ function createEvidenceFiles() {
         `{"environment":"${environmentName}"}\n`,
       );
     },
+    vadQaSummary(environmentName) {
+      return writeEvidenceFile(
+        path.join(exportsDir, `qa-${environmentName}-summary.md`),
+        `# ${environmentName} QA summary\n\n| Session | Topic | Audio | VAD threshold | Noise floor | Speech floor | Calibrated at |\n| --- | --- | --- | ---: | ---: | ---: | --- |\n`,
+      );
+    },
   };
 }
 
@@ -265,6 +271,8 @@ function vadEnvironment(name, vadSpeechThreshold, vadNoiseFloorRms, vadSpeechFlo
       missedSpeechEvents: 0,
     },
     qaExportPath: evidence.vadQaExport(name),
+    qaSummaryPath: evidence.vadQaSummary(name),
+    calibratedAt: '2026-06-19T09:00:00.000Z',
     notes: `${name} calibration fixture`,
   };
 }

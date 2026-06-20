@@ -539,6 +539,7 @@
     "environments": [
       {
         "name": "quiet_room",
+        "calibratedAt": "TBD",
         "metrics": {
           "vadSpeechThreshold": null,
           "vadNoiseFloorRms": null,
@@ -547,10 +548,12 @@
           "missedSpeechEvents": null
         },
         "qaExportPath": "TBD",
+        "qaSummaryPath": "TBD",
         "notes": "TBD"
       },
       {
         "name": "cafe_background",
+        "calibratedAt": "TBD",
         "metrics": {
           "vadSpeechThreshold": null,
           "vadNoiseFloorRms": null,
@@ -559,10 +562,12 @@
           "missedSpeechEvents": null
         },
         "qaExportPath": "TBD",
+        "qaSummaryPath": "TBD",
         "notes": "TBD"
       },
       {
         "name": "air_conditioner",
+        "calibratedAt": "TBD",
         "metrics": {
           "vadSpeechThreshold": null,
           "vadNoiseFloorRms": null,
@@ -571,10 +576,12 @@
           "missedSpeechEvents": null
         },
         "qaExportPath": "TBD",
+        "qaSummaryPath": "TBD",
         "notes": "TBD"
       },
       {
         "name": "outdoor_wind",
+        "calibratedAt": "TBD",
         "metrics": {
           "vadSpeechThreshold": null,
           "vadNoiseFloorRms": null,
@@ -583,6 +590,7 @@
           "missedSpeechEvents": null
         },
         "qaExportPath": "TBD",
+        "qaSummaryPath": "TBD",
         "notes": "TBD"
       }
     ]

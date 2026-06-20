@@ -210,11 +210,13 @@ Still requires real G2 validation:
 - Automated calibration coverage also treats enough-but-unseparated samples as
   unavailable calibration and falls back to `0.015`, so silent or malformed
   saved calibration cannot be exported as a valid VAD threshold.
-- After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `audioSource`, and cue latency fields.
-- Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json`.
+- After each environment run, export `Review -> Export my data` and preserve `eventAnalytics.vadSpeechThreshold`, `vadNoiseFloorRms`, `vadSpeechFloorRms`, `vadCalibratedAt`, `audioSource`, and cue latency fields.
+- Summarize exports with `cd even-app && npm run qa:summarize-export -- path/to/echo_my_data.json > docs/evidence/.../qa-summary.md`; the summary must include the `Calibrated at` column generated from `vadCalibratedAt`.
 - Record quiet room, cafe background, air-conditioner noise, and outdoor wind
   results under `vadCalibration.environments` in
   [docs/project-echo-pilot-evidence.template.json](./docs/project-echo-pilot-evidence.template.json).
+  Each environment must include the ISO `calibratedAt`, raw `qaExportPath`,
+  and human-readable `qaSummaryPath` evidence.
 
 ## Delayed proxy QA
 

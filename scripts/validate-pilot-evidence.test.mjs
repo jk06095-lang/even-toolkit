@@ -57,6 +57,21 @@ test('rejects VAD calibration evidence with missing QA export files', async () =
   );
 });
 
+test('rejects VAD calibration evidence without calibrated time and QA summary', async () => {
+  const fixture = writeCompletedPilotFixture('missing-vad-summary');
+  const manifest = readFixture(fixture.manifestPath);
+  manifest.vadCalibration.environments[0].calibratedAt = '2026-06-19 09:00';
+  manifest.vadCalibration.environments[0].qaSummaryPath = 'summary captured';
+  writeFixtureManifest(fixture.manifestPath, manifest);
+
+  const result = await runValidator(fixture.manifestPath);
+  const output = combinedOutput(result);
+
+  assert.notEqual(result.code, 0);
+  assert.match(output, /vadCalibration\.environments\[0\]\.calibratedAt: must be a valid ISO date-time ending in Z/);
+  assert.match(output, /vadCalibration\.environments\[0\]\.qaSummaryPath: must be an https URL or repo path/);
+});
+
 test('rejects duplicate participant IDs in completed pilot evidence', async () => {
   const fixture = writeCompletedPilotFixture('duplicate-participant');
   const manifest = readFixture(fixture.manifestPath);
@@ -109,10 +124,10 @@ function writeCompletedPilotFixture(name) {
     participants,
     vadCalibration: {
       environments: [
-        vadEnvironment('quiet_room', 0.01, 0.02, 0.04, refs.qaExport),
-        vadEnvironment('cafe_background', 0.02, 0.03, 0.06, refs.qaExport),
-        vadEnvironment('air_conditioner', 0.025, 0.035, 0.07, refs.qaExport),
-        vadEnvironment('outdoor_wind', 0.03, 0.04, 0.08, refs.qaExport),
+        vadEnvironment('quiet_room', 0.01, 0.02, 0.04, refs.qaExport, refs.qaSummary),
+        vadEnvironment('cafe_background', 0.02, 0.03, 0.06, refs.qaExport, refs.qaSummary),
+        vadEnvironment('air_conditioner', 0.025, 0.035, 0.07, refs.qaExport, refs.qaSummary),
+        vadEnvironment('outdoor_wind', 0.03, 0.04, 0.08, refs.qaExport, refs.qaSummary),
       ],
     },
     aggregate: {
@@ -151,6 +166,7 @@ function writeCompletedPilotFixture(name) {
 function createEvidenceRefs(fixtureDir) {
   const files = {
     qaExport: path.join(fixtureDir, 'qa-export.json'),
+    qaSummary: path.join(fixtureDir, 'qa-summary.md'),
     observerNotes: path.join(fixtureDir, 'observer-notes.md'),
     outcomeSummary: path.join(fixtureDir, 'outcome-summary.md'),
     video: path.join(fixtureDir, 'real-g2-video.mp4'),
@@ -246,9 +262,10 @@ function uxMetrics(condition) {
   };
 }
 
-function vadEnvironment(name, noise, threshold, speech, qaExportPath) {
+function vadEnvironment(name, noise, threshold, speech, qaExportPath, qaSummaryPath) {
   return {
     name,
+    calibratedAt: '2026-06-19T09:00:00.000Z',
     metrics: {
       vadSpeechThreshold: threshold,
       vadNoiseFloorRms: noise,
@@ -257,6 +274,7 @@ function vadEnvironment(name, noise, threshold, speech, qaExportPath) {
       missedSpeechEvents: 0,
     },
     qaExportPath,
+    qaSummaryPath,
     notes: `${name} calibration evidence reviewed`,
   };
 }

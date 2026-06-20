@@ -68,7 +68,9 @@ const CASE_STUDY_EXTENSIONS = ['md', 'html', 'pdf'];
 const ARCHITECTURE_EXTENSIONS = ['md', 'html', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'svg'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const PILOT_ARTIFACT_EXTENSIONS = ['json', 'md', 'txt', 'log'];
+const QA_SUMMARY_EXTENSIONS = ['md', 'txt', 'log'];
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -182,6 +184,30 @@ function validateIsoDate(object, key, pointer) {
     || parsedDate.getUTCDate() !== day
   ) {
     addError(fieldPointer, 'must be a real calendar date');
+  }
+}
+
+function validateIsoDateTime(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required ISO date-time');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft ISO date-time placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !ISO_DATETIME_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a valid ISO date-time ending in Z');
+    return;
+  }
+
+  const timestamp = Date.parse(value.trim());
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value.trim()) {
+    addError(fieldPointer, 'must be a real normalized ISO date-time');
   }
 }
 
@@ -617,11 +643,15 @@ function validateVadCalibration(manifestObject) {
     if (typeof environment.name === 'string' && !REQUIRED_VAD_ENVIRONMENTS.includes(environment.name)) {
       addError(`${pointer}.name`, `must be one of ${REQUIRED_VAD_ENVIRONMENTS.join(', ')}`);
     }
+    validateIsoDateTime(environment, 'calibratedAt', pointer);
 
     validateMetricGroup(environment.metrics, VAD_METRICS, `${pointer}.metrics`);
     validateVadMetricRelationships(environment.metrics, `${pointer}.metrics`);
     validateEvidenceLink(environment, 'qaExportPath', pointer, {
       extensions: PILOT_ARTIFACT_EXTENSIONS,
+    });
+    validateEvidenceLink(environment, 'qaSummaryPath', pointer, {
+      extensions: QA_SUMMARY_EXTENSIONS,
     });
     validateText(environment, 'notes', pointer);
   });
