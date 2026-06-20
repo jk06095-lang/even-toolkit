@@ -56,28 +56,30 @@ Useful official references:
 ## Next Execution Order
 
 1. Run `npm run verify:all` on a clean checkout.
-2. Run `npm run prepare:echo-evidence-drafts` and review
+2. Run `npm run status:echo-evidence` to inspect the missing final artifacts
+   without promoting any draft evidence.
+3. Run `npm run prepare:echo-evidence-drafts` and review
    `docs/evidence-drafts/project-echo-field-runbook.draft.md`.
-3. Package the same artifact that will be tested:
+4. Package the same artifact that will be tested:
    `npm --prefix even-app run pack`.
-4. Record `even-app/echo.ehpk` path and SHA-256 in the hardware, pilot, and
+5. Record `even-app/echo.ehpk` path and SHA-256 in the hardware, pilot, and
    Action evidence packages. The final validators reject stale or remote-only
    package proof.
-5. Install the `.ehpk` through the Even Hub private/beta path.
-6. Capture hardware QA evidence first: lifecycle, HUD states including `ACK`,
+6. Install the `.ehpk` through the Even Hub private/beta path.
+7. Capture hardware QA evidence first: lifecycle, HUD states including `ACK`,
    explicit G2/Phone mic separation, delayed-proxy cleanup, voice-runtime
    lazy-load behavior, wear status, and the phone-only conversation timeline.
-7. Run the 5-user A/B/C pilot on that same package digest, including quiet
+8. Run the 5-user A/B/C pilot on that same package digest, including quiet
    room, cafe, air-conditioner, and outdoor wind VAD calibration exports plus
    summaries.
-8. Deploy the production proxy, mint a short-lived signed smoke token from
+9. Deploy the production proxy, mint a short-lived signed smoke token from
    server-side secrets, then run readiness with `ECHO_PROXY_*` smoke env vars.
-9. Deploy/connect the OAuth-backed Custom GPT Action, capture privacy rejection
+10. Deploy/connect the OAuth-backed Custom GPT Action, capture privacy rejection
    evidence, and collect Day 1 recall plus Day 7 transfer proof with G2
    audio-level evidence.
-10. Validate all completed manifests.
-11. Run `npm run promote:echo-portfolio-links`.
-12. Run `npm run readiness:echo`; only close the remaining issues after it
+11. Validate all completed manifests.
+12. Run `npm run promote:echo-portfolio-links`.
+13. Run `npm run readiness:echo`; only close the remaining issues after it
     passes.
 
 ## Non-Negotiables

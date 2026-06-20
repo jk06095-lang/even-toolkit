@@ -99,6 +99,13 @@ evidence draft with:
 npm run prepare:echo-evidence-drafts
 ```
 
+To inspect which final evidence gates are still missing without promoting any
+draft artifact, run:
+
+```bash
+npm run status:echo-evidence
+```
+
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when
 available, local client artifact scan counts, and draft case-study/video
