@@ -142,6 +142,17 @@ links:
 npm run status:echo-evidence -- --validate-final
 ```
 
+Before closing a specific Project ECHO issue, run the close preflight with the
+issue number:
+
+```bash
+npm run preflight:echo-issue-close -- 10
+```
+
+The command checks the issue-specific final evidence gates and also requires
+`npm run readiness:echo` to pass, so draft files cannot accidentally close an
+issue.
+
 The drafts are written under `docs/evidence-drafts/` and fill only local facts
 such as the current ECHO app version, `.ehpk` SHA-256, bundle metrics when
 available, local client artifact scan counts, and draft case-study/video

@@ -93,7 +93,10 @@ Useful official references:
     present-but-invalid artifacts from validated final evidence.
 15. Run `npm run validate:issue-closure-ledger` to confirm each open issue still
     maps to the correct final evidence gate.
-16. Run `npm run readiness:echo`; only close the remaining issues after it
+16. Run `npm run preflight:echo-issue-close -- <issue-number>` for each issue
+    before closing it; pass the number without `#`, for example
+    `npm run preflight:echo-issue-close -- 10`.
+17. Run `npm run readiness:echo`; only close the remaining issues after it
     passes.
 
 ## Non-Negotiables

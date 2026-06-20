@@ -67,6 +67,10 @@ const steps = [
     args: ['run', 'test:echo-field-run'],
   },
   {
+    label: 'Project ECHO issue-close preflight tests',
+    args: ['run', 'test:echo-issue-close-preflight'],
+  },
+  {
     label: 'Project ECHO evidence status tests',
     args: ['run', 'test:echo-evidence-status'],
   },

@@ -31,6 +31,7 @@ const REQUIRED_HANDOFF_SNIPPETS = [
   ['final evidence status validation command', 'npm run status:echo-evidence -- --validate-final'],
   ['draft evidence preparation command', 'npm run prepare:echo-evidence-drafts'],
   ['field-run local prep command', 'npm run prepare:echo-field-run'],
+  ['issue close preflight command', 'npm run preflight:echo-issue-close'],
   ['ECHO package command', 'npm --prefix even-app run pack'],
   ['hardware evidence validator command', 'npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json'],
   ['pilot evidence validator command', 'npm run validate:pilot-evidence -- docs/project-echo-pilot-evidence.completed.json'],
