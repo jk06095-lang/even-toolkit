@@ -191,6 +191,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(videoShotList, /Partner turns are translated before learner\/unknown turns/);
   assert.match(videoShotList, /Low-confidence transcript shows a Korean-translation review warning/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
+  assert.match(fieldRunbook, /npm run prepare:echo-field-run/);
   assert.match(fieldRunbook, /npm run readiness:echo/);
   assert.match(fieldRunbook, /Beta Testing is the reviewer-parity path/);
   assert.match(fieldRunbook, /permission-denial recovery/);

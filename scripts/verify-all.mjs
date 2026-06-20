@@ -63,6 +63,10 @@ const steps = [
     args: ['run', 'test:echo-evidence-drafts'],
   },
   {
+    label: 'Project ECHO field-run prep runner tests',
+    args: ['run', 'test:echo-field-run'],
+  },
+  {
     label: 'Project ECHO evidence status tests',
     args: ['run', 'test:echo-evidence-status'],
   },

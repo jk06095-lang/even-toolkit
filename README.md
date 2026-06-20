@@ -105,6 +105,16 @@ evidence draft with:
 npm run prepare:echo-evidence-drafts
 ```
 
+For the full local field-prep pass, run:
+
+```bash
+npm run prepare:echo-field-run
+```
+
+That command packages the ECHO app, regenerates draft evidence, validates the
+workspace `.ehpk` SHA against those drafts, and prints final-gate status without
+promoting draft evidence.
+
 To inspect which final evidence gates are still missing without promoting any
 draft artifact, run:
 

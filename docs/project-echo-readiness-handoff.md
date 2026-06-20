@@ -59,36 +59,41 @@ Useful official references:
 
 ## Next Execution Order
 
-1. Run `npm run verify:all` on a clean checkout.
-2. Run `npm run status:echo-evidence` to inspect the missing final artifacts
+1. Run `npm run prepare:echo-field-run` on a clean checkout before external
+   field capture. It runs the ECHO app verify/package step, regenerates draft
+   evidence, validates the workspace `.ehpk` SHA against those drafts, and
+   prints final-gate status without promoting draft evidence.
+2. Run `npm run verify:all` before committing any regenerated package or draft
+   updates.
+3. Run `npm run status:echo-evidence` to inspect the missing final artifacts
    plus production proxy and Action OAuth smoke env preflights without promoting
    any draft evidence.
-3. Run `npm run prepare:echo-evidence-drafts` and review
+4. Run `npm run prepare:echo-evidence-drafts` and review
    `docs/evidence-drafts/project-echo-field-runbook.draft.md`.
-4. Package the same artifact that will be tested:
+5. Confirm the package step inside field prep completed with
    `npm --prefix even-app run pack`.
-5. Record `even-app/echo.ehpk` path and SHA-256 in the hardware, pilot, and
+6. Record `even-app/echo.ehpk` path and SHA-256 in the hardware, pilot, and
    Action evidence packages. The final validators reject stale or remote-only
    package proof.
-6. Install the `.ehpk` through the Even Hub private/beta path.
-7. Capture hardware QA evidence first: lifecycle, HUD states including `ACK`,
+7. Install the `.ehpk` through the Even Hub private/beta path.
+8. Capture hardware QA evidence first: lifecycle, HUD states including `ACK`,
    explicit G2/Phone mic separation, delayed-proxy cleanup, voice-runtime
    lazy-load behavior, wear status, and the phone-only conversation timeline.
-8. Run the 5-user A/B/C pilot on that same package digest, including quiet
+9. Run the 5-user A/B/C pilot on that same package digest, including quiet
    room, cafe, air-conditioner, and outdoor wind VAD calibration exports plus
    summaries.
-9. Deploy the production proxy, mint a short-lived signed smoke token from
+10. Deploy the production proxy, mint a short-lived signed smoke token from
    server-side secrets, then run readiness with `ECHO_PROXY_*` smoke env vars.
-10. Deploy/connect the OAuth-backed Custom GPT Action, capture privacy rejection
+11. Deploy/connect the OAuth-backed Custom GPT Action, capture privacy rejection
    evidence, and collect Day 1 recall plus Day 7 transfer proof with G2
    audio-level evidence.
-11. Validate all completed manifests.
-12. Run `npm run promote:echo-portfolio-links`.
-13. Run `npm run status:echo-evidence -- --validate-final` to distinguish
+12. Validate all completed manifests.
+13. Run `npm run promote:echo-portfolio-links`.
+14. Run `npm run status:echo-evidence -- --validate-final` to distinguish
     present-but-invalid artifacts from validated final evidence.
-14. Run `npm run validate:issue-closure-ledger` to confirm each open issue still
+15. Run `npm run validate:issue-closure-ledger` to confirm each open issue still
     maps to the correct final evidence gate.
-15. Run `npm run readiness:echo`; only close the remaining issues after it
+16. Run `npm run readiness:echo`; only close the remaining issues after it
     passes.
 
 ## Non-Negotiables
