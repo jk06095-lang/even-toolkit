@@ -145,6 +145,12 @@ Client build:
 - Do not set `VITE_GEMINI_API_KEY`.
 - Do not point `VITE_ECHO_API_BASE_URL` at `generativelanguage.googleapis.com`
   or a `192.168.*` development host for release builds.
+- Do not set a `VITE_*` session-token variable. The ECHO app reads a
+  short-lived token from `globalThis.__PROJECT_ECHO_SESSION_TOKEN__` or
+  `sessionStorage["projectEcho.sessionToken"]` at runtime and sends it as
+  `Authorization: Bearer <token>`. Runtime token injection keeps the released
+  `.ehpk` and `dist` artifacts free of provider keys and session tokens while
+  still satisfying the proxy auth guard.
 
 Manifest:
 
@@ -162,7 +168,10 @@ Manifest:
    `ECHO_PROXY_SESSION_TOKEN_ISSUER`, set a TTL of 86400 seconds or less, and
    set a rotation cadence of 30 days or less. Keep token secrets and issued
    session tokens out of source control, `even-app/dist`, and `.ehpk` artifacts;
-   revoke old smoke tokens after each production rotation. Static
+   inject only the short-lived issued token into the running WebView session via
+   `globalThis.__PROJECT_ECHO_SESSION_TOKEN__` or
+   `sessionStorage["projectEcho.sessionToken"]`, then revoke old smoke tokens
+   after each production rotation. Static
    `ECHO_PROXY_SESSION_TOKENS` may remain for local compatibility, but final
    release smoke expects signed-token support. Mint a short-lived smoke token
    from the deploy environment:

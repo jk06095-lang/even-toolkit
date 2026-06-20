@@ -51,6 +51,11 @@ token has been minted from the server-side secret manager. Do not commit token
 values. `ECHO_PROXY_SMOKE_ORIGIN` must be the deployed public HTTPS client
 origin only; localhost, private-network hosts, paths, queries, and hashes are
 local/test inputs and cannot satisfy #1/#27 release evidence.
+The app build may contain `VITE_ECHO_API_BASE_URL`, but it must not contain a
+`VITE_*` session token. Inject only the short-lived token into the running
+WebView as `globalThis.__PROJECT_ECHO_SESSION_TOKEN__` or
+`sessionStorage["projectEcho.sessionToken"]`, and confirm the production proxy
+sees it as `Authorization: Bearer <token>`.
 
 ```bash
 ECHO_PROXY_BASE_URL=https://api.project-echo.app

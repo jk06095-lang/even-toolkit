@@ -15,6 +15,12 @@ Project ECHO uses a server-side API proxy for cue generation, transcription,
 and session analysis. See [docs/echo-api-proxy.md](./docs/echo-api-proxy.md)
 for deployment environment variables, key-rotation requirements, and release
 artifact checks.
+The browser app may build with `VITE_ECHO_API_BASE_URL`, but the short-lived
+ECHO session token must be injected at runtime, not bundled as a `VITE_*`
+secret. `even-app/src/services/echo-api.ts` reads
+`globalThis.__PROJECT_ECHO_SESSION_TOKEN__` first, then
+`sessionStorage["projectEcho.sessionToken"]`, and sends the value as
+`Authorization: Bearer <token>` only for the current WebView session.
 
 ## Project ECHO Evidence
 
@@ -381,7 +387,8 @@ you control. The phone WebView should hold only a short-lived session token, not
 the upstream provider key. Add the proxy origin to `app.json` `network.whitelist`
 and configure real CORS on the proxy; the whitelist is not a CORS bypass. The
 official packaging and submission docs also state that API keys must never be
-bundled into a released `.ehpk`.
+bundled into a released `.ehpk`. Do not build a session token into `VITE_*`
+variables; inject it into the WebView at launch time and clear it at session end.
 
 ```ts
 const STT_PROXY_URL = import.meta.env.VITE_STT_PROXY_URL;

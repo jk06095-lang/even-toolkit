@@ -38,6 +38,7 @@ describe('release safety checks', () => {
 
     expect(sourceText).not.toContain('@google/genai');
     expect(sourceText).not.toContain('VITE_GEMINI_API_KEY');
+    expect(sourceText).not.toContain('VITE_ECHO_API_SESSION_TOKEN');
   });
 
   it('does not log raw bridge transcription text from recognizers', () => {

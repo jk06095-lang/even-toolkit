@@ -8,6 +8,8 @@ const API_TIMEOUT_MS = Number.parseInt(
 );
 
 const DEFAULT_API_TIMEOUT_MS = 12_000;
+const RUNTIME_SESSION_TOKEN_GLOBAL = '__PROJECT_ECHO_SESSION_TOKEN__';
+const RUNTIME_SESSION_TOKEN_STORAGE_KEY = 'projectEcho.sessionToken';
 
 function normalizedApiBase(): string {
   return API_BASE.trim().replace(/\/+$/, '');
@@ -69,6 +71,14 @@ async function postEcho<T>(path: string, body: unknown, signal?: AbortSignal): P
     throw new EchoApiUnavailableError();
   }
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const sessionToken = readRuntimeSessionToken();
+  if (sessionToken) {
+    headers.Authorization = `Bearer ${sessionToken}`;
+  }
+
   const timeoutController = new AbortController();
   const timeout = setTimeout(() => timeoutController.abort(), echoApiTimeoutMs());
   const abortFromCaller = () => timeoutController.abort();
@@ -79,9 +89,7 @@ async function postEcho<T>(path: string, body: unknown, signal?: AbortSignal): P
   try {
     response = await fetch(`${base}${path}`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(body),
       signal: timeoutController.signal,
     });
@@ -106,6 +114,33 @@ async function postEcho<T>(path: string, body: unknown, signal?: AbortSignal): P
   }
 
   return response.text() as Promise<T>;
+}
+
+function readRuntimeSessionToken(): string {
+  const globalToken = normalizeSessionToken(
+    (globalThis as Record<string, unknown>)[RUNTIME_SESSION_TOKEN_GLOBAL],
+  );
+  if (globalToken) return globalToken;
+
+  try {
+    return normalizeSessionToken(globalThis.sessionStorage?.getItem(RUNTIME_SESSION_TOKEN_STORAGE_KEY));
+  } catch {
+    return '';
+  }
+}
+
+function normalizeSessionToken(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const token = value.trim().replace(/^Bearer\s+/i, '');
+  if (
+    !token ||
+    token.length > 4096 ||
+    /\s/.test(token) ||
+    /^(?:TBD|TODO|N\/A|placeholder|example)$/i.test(token)
+  ) {
+    return '';
+  }
+  return token;
 }
 
 export interface CueApiRequest {
