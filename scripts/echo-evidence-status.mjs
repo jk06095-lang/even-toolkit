@@ -10,6 +10,10 @@ import {
   validateReadmePortfolioLinks,
   validateProxySmokeEvidenceOut,
 } from './echo-release-readiness.mjs';
+import {
+  ISSUE_CLOSURE_LEDGER_PATH,
+  findIssueClosureLedgerIssues,
+} from './validate-issue-closure-ledger.mjs';
 
 const repoRoot = process.cwd();
 
@@ -163,12 +167,14 @@ export function buildEvidenceStatus(options = {}) {
     path: READINESS_HANDOFF_PATH,
     status: fileExists(READINESS_HANDOFF_PATH) ? 'available' : 'missing',
   };
+  const issueClosureLedger = buildIssueClosureLedgerStatus({ fileExists, readText });
 
   const proxySmokeEnv = buildProxySmokeEnvStatus(env, { repoRoot: root });
   const actionOauthSmokeEnv = buildActionOauthSmokeEnvStatus(env, { repoRoot: root });
 
   return {
     handoff,
+    issueClosureLedger,
     finalGates,
     draftFiles,
     proxySmokeEnv,
@@ -184,6 +190,7 @@ export function formatEvidenceStatus(status) {
     '',
     'Informational only. `npm run readiness:echo` remains the release gate.',
     `Field handoff: ${status.handoff.path} (${status.handoff.status})`,
+    `Issue closure ledger: ${formatIssueClosureLedgerStatus(status.issueClosureLedger)}`,
     '',
     'Proxy smoke env preflight:',
     ...formatProxySmokeEnvLines(status.proxySmokeEnv),
@@ -220,12 +227,58 @@ export function formatEvidenceStatus(status) {
   lines.push('Next commands:');
   lines.push('- npm run prepare:echo-evidence-drafts');
   lines.push('- npm run validate:echo-evidence-drafts');
+  lines.push('- npm run validate:issue-closure-ledger');
   lines.push('- npm run status:echo-evidence -- --validate-final');
   lines.push('- npm run readiness:echo');
   lines.push('');
-  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing, proxy smoke env ready: ${status.proxySmokeEnv.ready ? 'yes' : 'no'}, Action OAuth smoke env ready: ${status.actionOauthSmokeEnv.ready ? 'yes' : 'no'}.`);
+  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing, proxy smoke env ready: ${status.proxySmokeEnv.ready ? 'yes' : 'no'}, Action OAuth smoke env ready: ${status.actionOauthSmokeEnv.ready ? 'yes' : 'no'}, issue ledger valid: ${status.issueClosureLedger.status === 'valid' ? 'yes' : 'no'}.`);
 
   return `${lines.join('\n')}\n`;
+}
+
+function buildIssueClosureLedgerStatus({ fileExists, readText }) {
+  if (!fileExists(ISSUE_CLOSURE_LEDGER_PATH)) {
+    return {
+      path: ISSUE_CLOSURE_LEDGER_PATH,
+      status: 'missing',
+      issueCount: 0,
+      detail: 'issue closure ledger missing',
+    };
+  }
+
+  let ledgerText;
+  try {
+    ledgerText = readText(ISSUE_CLOSURE_LEDGER_PATH);
+  } catch (error) {
+    return {
+      path: ISSUE_CLOSURE_LEDGER_PATH,
+      status: 'invalid',
+      issueCount: 0,
+      detail: `could not read issue closure ledger: ${error.message}`,
+    };
+  }
+
+  const issues = findIssueClosureLedgerIssues(ledgerText);
+  if (issues.length > 0) {
+    return {
+      path: ISSUE_CLOSURE_LEDGER_PATH,
+      status: 'invalid',
+      issueCount: issues.length,
+      detail: issues.slice(0, 2).join('; '),
+    };
+  }
+
+  return {
+    path: ISSUE_CLOSURE_LEDGER_PATH,
+    status: 'valid',
+    issueCount: 0,
+    detail: 'open issue closure gates are mapped to final evidence.',
+  };
+}
+
+function formatIssueClosureLedgerStatus(issueClosureLedger) {
+  const marker = issueClosureLedger.status.toUpperCase();
+  return `${issueClosureLedger.path} (${marker}: ${issueClosureLedger.detail})`;
 }
 
 function validateFinalGate(gate, { present, readText, fileExists, runValidator }) {

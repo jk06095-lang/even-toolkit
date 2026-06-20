@@ -119,7 +119,9 @@ the token value. The same status output also preflights the Custom GPT Action
 OAuth smoke inputs: `ECHO_ACTION_SMOKE_BASE_URL`/`ECHO_ACTION_SMOKE_ORIGIN` may
 fall back to the proxy smoke URL/origin, `ECHO_ACTION_OAUTH_REDIRECT_URI`
 defaults to the ChatGPT callback URL, and `ECHO_ACTION_OAUTH_CLIENT_SECRET` is
-reported only as set/missing with the value redacted.
+reported only as set/missing with the value redacted. It also validates the
+issue closure ledger so missing or drifted close/no-close evidence gates show up
+in the same status view.
 After final artifacts exist, add `-- --validate-final` to run the available
 non-mutating validators for present completed manifests and README portfolio
 links:

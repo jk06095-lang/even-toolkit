@@ -1,4 +1,6 @@
 import { strict as assert } from 'node:assert';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 
 import {
@@ -10,6 +12,16 @@ import {
   formatEvidenceStatus,
 } from './echo-evidence-status.mjs';
 import { READINESS_HANDOFF_PATH } from './echo-release-readiness.mjs';
+import { ISSUE_CLOSURE_LEDGER_PATH } from './validate-issue-closure-ledger.mjs';
+
+const repoRoot = process.cwd();
+const validIssueClosureLedgerText = readFileSync(path.resolve(repoRoot, ISSUE_CLOSURE_LEDGER_PATH), 'utf8');
+const validIssueClosureLedgerStatus = {
+  path: ISSUE_CLOSURE_LEDGER_PATH,
+  status: 'valid',
+  issueCount: 0,
+  detail: 'open issue closure gates are mapped to final evidence.',
+};
 
 test('reports missing final evidence without treating draft support as complete', () => {
   const availableFiles = new Set([
@@ -29,12 +41,51 @@ test('reports missing final evidence without treating draft support as complete'
   const formatted = formatEvidenceStatus(status);
   assert.match(formatted, /Informational only/);
   assert.match(formatted, /npm run readiness:echo/);
+  assert.match(formatted, /Issue closure ledger: docs\/project-echo-issue-closure-ledger\.md \(MISSING:/);
   assert.match(formatted, /Proxy smoke env preflight/);
   assert.match(formatted, /Action OAuth smoke env preflight/);
   assert.match(formatted, /MISSING #5\/#10: completed 5-user pilot manifest/);
   assert.match(formatted, /Draft support: docs\/evidence-drafts\/project-echo-pilot-evidence\.draft\.json \(available\)/);
   assert.match(formatted, /proxy smoke env ready: no/);
   assert.match(formatted, /Action OAuth smoke env ready: no/);
+  assert.match(formatted, /issue ledger valid: no/);
+});
+
+test('reports a valid issue closure ledger in evidence status', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    ISSUE_CLOSURE_LEDGER_PATH,
+  ]);
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: (filePath) => {
+      if (filePath === ISSUE_CLOSURE_LEDGER_PATH) return validIssueClosureLedgerText;
+      return '# README without final portfolio links\n';
+    },
+  });
+
+  assert.equal(status.issueClosureLedger.status, 'valid');
+  assert.match(formatEvidenceStatus(status), /Issue closure ledger: docs\/project-echo-issue-closure-ledger\.md \(VALID:/);
+  assert.match(formatEvidenceStatus(status), /issue ledger valid: yes/);
+});
+
+test('reports an invalid issue closure ledger in evidence status', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    ISSUE_CLOSURE_LEDGER_PATH,
+  ]);
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: (filePath) => {
+      if (filePath === ISSUE_CLOSURE_LEDGER_PATH) return validIssueClosureLedgerText.replaceAll('#29', '#30');
+      return '# README without final portfolio links\n';
+    },
+  });
+
+  assert.equal(status.issueClosureLedger.status, 'invalid');
+  assert.match(status.issueClosureLedger.detail, /Missing open issue #29/);
+  assert.match(formatEvidenceStatus(status), /Issue closure ledger: docs\/project-echo-issue-closure-ledger\.md \(INVALID:/);
+  assert.match(formatEvidenceStatus(status), /issue ledger valid: no/);
 });
 
 test('detects present completed artifacts and README portfolio block', () => {
@@ -241,6 +292,7 @@ test('rejects local or path-shaped proxy smoke URLs in the status preflight', ()
     draftFiles: [],
     proxySmokeEnv: pathOrigin,
     actionOauthSmokeEnv: buildActionOauthSmokeEnvStatus({}),
+    issueClosureLedger: validIssueClosureLedgerStatus,
     missingFinalCount: 0,
     missingDraftCount: 0,
   }), /CHECK: ECHO_PROXY_SMOKE_ORIGIN/);
@@ -307,6 +359,7 @@ test('allows Action OAuth smoke URL fallback and default ChatGPT redirect URI', 
     draftFiles: [],
     proxySmokeEnv: buildProxySmokeEnvStatus({}),
     actionOauthSmokeEnv,
+    issueClosureLedger: validIssueClosureLedgerStatus,
     missingFinalCount: 0,
     missingDraftCount: 0,
   });
