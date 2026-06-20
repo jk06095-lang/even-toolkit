@@ -62,6 +62,105 @@ test('detects present completed artifacts and README portfolio block', () => {
   assert.match(formatEvidenceStatus(status), /Summary: 0 final gate\(s\) missing/);
 });
 
+test('validates present final evidence when requested', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    'docs/key-rotation-evidence.md',
+  ]);
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: () => '# README without final portfolio links\n',
+    validateFinal: true,
+    runValidator: (gate) => ({
+      status: 'passed',
+      detail: `${gate.name} validator passed`,
+    }),
+  });
+  const keyRotation = status.finalGates.find((gate) => gate.artifact === 'docs/key-rotation-evidence.md');
+
+  assert.equal(keyRotation.status, 'present');
+  assert.deepEqual(keyRotation.validation, {
+    status: 'passed',
+    detail: 'provider key/session-token rotation validator passed',
+  });
+  assert.match(formatEvidenceStatus(status), /VALID #1\/#27: provider key\/session-token rotation/);
+  assert.match(formatEvidenceStatus(status), /Validation: passed - provider key\/session-token rotation validator passed/);
+});
+
+test('marks present but invalid final evidence as invalid', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    'docs/project-echo-hardware-qa.completed.json',
+  ]);
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: () => '# README without final portfolio links\n',
+    validateFinal: true,
+    runValidator: () => ({
+      status: 'failed',
+      detail: 'hardware evidence missing ACK proof',
+    }),
+  });
+
+  assert.match(formatEvidenceStatus(status), /INVALID #2\/#3\/#6\/#12\/#13\/#14\/#28: completed hardware QA manifest/);
+  assert.match(formatEvidenceStatus(status), /Validation: failed - hardware evidence missing ACK proof/);
+});
+
+test('skips live proxy smoke artifact validation in status and points to readiness', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    'docs/proxy-smoke-evidence.json',
+  ]);
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: () => '# README without final portfolio links\n',
+    validateFinal: true,
+  });
+  const proxySmoke = status.finalGates.find((gate) => gate.artifact === 'docs/proxy-smoke-evidence.json');
+
+  assert.equal(proxySmoke.status, 'present');
+  assert.equal(proxySmoke.validation.status, 'skipped');
+  assert.match(proxySmoke.validation.detail, /readiness:echo/);
+  assert.match(formatEvidenceStatus(status), /PRESENT #1\/#27: production proxy smoke/);
+});
+
+test('validates README portfolio links against completed pilot evidence', () => {
+  const availableFiles = new Set([
+    READINESS_HANDOFF_PATH,
+    'docs/project-echo-pilot-evidence.completed.json',
+  ]);
+  const readme = `
+# README
+
+<!-- project-echo-portfolio-links:start -->
+- [Project ECHO case study (KO)](https://portfolio.project-echo.test/project-echo-case-study.ko.md) <!-- project-echo-case-study-ko -->
+- [Project ECHO case study (EN)](https://portfolio.project-echo.test/project-echo-case-study.en.md) <!-- project-echo-case-study-en -->
+- [Project ECHO real G2 video](https://portfolio.project-echo.test/project-echo-real-g2-video.mp4) <!-- project-echo-real-g2-video -->
+<!-- project-echo-portfolio-links:end -->
+`;
+  const completedPilot = {
+    caseStudy: {
+      koreanCaseStudyUrl: 'https://portfolio.project-echo.test/project-echo-case-study.ko.md',
+      englishCaseStudyUrl: 'https://portfolio.project-echo.test/project-echo-case-study.en.md',
+      realG2VideoUrl: 'https://portfolio.project-echo.test/project-echo-real-g2-video.mp4',
+    },
+  };
+  const status = buildEvidenceStatus({
+    fileExists: (filePath) => availableFiles.has(filePath),
+    readText: (filePath) => {
+      if (filePath === 'docs/project-echo-pilot-evidence.completed.json') {
+        return JSON.stringify(completedPilot);
+      }
+      return readme;
+    },
+    validateFinal: true,
+  });
+
+  const readmeGate = status.finalGates.find((gate) => gate.validatorKind === 'readme-portfolio-links');
+  assert.equal(readmeGate.validation.status, 'passed');
+  assert.match(formatEvidenceStatus(status), /VALID #10: README portfolio evidence links/);
+});
+
 test('reports proxy smoke env readiness without leaking the session token', () => {
   const env = {
     ECHO_PROXY_BASE_URL: 'https://api.project-echo.app',

@@ -26,6 +26,7 @@ const REQUIRED_HANDOFF_SNIPPETS = [
   ['non-negotiables section', '## Non-Negotiables'],
   ['readiness source of truth command', 'npm run readiness:echo'],
   ['evidence status command', 'npm run status:echo-evidence'],
+  ['final evidence status validation command', 'npm run status:echo-evidence -- --validate-final'],
   ['draft evidence preparation command', 'npm run prepare:echo-evidence-drafts'],
   ['ECHO package command', 'npm --prefix even-app run pack'],
   ['hardware evidence validator command', 'npm run validate:hardware-qa -- docs/project-echo-hardware-qa.completed.json'],

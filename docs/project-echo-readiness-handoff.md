@@ -79,7 +79,9 @@ Useful official references:
    audio-level evidence.
 11. Validate all completed manifests.
 12. Run `npm run promote:echo-portfolio-links`.
-13. Run `npm run readiness:echo`; only close the remaining issues after it
+13. Run `npm run status:echo-evidence -- --validate-final` to distinguish
+    present-but-invalid artifacts from validated final evidence.
+14. Run `npm run readiness:echo`; only close the remaining issues after it
     passes.
 
 ## Non-Negotiables
