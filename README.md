@@ -111,7 +111,11 @@ variables: `ECHO_PROXY_BASE_URL` must be a public HTTPS URL,
 `ECHO_PROXY_SMOKE_ORIGIN` must be a public HTTPS origin with no path/query/hash,
 and `ECHO_PROXY_SMOKE_EVIDENCE_OUT` must resolve to a repo-local JSON path. It
 reports only whether `ECHO_PROXY_SMOKE_SESSION_TOKEN` is set; it does not print
-the token value.
+the token value. The same status output also preflights the Custom GPT Action
+OAuth smoke inputs: `ECHO_ACTION_SMOKE_BASE_URL`/`ECHO_ACTION_SMOKE_ORIGIN` may
+fall back to the proxy smoke URL/origin, `ECHO_ACTION_OAUTH_REDIRECT_URI`
+defaults to the ChatGPT callback URL, and `ECHO_ACTION_OAUTH_CLIENT_SECRET` is
+reported only as set/missing with the value redacted.
 After final artifacts exist, add `-- --validate-final` to run the available
 non-mutating validators for present completed manifests and README portfolio
 links:

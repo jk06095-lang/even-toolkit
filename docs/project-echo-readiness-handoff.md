@@ -57,7 +57,8 @@ Useful official references:
 
 1. Run `npm run verify:all` on a clean checkout.
 2. Run `npm run status:echo-evidence` to inspect the missing final artifacts
-   without promoting any draft evidence.
+   plus production proxy and Action OAuth smoke env preflights without promoting
+   any draft evidence.
 3. Run `npm run prepare:echo-evidence-drafts` and review
    `docs/evidence-drafts/project-echo-field-runbook.draft.md`.
 4. Package the same artifact that will be tested:

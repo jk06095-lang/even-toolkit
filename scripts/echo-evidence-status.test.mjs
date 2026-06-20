@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   DRAFT_SUPPORT_FILES,
   FINAL_EVIDENCE_GATES,
+  buildActionOauthSmokeEnvStatus,
   buildEvidenceStatus,
   buildProxySmokeEnvStatus,
   formatEvidenceStatus,
@@ -29,9 +30,11 @@ test('reports missing final evidence without treating draft support as complete'
   assert.match(formatted, /Informational only/);
   assert.match(formatted, /npm run readiness:echo/);
   assert.match(formatted, /Proxy smoke env preflight/);
+  assert.match(formatted, /Action OAuth smoke env preflight/);
   assert.match(formatted, /MISSING #5\/#10: completed 5-user pilot manifest/);
   assert.match(formatted, /Draft support: docs\/evidence-drafts\/project-echo-pilot-evidence\.draft\.json \(available\)/);
   assert.match(formatted, /proxy smoke env ready: no/);
+  assert.match(formatted, /Action OAuth smoke env ready: no/);
 });
 
 test('detects present completed artifacts and README portfolio block', () => {
@@ -237,7 +240,99 @@ test('rejects local or path-shaped proxy smoke URLs in the status preflight', ()
     finalGates: [],
     draftFiles: [],
     proxySmokeEnv: pathOrigin,
+    actionOauthSmokeEnv: buildActionOauthSmokeEnvStatus({}),
     missingFinalCount: 0,
     missingDraftCount: 0,
   }), /CHECK: ECHO_PROXY_SMOKE_ORIGIN/);
+});
+
+test('reports Action OAuth smoke env readiness without leaking the client secret', () => {
+  const env = {
+    ECHO_ACTION_SMOKE_BASE_URL: 'https://api.project-echo.app',
+    ECHO_ACTION_SMOKE_ORIGIN: 'https://chatgpt.com',
+    ECHO_ACTION_OAUTH_CLIENT_ID: 'project-echo-action-client',
+    ECHO_ACTION_OAUTH_CLIENT_SECRET: 'secret-action-client-value-must-not-print',
+    ECHO_ACTION_OAUTH_REDIRECT_URI: 'https://chatgpt.com/aip/project-echo/oauth/callback',
+    ECHO_ACTION_SMOKE_EVIDENCE_OUT: '../docs/chatgpt-action-oauth-smoke.json',
+  };
+  const actionOauthSmokeEnv = buildActionOauthSmokeEnvStatus(env);
+
+  assert.equal(actionOauthSmokeEnv.ready, true);
+  assert.deepEqual(actionOauthSmokeEnv.baseUrl, {
+    ok: true,
+    normalized: 'https://api.project-echo.app',
+    source: 'ECHO_ACTION_SMOKE_BASE_URL',
+  });
+  assert.deepEqual(actionOauthSmokeEnv.origin, {
+    ok: true,
+    normalized: 'https://chatgpt.com',
+    source: 'ECHO_ACTION_SMOKE_ORIGIN',
+  });
+  assert.equal(actionOauthSmokeEnv.redirectUri.ok, true);
+  assert.equal(actionOauthSmokeEnv.evidenceOut.repoRelativePath, 'docs/chatgpt-action-oauth-smoke.json');
+  assert.equal(actionOauthSmokeEnv.evidenceOut.proxyRelativePath, '../docs/chatgpt-action-oauth-smoke.json');
+
+  const status = buildEvidenceStatus({
+    fileExists: () => false,
+    readText: () => '# README without final portfolio links\n',
+    env,
+  });
+  const formatted = formatEvidenceStatus(status);
+
+  assert.match(formatted, /SET: ECHO_ACTION_OAUTH_CLIENT_SECRET \(value redacted\)/);
+  assert.match(formatted, /OK: Action smoke base URL -> https:\/\/api\.project-echo\.app/);
+  assert.match(formatted, /OK: Action smoke origin -> https:\/\/chatgpt\.com/);
+  assert.match(formatted, /Ready to attempt Action OAuth smoke: yes/);
+  assert.doesNotMatch(formatted, /secret-action-client-value-must-not-print/);
+  assert.doesNotMatch(JSON.stringify(status), /secret-action-client-value-must-not-print/);
+});
+
+test('allows Action OAuth smoke URL fallback and default ChatGPT redirect URI', () => {
+  const actionOauthSmokeEnv = buildActionOauthSmokeEnvStatus({
+    ECHO_PROXY_BASE_URL: 'https://api.project-echo.app',
+    ECHO_PROXY_SMOKE_ORIGIN: 'https://chatgpt.com',
+    ECHO_ACTION_OAUTH_CLIENT_ID: 'project-echo-action-client',
+    ECHO_ACTION_OAUTH_CLIENT_SECRET: 'redacted',
+    ECHO_ACTION_SMOKE_EVIDENCE_OUT: 'docs/chatgpt-action-oauth-smoke.json',
+  });
+
+  assert.equal(actionOauthSmokeEnv.ready, true);
+  assert.equal(actionOauthSmokeEnv.baseUrl.source, 'ECHO_PROXY_BASE_URL');
+  assert.equal(actionOauthSmokeEnv.origin.source, 'ECHO_PROXY_SMOKE_ORIGIN');
+  assert.equal(actionOauthSmokeEnv.redirectUri.defaulted, true);
+
+  const formatted = formatEvidenceStatus({
+    handoff: { path: READINESS_HANDOFF_PATH, status: 'available' },
+    finalGates: [],
+    draftFiles: [],
+    proxySmokeEnv: buildProxySmokeEnvStatus({}),
+    actionOauthSmokeEnv,
+    missingFinalCount: 0,
+    missingDraftCount: 0,
+  });
+
+  assert.match(formatted, /FALLBACK: ECHO_ACTION_SMOKE_BASE_URL via ECHO_PROXY_BASE_URL/);
+  assert.match(formatted, /FALLBACK: ECHO_ACTION_SMOKE_ORIGIN via ECHO_PROXY_SMOKE_ORIGIN/);
+  assert.match(formatted, /DEFAULT: ECHO_ACTION_OAUTH_REDIRECT_URI -> https:\/\/chatgpt\.com\/aip\/project-echo\/oauth\/callback/);
+});
+
+test('rejects unsafe Action OAuth smoke env values in the status preflight', () => {
+  const unsafe = buildActionOauthSmokeEnvStatus({
+    ECHO_ACTION_SMOKE_BASE_URL: 'http://127.0.0.1:8787',
+    ECHO_ACTION_SMOKE_ORIGIN: 'https://chatgpt.com/action',
+    ECHO_ACTION_OAUTH_CLIENT_ID: 'project-echo-action-client',
+    ECHO_ACTION_OAUTH_CLIENT_SECRET: 'redacted',
+    ECHO_ACTION_OAUTH_REDIRECT_URI: 'https://localhost/callback',
+    ECHO_ACTION_SMOKE_EVIDENCE_OUT: '../../outside.json',
+  });
+
+  assert.equal(unsafe.ready, false);
+  assert.equal(unsafe.baseUrl.ok, false);
+  assert.match(unsafe.baseUrl.detail, /must use https/);
+  assert.equal(unsafe.origin.ok, false);
+  assert.match(unsafe.origin.detail, /without path, query, or hash/);
+  assert.equal(unsafe.redirectUri.ok, false);
+  assert.match(unsafe.redirectUri.detail, /must not point to localhost/);
+  assert.equal(unsafe.evidenceOut.ok, false);
+  assert.match(unsafe.evidenceOut.detail, /must stay inside the repository/);
 });

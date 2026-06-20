@@ -120,6 +120,17 @@ export const PROXY_SMOKE_ENV_VARS = [
   'ECHO_PROXY_SMOKE_EVIDENCE_OUT',
 ];
 
+export const ACTION_OAUTH_SMOKE_ENV_VARS = [
+  'ECHO_ACTION_SMOKE_BASE_URL',
+  'ECHO_ACTION_SMOKE_ORIGIN',
+  'ECHO_ACTION_OAUTH_CLIENT_ID',
+  'ECHO_ACTION_OAUTH_CLIENT_SECRET',
+  'ECHO_ACTION_OAUTH_REDIRECT_URI',
+  'ECHO_ACTION_SMOKE_EVIDENCE_OUT',
+];
+
+const ACTION_OAUTH_REDIRECT_URI_DEFAULT = 'https://chatgpt.com/aip/project-echo/oauth/callback';
+
 export function buildEvidenceStatus(options = {}) {
   const fileExists = options.fileExists ?? defaultFileExists;
   const readText = options.readText ?? defaultReadText;
@@ -154,12 +165,14 @@ export function buildEvidenceStatus(options = {}) {
   };
 
   const proxySmokeEnv = buildProxySmokeEnvStatus(env, { repoRoot: root });
+  const actionOauthSmokeEnv = buildActionOauthSmokeEnvStatus(env, { repoRoot: root });
 
   return {
     handoff,
     finalGates,
     draftFiles,
     proxySmokeEnv,
+    actionOauthSmokeEnv,
     missingFinalCount: finalGates.filter((gate) => gate.status !== 'present').length,
     missingDraftCount: draftFiles.filter((draft) => draft.status !== 'available').length,
   };
@@ -174,6 +187,9 @@ export function formatEvidenceStatus(status) {
     '',
     'Proxy smoke env preflight:',
     ...formatProxySmokeEnvLines(status.proxySmokeEnv),
+    '',
+    'Action OAuth smoke env preflight:',
+    ...formatActionOauthSmokeEnvLines(status.actionOauthSmokeEnv),
     '',
     'Final evidence gates:',
   ];
@@ -207,7 +223,7 @@ export function formatEvidenceStatus(status) {
   lines.push('- npm run status:echo-evidence -- --validate-final');
   lines.push('- npm run readiness:echo');
   lines.push('');
-  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing, proxy smoke env ready: ${status.proxySmokeEnv.ready ? 'yes' : 'no'}.`);
+  lines.push(`Summary: ${status.missingFinalCount} final gate(s) missing, ${status.missingDraftCount} draft support file(s) missing, proxy smoke env ready: ${status.proxySmokeEnv.ready ? 'yes' : 'no'}, Action OAuth smoke env ready: ${status.actionOauthSmokeEnv.ready ? 'yes' : 'no'}.`);
 
   return `${lines.join('\n')}\n`;
 }
@@ -351,6 +367,118 @@ export function buildProxySmokeEnvStatus(env, options = {}) {
   };
 }
 
+export function buildActionOauthSmokeEnvStatus(env, options = {}) {
+  const baseUrlStatus = buildFallbackVariableStatus(
+    env,
+    'ECHO_ACTION_SMOKE_BASE_URL',
+    'ECHO_PROXY_BASE_URL',
+  );
+  const originStatus = buildFallbackVariableStatus(
+    env,
+    'ECHO_ACTION_SMOKE_ORIGIN',
+    'ECHO_PROXY_SMOKE_ORIGIN',
+  );
+  const clientIdStatus = buildRequiredVariableStatus(env, 'ECHO_ACTION_OAUTH_CLIENT_ID');
+  const clientSecretStatus = buildRequiredVariableStatus(env, 'ECHO_ACTION_OAUTH_CLIENT_SECRET', {
+    redacted: true,
+  });
+  const redirectUriStatus = env.ECHO_ACTION_OAUTH_REDIRECT_URI
+    ? {
+      name: 'ECHO_ACTION_OAUTH_REDIRECT_URI',
+      status: 'set',
+    }
+    : {
+      name: 'ECHO_ACTION_OAUTH_REDIRECT_URI',
+      status: 'default',
+      source: ACTION_OAUTH_REDIRECT_URI_DEFAULT,
+    };
+  const evidenceOutStatus = buildRequiredVariableStatus(env, 'ECHO_ACTION_SMOKE_EVIDENCE_OUT');
+  const variables = [
+    baseUrlStatus,
+    originStatus,
+    clientIdStatus,
+    clientSecretStatus,
+    redirectUriStatus,
+    evidenceOutStatus,
+  ];
+  const evidenceOut = validateActionOauthSmokeEvidenceOut(
+    env.ECHO_ACTION_SMOKE_EVIDENCE_OUT || '',
+    { repoRoot: options.repoRoot ?? repoRoot },
+  );
+  const baseUrl = validateProductionActionBaseUrl(
+    baseUrlStatus.value || '',
+    baseUrlStatus.sourceName || 'ECHO_ACTION_SMOKE_BASE_URL',
+  );
+  const origin = validateProductionActionOrigin(
+    originStatus.value || '',
+    originStatus.sourceName || 'ECHO_ACTION_SMOKE_ORIGIN',
+  );
+  const redirectUri = validateProductionActionRedirectUri(
+    env.ECHO_ACTION_OAUTH_REDIRECT_URI || ACTION_OAUTH_REDIRECT_URI_DEFAULT,
+  );
+
+  return {
+    variables: variables.map(({ value, ...variable }) => variable),
+    baseUrl,
+    origin,
+    redirectUri,
+    evidenceOut: evidenceOut.ok
+      ? {
+        ok: true,
+        repoRelativePath: evidenceOut.repoRelativePath,
+        proxyRelativePath: evidenceOut.proxyRelativePath,
+      }
+      : {
+        ok: false,
+        detail: evidenceOut.detail,
+      },
+    ready: clientIdStatus.status === 'set'
+      && clientSecretStatus.status === 'set'
+      && evidenceOutStatus.status === 'set'
+      && baseUrl.ok
+      && origin.ok
+      && redirectUri.ok
+      && evidenceOut.ok,
+  };
+}
+
+function buildFallbackVariableStatus(env, name, fallbackName) {
+  if (env[name]) {
+    return {
+      name,
+      status: 'set',
+      sourceName: name,
+      value: env[name],
+    };
+  }
+
+  if (env[fallbackName]) {
+    return {
+      name,
+      status: 'fallback',
+      source: fallbackName,
+      sourceName: fallbackName,
+      value: env[fallbackName],
+    };
+  }
+
+  return {
+    name,
+    status: 'missing',
+    sourceName: name,
+    value: '',
+  };
+}
+
+function buildRequiredVariableStatus(env, name, options = {}) {
+  return {
+    name,
+    status: env[name] ? 'set' : 'missing',
+    redacted: options.redacted === true && Boolean(env[name]),
+    value: env[name] || '',
+  };
+}
+
 function validateProductionProxyBaseUrl(value) {
   if (!value) {
     return {
@@ -441,6 +569,189 @@ function validateProductionProxyOrigin(value) {
   };
 }
 
+function validateProductionActionBaseUrl(value, envName) {
+  if (!value) {
+    return {
+      ok: false,
+      detail: `${envName} is required.`,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {
+      ok: false,
+      detail: `${envName} must be a valid URL.`,
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: `${envName} must use https:// for release smoke.`,
+    };
+  }
+
+  if (isLocalOrPrivateHost(parsed.hostname)) {
+    return {
+      ok: false,
+      detail: `${envName} must not point to localhost or a private network host.`,
+    };
+  }
+
+  if (parsed.search || parsed.hash) {
+    return {
+      ok: false,
+      detail: `${envName} must not include query or hash.`,
+    };
+  }
+
+  return {
+    ok: true,
+    normalized: normalizeUrlWithoutTrailingSlash(parsed),
+    source: envName,
+  };
+}
+
+function validateProductionActionOrigin(value, envName) {
+  if (!value) {
+    return {
+      ok: false,
+      detail: `${envName} is required.`,
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {
+      ok: false,
+      detail: `${envName} must be a valid URL origin.`,
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: `${envName} must use https:// for release smoke.`,
+    };
+  }
+
+  if (parsed.origin !== value.replace(/\/$/, '')) {
+    return {
+      ok: false,
+      detail: `${envName} must be an origin without path, query, or hash.`,
+    };
+  }
+
+  if (isLocalOrPrivateHost(parsed.hostname)) {
+    return {
+      ok: false,
+      detail: `${envName} must not point to localhost or a private network host.`,
+    };
+  }
+
+  return {
+    ok: true,
+    normalized: parsed.origin,
+    source: envName,
+  };
+}
+
+function validateProductionActionRedirectUri(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {
+      ok: false,
+      detail: 'ECHO_ACTION_OAUTH_REDIRECT_URI must be a valid URL.',
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: 'ECHO_ACTION_OAUTH_REDIRECT_URI must use https:// for release smoke.',
+    };
+  }
+
+  if (isLocalOrPrivateHost(parsed.hostname)) {
+    return {
+      ok: false,
+      detail: 'ECHO_ACTION_OAUTH_REDIRECT_URI must not point to localhost or a private network host.',
+    };
+  }
+
+  if (parsed.hash) {
+    return {
+      ok: false,
+      detail: 'ECHO_ACTION_OAUTH_REDIRECT_URI must not include a hash fragment.',
+    };
+  }
+
+  parsed.hash = '';
+  return {
+    ok: true,
+    normalized: parsed.toString(),
+    defaulted: value === ACTION_OAUTH_REDIRECT_URI_DEFAULT,
+  };
+}
+
+function validateActionOauthSmokeEvidenceOut(value, options = {}) {
+  const envName = 'ECHO_ACTION_SMOKE_EVIDENCE_OUT';
+  const root = path.resolve(options.repoRoot ?? repoRoot);
+  if (!value) {
+    return {
+      ok: false,
+      detail: `${envName} is required.`,
+    };
+  }
+
+  if (!/^(?:\.{1,2}[\\/])?[A-Za-z0-9_.\-/\\]+\.json$/i.test(value)) {
+    return {
+      ok: false,
+      detail: `${envName} must be a repo-local JSON path.`,
+    };
+  }
+
+  const rootResolved = path.resolve(root, value);
+  const proxyResolved = path.resolve(root, 'echo-api-proxy', value);
+  const resolvedPath = pathStaysInside(rootResolved, root) ? rootResolved : proxyResolved;
+  if (!pathStaysInside(resolvedPath, root)) {
+    return {
+      ok: false,
+      detail: `${envName} must stay inside the repository.`,
+    };
+  }
+
+  const repoRelativePath = path.relative(root, resolvedPath).replace(/\\/g, '/');
+  if (!repoRelativePath || repoRelativePath.startsWith('..') || path.isAbsolute(repoRelativePath)) {
+    return {
+      ok: false,
+      detail: `${envName} must resolve to a file inside the repository.`,
+    };
+  }
+
+  const proxyRoot = path.resolve(root, 'echo-api-proxy');
+  const proxyRelativePath = path.relative(proxyRoot, resolvedPath).replace(/\\/g, '/');
+  return {
+    ok: true,
+    repoRelativePath,
+    proxyRelativePath,
+  };
+}
+
+function pathStaysInside(targetPath, root) {
+  const resolvedRoot = path.resolve(root);
+  const resolvedTarget = path.resolve(targetPath);
+  const rootPrefix = `${resolvedRoot}${path.sep}`;
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(rootPrefix);
+}
+
 function normalizeUrlWithoutTrailingSlash(parsed) {
   parsed.search = '';
   parsed.hash = '';
@@ -497,6 +808,47 @@ function formatProxySmokeEnvLines(proxySmokeEnv) {
     lines.push(`- CHECK: ECHO_PROXY_SMOKE_EVIDENCE_OUT - ${proxySmokeEnv.evidenceOut.detail}`);
   }
   lines.push(`- Ready to attempt production proxy smoke: ${proxySmokeEnv.ready ? 'yes' : 'no'}`);
+
+  return lines;
+}
+
+function formatActionOauthSmokeEnvLines(actionOauthSmokeEnv) {
+  const lines = actionOauthSmokeEnv.variables.map((variable) => {
+    if (variable.status === 'fallback') {
+      return `- FALLBACK: ${variable.name} via ${variable.source}`;
+    }
+    if (variable.status === 'default') {
+      return `- DEFAULT: ${variable.name} -> ${variable.source}`;
+    }
+    const marker = variable.status === 'set' ? 'SET' : 'MISSING';
+    const redacted = variable.redacted ? ' (value redacted)' : '';
+    return `- ${marker}: ${variable.name}${redacted}`;
+  });
+
+  if (actionOauthSmokeEnv.baseUrl.ok) {
+    lines.push(`- OK: Action smoke base URL -> ${actionOauthSmokeEnv.baseUrl.normalized}`);
+  } else {
+    lines.push(`- CHECK: Action smoke base URL - ${actionOauthSmokeEnv.baseUrl.detail}`);
+  }
+
+  if (actionOauthSmokeEnv.origin.ok) {
+    lines.push(`- OK: Action smoke origin -> ${actionOauthSmokeEnv.origin.normalized}`);
+  } else {
+    lines.push(`- CHECK: Action smoke origin - ${actionOauthSmokeEnv.origin.detail}`);
+  }
+
+  if (actionOauthSmokeEnv.redirectUri.ok) {
+    lines.push(`- OK: ECHO_ACTION_OAUTH_REDIRECT_URI -> ${actionOauthSmokeEnv.redirectUri.normalized}`);
+  } else {
+    lines.push(`- CHECK: ECHO_ACTION_OAUTH_REDIRECT_URI - ${actionOauthSmokeEnv.redirectUri.detail}`);
+  }
+
+  if (actionOauthSmokeEnv.evidenceOut.ok) {
+    lines.push(`- OK: ECHO_ACTION_SMOKE_EVIDENCE_OUT -> ${actionOauthSmokeEnv.evidenceOut.repoRelativePath}`);
+  } else {
+    lines.push(`- CHECK: ECHO_ACTION_SMOKE_EVIDENCE_OUT - ${actionOauthSmokeEnv.evidenceOut.detail}`);
+  }
+  lines.push(`- Ready to attempt Action OAuth smoke: ${actionOauthSmokeEnv.ready ? 'yes' : 'no'}`);
 
   return lines;
 }
