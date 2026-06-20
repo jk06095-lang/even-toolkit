@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -44,7 +45,9 @@ const SECRET_PATTERNS = [
 ];
 
 const EVIDENCE_EXTENSIONS = ['md', 'txt', 'log', 'json', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov', 'webm', 'mkv'];
+const PACKAGE_EXTENSIONS = ['ehpk'];
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
 const args = process.argv.slice(2);
 const allowDraft = args.includes('--allow-draft');
@@ -296,6 +299,78 @@ function validateEvidenceLinkValue(value, pointer) {
   }
 }
 
+function validateRepoEvidenceFile(object, key, pointer, options = {}) {
+  const fieldPointer = `${pointer}.${key}`;
+  validateText(object, key, pointer);
+  const value = object?.[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) return null;
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    addError(fieldPointer, 'must be a repo-local file path so the artifact can be verified');
+    return null;
+  }
+
+  const extensions = options.extensions ?? EVIDENCE_EXTENSIONS;
+  const ext = path.extname(trimmed).replace(/^\./, '').toLowerCase();
+  if (!extensions.includes(ext)) {
+    addError(fieldPointer, `must be a repo path ending in one of: ${extensions.join(', ')}`);
+    return null;
+  }
+
+  return resolveRepoEvidencePath(trimmed, fieldPointer);
+}
+
+function resolveRepoEvidencePath(value, pointer) {
+  const resolvedPath = path.resolve(process.cwd(), value);
+  const repoRoot = `${process.cwd()}${path.sep}`;
+  if (resolvedPath !== process.cwd() && !resolvedPath.startsWith(repoRoot)) {
+    addError(pointer, 'repo path evidence must stay inside the repository');
+    return null;
+  }
+  if (!existsSync(resolvedPath)) {
+    addError(pointer, 'repo path evidence must point to an existing file');
+    return null;
+  }
+  return resolvedPath;
+}
+
+function validateSha256(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  if (!hasOwn(object, key)) {
+    addError(fieldPointer, 'missing required SHA-256 field');
+    return;
+  }
+
+  const value = object[key];
+  if (allowDraft && (value === null || isPlaceholder(value))) {
+    addWarning(fieldPointer, 'draft SHA-256 placeholder remains');
+    return;
+  }
+
+  if (typeof value !== 'string' || !SHA256_PATTERN.test(value.trim())) {
+    addError(fieldPointer, 'must be a 64-character hex SHA-256 digest');
+  }
+}
+
+function validatePackageSha256(buildArtifact, packagePath, pointer) {
+  const digest = buildArtifact.sha256;
+  if (
+    !packagePath
+    || allowDraft
+    || typeof digest !== 'string'
+    || !SHA256_PATTERN.test(digest.trim())
+  ) {
+    return;
+  }
+
+  const actualDigest = createHash('sha256').update(readFileSync(packagePath)).digest('hex');
+  if (actualDigest !== digest.toLowerCase()) {
+    addError(`${pointer}.sha256`, 'must match the SHA-256 digest of buildArtifact.packagePath');
+  }
+}
+
 function validateEvidenceLinkArray(object, key, pointer, minItems) {
   const fieldPointer = `${pointer}.${key}`;
   const value = object?.[key];
@@ -330,6 +405,27 @@ function validateRoot() {
   validateExpected(manifest, 'evidenceStatus', allowDraft ? 'draft' : 'complete', 'manifest');
   validateHttpsUrl(manifest, 'actionApiBaseUrl', 'manifest', expectedBaseUrl);
   validateExpected(manifest, 'actionContractVersion', expectedVersion, 'manifest');
+}
+
+function validateBuildArtifact() {
+  if (!validateObject(manifest.buildArtifact, 'buildArtifact')) return;
+
+  const packagePath = validateRepoEvidenceFile(manifest.buildArtifact, 'packagePath', 'buildArtifact', {
+    extensions: PACKAGE_EXTENSIONS,
+  });
+  validateSha256(manifest.buildArtifact, 'sha256', 'buildArtifact');
+  validatePackageSha256(manifest.buildArtifact, packagePath, 'buildArtifact');
+  validateText(manifest.buildArtifact, 'packCommand', 'buildArtifact');
+  if (
+    !allowDraft
+    && typeof manifest.buildArtifact.packCommand === 'string'
+    && !/pack/i.test(manifest.buildArtifact.packCommand)
+  ) {
+    addError('buildArtifact.packCommand', 'must include the pack command used to create the .ehpk');
+  }
+  validateExpected(manifest.buildArtifact, 'sameArtifactUsedForG2Recall', true, 'buildArtifact');
+  validateExpected(manifest.buildArtifact, 'sameArtifactAsHardwareQa', true, 'buildArtifact');
+  validateEvidenceLink(manifest.buildArtifact, 'evidenceRef', 'buildArtifact');
 }
 
 function validateActionGpt() {
@@ -655,6 +751,7 @@ function isLocalHost(hostname) {
 }
 
 validateRoot();
+validateBuildArtifact();
 validateActionGpt();
 validateOauth();
 validateEndpoints();

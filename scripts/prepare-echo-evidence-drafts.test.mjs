@@ -82,8 +82,16 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.equal(pilot.outcomeMetrics.evidenceRef, 'TBD');
   assert.equal(hardware.buildArtifact.packagePath, 'even-app/echo.ehpk');
   assert.match(hardware.buildArtifact.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(pilot.buildArtifact.packagePath, 'even-app/echo.ehpk');
+  assert.equal(pilot.buildArtifact.sha256, hardware.buildArtifact.sha256);
+  assert.equal(pilot.buildArtifact.sameArtifactUsedForPilot, false);
   assert.equal(hardware.buildArtifact.installedViaBetaOrPrivateBuild, null);
   assert.equal(action.actionContractVersion, actionSpec.info.version);
+  assert.equal(action.buildArtifact.packagePath, 'even-app/echo.ehpk');
+  assert.equal(action.buildArtifact.sha256, hardware.buildArtifact.sha256);
+  assert.equal(action.buildArtifact.sameArtifactUsedForG2Recall, null);
+  assert.equal(action.buildArtifact.sameArtifactAsHardwareQa, null);
+  assert.equal(action.buildArtifact.evidenceRef, repoRelative(buildReportPath));
   assert.equal(action.actionGpt.customGptConfigured, null);
   assert.equal(action.activeRecallDeviceEvidence.g2BridgeRecallCaptured, null);
   assert.equal(action.activeRecallDeviceEvidence.calibratedG2ThresholdUsed, null);
@@ -199,6 +207,8 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /docs\/project-echo-chatgpt-action-evidence\.completed\.json/);
   assert.match(fieldRunbook, /Custom GPT Action OAuth Smoke/);
   assert.match(fieldRunbook, /Custom GPT Active Recall Evidence/);
+  assert.match(fieldRunbook, /buildArtifact\.packagePath/);
+  assert.match(fieldRunbook, /sameArtifactAsHardwareQa=true/);
   assert.match(fieldRunbook, /twoSeparateRecallDaysProven=true/);
   assert.match(fieldRunbook, /recallTransferProof\.day1RecallDate/);
   assert.match(fieldRunbook, /day7TransferDate/);

@@ -13,6 +13,8 @@ const packageSource = readArg('--package-source') ?? 'workspace';
 const packageAbs = path.resolve(repoRoot, packagePath);
 const buildArtifactPath = path.join(outDir, 'project-echo-build-artifact.md');
 const hardwareQaPath = path.join(outDir, 'project-echo-hardware-qa.draft.json');
+const pilotEvidencePath = path.join(outDir, 'project-echo-pilot-evidence.draft.json');
+const actionEvidencePath = path.join(outDir, 'project-echo-chatgpt-action-evidence.draft.json');
 const fieldRunbookPath = path.join(outDir, 'project-echo-field-runbook.draft.md');
 
 const errors = [];
@@ -34,6 +36,12 @@ if (!existsSync(buildArtifactPath)) {
 }
 if (!existsSync(hardwareQaPath)) {
   errors.push(`${repoRelative(hardwareQaPath)}: hardware QA draft is missing`);
+}
+if (!existsSync(pilotEvidencePath)) {
+  errors.push(`${repoRelative(pilotEvidencePath)}: pilot evidence draft is missing`);
+}
+if (!existsSync(actionEvidencePath)) {
+  errors.push(`${repoRelative(actionEvidencePath)}: ChatGPT Action evidence draft is missing`);
 }
 if (!existsSync(fieldRunbookPath)) {
   errors.push(`${repoRelative(fieldRunbookPath)}: field runbook draft is missing`);
@@ -62,13 +70,18 @@ if (expectedSha && existsSync(buildArtifactPath)) {
 if (expectedSha && existsSync(hardwareQaPath)) {
   const hardware = readJson(hardwareQaPath);
   assertEqual(hardware?.device?.appVersion, appVersion, `${repoRelative(hardwareQaPath)} device.appVersion`);
-  assertEqual(hardware?.buildArtifact?.packagePath, packagePath, `${repoRelative(hardwareQaPath)} buildArtifact.packagePath`);
-  assertEqual(hardware?.buildArtifact?.sha256, expectedSha, `${repoRelative(hardwareQaPath)} buildArtifact.sha256`);
-  assertEqual(
-    hardware?.buildArtifact?.evidenceRef,
-    normalizePath(repoRelative(buildArtifactPath)),
-    `${repoRelative(hardwareQaPath)} buildArtifact.evidenceRef`,
-  );
+  assertBuildArtifactMatches(hardware, hardwareQaPath);
+}
+
+if (expectedSha && existsSync(pilotEvidencePath)) {
+  const pilot = readJson(pilotEvidencePath);
+  assertEqual(pilot?.hardware?.appVersion, appVersion, `${repoRelative(pilotEvidencePath)} hardware.appVersion`);
+  assertBuildArtifactMatches(pilot, pilotEvidencePath);
+}
+
+if (expectedSha && existsSync(actionEvidencePath)) {
+  const action = readJson(actionEvidencePath);
+  assertBuildArtifactMatches(action, actionEvidencePath);
 }
 
 if (expectedSha && existsSync(fieldRunbookPath)) {
@@ -119,6 +132,16 @@ function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     errors.push(`${label}: expected ${String(expected)}, got ${String(actual)}`);
   }
+}
+
+function assertBuildArtifactMatches(manifest, manifestPath) {
+  assertEqual(manifest?.buildArtifact?.packagePath, packagePath, `${repoRelative(manifestPath)} buildArtifact.packagePath`);
+  assertEqual(manifest?.buildArtifact?.sha256, expectedSha, `${repoRelative(manifestPath)} buildArtifact.sha256`);
+  assertEqual(
+    manifest?.buildArtifact?.evidenceRef,
+    normalizePath(repoRelative(buildArtifactPath)),
+    `${repoRelative(manifestPath)} buildArtifact.evidenceRef`,
+  );
 }
 
 function readCommittedFile(filePath) {

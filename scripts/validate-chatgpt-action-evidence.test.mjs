@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 
@@ -20,6 +21,8 @@ before(() => {
   writeFileSync(path.join(tmpRoot, 'same-day-repeat.json'), '{"ok":true,"countedAsTransfer":false}\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'tutor-instructions-evidence.md'), '# Tutor instructions evidence\n', 'utf8');
   writeFileSync(path.join(tmpRoot, 'roleplay-writeback-evidence.json'), '{"ok":true,"boundedItemIds":["li_001"]}\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'echo.ehpk'), 'packaged Project ECHO app\n', 'utf8');
+  writeFileSync(path.join(tmpRoot, 'build-artifact.md'), '# Build artifact evidence\n', 'utf8');
 });
 
 after(() => {
@@ -77,6 +80,34 @@ test('rejects completed Action evidence without spaced-recall transfer proof', a
   assert.match(result.stderr, /activeRecallDeviceEvidence\.transferScenarioEvidenceCaptured/);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.recallDates/);
   assert.match(result.stderr, /activeRecallDeviceEvidence\.recallTransferProof\.transferScenarioIds/);
+});
+
+test('rejects completed Action evidence with stale or unverifiable package proof', async () => {
+  const mismatched = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  mismatched.buildArtifact.sha256 = '0'.repeat(64);
+  const mismatchedPath = writeManifest('mismatched-package-sha', mismatched);
+  const mismatchedResult = await runValidator(mismatchedPath);
+
+  assert.notEqual(mismatchedResult.code, 0);
+  assert.match(
+    mismatchedResult.stderr,
+    /buildArtifact\.sha256: must match the SHA-256 digest of buildArtifact\.packagePath/,
+  );
+
+  const remotePackage = completeManifest({
+    tokenStorageBoundary: 'Server-side OAuth tokens are stored as hashed fingerprints in proxy memory; raw access tokens and client secrets are not stored in evidence.',
+  });
+  remotePackage.buildArtifact.packagePath = 'https://example.test/echo.ehpk';
+  const remotePath = writeManifest('remote-package-proof', remotePackage);
+  const remoteResult = await runValidator(remotePath);
+
+  assert.notEqual(remoteResult.code, 0);
+  assert.match(
+    remoteResult.stderr,
+    /buildArtifact\.packagePath: must be a repo-local file path so the artifact can be verified/,
+  );
 });
 
 test('rejects completed Action evidence without a day 7 transfer window', async () => {
@@ -184,6 +215,8 @@ function writeManifest(name, manifest) {
 function completeManifest({ tokenStorageBoundary }) {
   const actionEvidenceRef = repoRelative(path.join(tmpRoot, 'action-oauth-smoke.json'));
   const gptEvidenceRef = repoRelative(path.join(tmpRoot, 'action-gpt-config.png'));
+  const packagePath = repoRelative(path.join(tmpRoot, 'echo.ehpk'));
+  const packageEvidenceRef = repoRelative(path.join(tmpRoot, 'build-artifact.md'));
   const deviceEvidenceRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
   const pronunciationPolicyRef = repoRelative(path.join(tmpRoot, 'g2-recall-evidence.json'));
   const recallDay1Ref = repoRelative(path.join(tmpRoot, 'recall-day-1.json'));
@@ -207,6 +240,14 @@ function completeManifest({ tokenStorageBoundary }) {
     runDate: '2026-06-19',
     actionApiBaseUrl,
     actionContractVersion: '0.1.0',
+    buildArtifact: {
+      packagePath,
+      sha256: sha256File(packagePath),
+      packCommand: 'npm --prefix even-app run pack',
+      sameArtifactUsedForG2Recall: true,
+      sameArtifactAsHardwareQa: true,
+      evidenceRef: packageEvidenceRef,
+    },
     actionGpt: {
       customGptConfigured: true,
       openapiSchemaUploaded: true,
@@ -326,6 +367,12 @@ function runValidator(manifestPath) {
     child.on('error', reject);
     child.on('exit', (code) => resolve({ code, stdout, stderr }));
   });
+}
+
+function sha256File(repoRelativePath) {
+  return createHash('sha256')
+    .update(readFileSync(path.join(repoRoot, repoRelativePath)))
+    .digest('hex');
 }
 
 function repoRelative(filePath) {

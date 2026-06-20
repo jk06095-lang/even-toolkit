@@ -90,6 +90,10 @@ G2/audio-level recall evidence are also captured.
 The completed #29 manifest must prove the learning boundary, not only endpoint
 availability:
 
+- `buildArtifact.packagePath` and `buildArtifact.sha256`: the repo-local
+  `.ehpk` package used for G2 active-recall evidence. The SHA-256 must match
+  the actual file, and `sameArtifactAsHardwareQa=true` must tie it to the
+  hardware QA artifact.
 - `twoSeparateRecallDaysProven=true`: a hidden meaning-to-expression item is
   recalled successfully on Day 1 and transferred again on Day 7.
 - `recallTransferProof.day1RecallDate` and `day7TransferDate`: YYYY-MM-DD

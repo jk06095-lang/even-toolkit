@@ -197,6 +197,11 @@ evidence refs, bounded transfer scenario IDs, and same-day repeat evidence. The
 latter records the G2 bridge capture source, calibrated speech threshold,
 speech-frame ratio, frame counts, clipped-frame count, and `rawAudioRetained:
 false` without storing raw audio.
+The same completed manifest must include a `buildArtifact` block with the
+repo-local `.ehpk` package path, SHA-256 digest, pack command, and confirmations
+that the G2 active-recall evidence came from the same artifact used for hardware
+QA. The validator recomputes the package digest so a stale or remote-only app
+artifact reference cannot satisfy #29.
 Run `npm run prepare:echo-evidence-drafts` before deployment checks to generate
 `docs/evidence-drafts/project-echo-chatgpt-action-evidence.draft.json` with the
 current Action API base URL and contract version prefilled. The generated file

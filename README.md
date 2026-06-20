@@ -53,7 +53,9 @@ It also has to prove the spaced-recall boundary: two separate hidden recall
 days, transfer scenario evidence, and same-day repeat attempts not counting as
 transfer. Final #29 evidence must include the structured recall dates, attempt
 refs, transfer scenario IDs, and G2 bridge audio-level frame metrics rather
-than only marking those checks as `true`.
+than only marking those checks as `true`. It must also identify the repo-local
+`.ehpk` package path and matching SHA-256 digest used for G2 active-recall
+evidence, and confirm that it is the same artifact used for hardware QA.
 The hardware QA manifest must identify the exact repo-local `.ehpk` package
 path and matching SHA-256 digest used for the real G2 run, and must include
 private/beta locked-phone background lifecycle evidence, Android cold-start

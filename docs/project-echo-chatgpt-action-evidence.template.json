@@ -4,6 +4,14 @@
   "runDate": "TBD",
   "actionApiBaseUrl": "https://api.project-echo.app",
   "actionContractVersion": "0.1.0",
+  "buildArtifact": {
+    "packagePath": "TBD",
+    "sha256": "TBD",
+    "packCommand": "TBD",
+    "sameArtifactUsedForG2Recall": null,
+    "sameArtifactAsHardwareQa": null,
+    "evidenceRef": "TBD"
+  },
   "actionGpt": {
     "customGptConfigured": null,
     "openapiSchemaUploaded": null,

@@ -4,6 +4,14 @@
   "runDate": "TBD",
   "actionApiBaseUrl": "https://api.project-echo.app",
   "actionContractVersion": "0.1.0",
+  "buildArtifact": {
+    "packagePath": "even-app/echo.ehpk",
+    "sha256": "c2607ddd4ac132469503af1199764000400fcb9568da5da8448248ff777586c8",
+    "packCommand": "npm --prefix even-app run pack",
+    "sameArtifactUsedForG2Recall": null,
+    "sameArtifactAsHardwareQa": null,
+    "evidenceRef": "docs/evidence-drafts/project-echo-build-artifact.md"
+  },
   "actionGpt": {
     "customGptConfigured": null,
     "openapiSchemaUploaded": null,
