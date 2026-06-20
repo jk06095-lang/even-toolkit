@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 const REQUIRED_HUD_STATES = ['READY', 'LISTENING', 'CUE', 'ACK', 'PAUSED'];
+const ACK_DURATION_MIN_MS = 600;
+const ACK_DURATION_MAX_MS = 900;
 const REQUIRED_DELAYED_PROXY_SCENARIOS = ['endPractice', 'pause', 'exitEcho'];
 const WEARING_STATE_CASES = [
   {
@@ -681,11 +683,44 @@ function validateHud(manifestObject) {
     validateEvidenceLink(manifestObject.hud.states[state], 'evidenceRef', pointer);
   }
 
+  validateAckBehavior(manifestObject.hud);
   validateExpected(manifestObject.hud, 'phoneDetailOnly', true, 'hud');
   validateExpected(manifestObject.hud, 'grammarHiddenOnG2', true, 'hud');
   validateEvidenceLink(manifestObject.hud, 'videoEvidence', 'hud', {
     extensions: VIDEO_EXTENSIONS,
   });
+}
+
+function validateAckBehavior(hud) {
+  if (!validateObject(hud.ackBehavior, 'hud.ackBehavior')) return;
+
+  const ack = hud.ackBehavior;
+  validateText(ack, 'visibleText', 'hud.ackBehavior', { includes: 'OK' });
+  validateNonNegativeNumber(ack, 'durationMs', 'hud.ackBehavior');
+  const durationMs = ack.durationMs;
+  if (
+    typeof durationMs === 'number'
+    && Number.isFinite(durationMs)
+    && (durationMs < ACK_DURATION_MIN_MS || durationMs > ACK_DURATION_MAX_MS)
+  ) {
+    addError(
+      'hud.ackBehavior.durationMs',
+      `must be between ${ACK_DURATION_MIN_MS} and ${ACK_DURATION_MAX_MS} ms`,
+    );
+  }
+
+  for (const key of [
+    'assistedAdaptedTriggersAck',
+    'assistedExactTriggersAck',
+    'shownOnlyAfterAssistedCueUse',
+    'independentSpeechDoesNotAlwaysAck',
+    'returnsToListening',
+    'timerClearedOnStop',
+  ]) {
+    validateExpected(ack, key, true, 'hud.ackBehavior');
+  }
+
+  validateEvidenceLink(ack, 'evidenceRef', 'hud.ackBehavior');
 }
 
 function validateAssist(manifestObject) {
@@ -700,6 +735,9 @@ function validateAssist(manifestObject) {
     'speechClearsCue',
     'silenceOnlyDoesNotAutoCue',
     'breakdownSignalRequired',
+    'minimumTwoSignalsForAutoCue',
+    'partnerSpeechBlocksAutoCue',
+    'recentDismissRateCheckedBeforeAutoCue',
     'graceCancelWorks',
     'autoCueLevelCap',
     'manualLevelThreeRequiresExplicitRequest',

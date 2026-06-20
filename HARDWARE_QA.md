@@ -32,6 +32,11 @@ For lifecycle QA, final numeric cleanup counters must be recorded as `0`; a
 plain boolean pass is not enough for the completed hardware evidence.
 The final `device.appVersion` must match the current `even-app/package.json`
 version so hardware evidence cannot be reused from an older app build.
+Final ACK evidence must prove a short `OK` state lasting 600-900 ms, triggered
+only after assisted/adapted or assisted/exact cue use, and returning to
+`LISTENING` without a late timer after stop/standby. Final Assist evidence must
+also prove Auto Assist needs at least two trigger signals, blocks auto cues while
+the partner is speaking, and checks recent dismiss behavior before triggering.
 
 Before the field run, prepare draft manifests and local artifact evidence:
 
@@ -281,8 +286,15 @@ Automated coverage added on 2026-06-19:
 - Switch to `Auto` again, accept the prompt, and verify the phone UI changes to
   `Assist: Auto`.
 - Switch to `Auto`, stay silent past the threshold without a recent breakdown signal, and confirm no auto cue appears.
+- In Auto, create only one trigger signal at a time, such as silence without an
+  abandoned utterance or filler without elapsed silence, and confirm no auto cue
+  appears until at least two trigger signals are present.
+- In Auto, mark or correct the latest turn as partner speech and confirm the
+  app does not show an automatic cue while the partner is speaking.
 - In Auto, say a breakdown phrase such as `I think maybe...` or repeated filler words, then stay silent past the threshold and confirm an auto cue appears.
 - In Auto, say a breakdown phrase, cross the silence threshold, start speaking again within the 400 ms grace window, and confirm the pending auto cue is cancelled.
+- Before an auto cue, confirm the app checks recent dismiss behavior instead of
+  continuing to trigger after repeated dismissals.
 - Confirm Auto and speech-evaluation cues never exceed level 2 in exported evidence, and
   their visible G2 cue text is shortened to the capped cue level.
 - Confirm level 3/full-structure cues appear only after an explicit Manual Assist request.
@@ -292,6 +304,9 @@ Automated coverage added on 2026-06-19:
   `auto_trigger_count`, `cue_dismissed_count`, `false_trigger_count`, and
   `cue_used_count`. Final hardware QA requires at least one manual request, one
   auto trigger, and two dismissed cues to prove the safety path was exercised.
+- Record `minimumTwoSignalsForAutoCue`, `partnerSpeechBlocksAutoCue`, and
+  `recentDismissRateCheckedBeforeAutoCue` as `true` with evidence refs in the
+  completed hardware manifest.
 - Confirm `rawTranscriptInMetrics` is `false`; Assist metrics must be counts and
   flags only, not raw learner utterances or cue text.
 
@@ -414,6 +429,10 @@ Still requires real G2 validation:
 - Cue display shows `CUE` plus one short phrase only.
 - Successful assisted/adapted cue use shows a short `ACK` / `OK` state and then
   returns to `LISTENING` without showing transcript or achievement detail.
+- The completed manifest must record `hud.ackBehavior.visibleText` containing
+  `OK`, `durationMs` between 600 and 900, assisted/adapted and assisted/exact
+  trigger proof, no routine ACK on independent speech, a return to `LISTENING`,
+  and timer cleanup on stop/standby.
 - Pause/menu flow never overlaps transcript, cue history, or status metrics.
 - Resume returns to `LISTENING`; End Practice returns to `READY`.
 - The completed hardware QA manifest must contain exactly `READY`, `LISTENING`,

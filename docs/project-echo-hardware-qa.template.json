@@ -264,6 +264,17 @@
         "evidenceRef": "TBD"
       }
     },
+    "ackBehavior": {
+      "visibleText": "TBD",
+      "durationMs": null,
+      "assistedAdaptedTriggersAck": null,
+      "assistedExactTriggersAck": null,
+      "shownOnlyAfterAssistedCueUse": null,
+      "independentSpeechDoesNotAlwaysAck": null,
+      "returnsToListening": null,
+      "timerClearedOnStop": null,
+      "evidenceRef": "TBD"
+    },
     "phoneDetailOnly": null,
     "grammarHiddenOnG2": null,
     "videoEvidence": "TBD"
@@ -277,6 +288,9 @@
     "speechClearsCue": null,
     "silenceOnlyDoesNotAutoCue": null,
     "breakdownSignalRequired": null,
+    "minimumTwoSignalsForAutoCue": null,
+    "partnerSpeechBlocksAutoCue": null,
+    "recentDismissRateCheckedBeforeAutoCue": null,
     "graceCancelWorks": null,
     "autoCueLevelCap": null,
     "manualLevelThreeRequiresExplicitRequest": null,

@@ -199,8 +199,13 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(fieldRunbook, /translationReview\.partnerTurnsPrioritized=true/);
   assert.match(fieldRunbook, /translationReview\.lowConfidenceTranslationWarningShown=true/);
   assert.match(fieldRunbook, /hudBoundary\.g2TranslationHidden=true/);
+  assert.match(fieldRunbook, /hud\.ackBehavior\.durationMs/);
+  assert.match(fieldRunbook, /assist\.minimumTwoSignalsForAutoCue=true/);
+  assert.match(fieldRunbook, /assist\.partnerSpeechBlocksAutoCue=true/);
+  assert.match(fieldRunbook, /assist\.recentDismissRateCheckedBeforeAutoCue=true/);
   assert.match(fieldRunbook, /partner-turn translation priority/);
   assert.match(fieldRunbook, /low-confidence translation warnings/);
+  assert.match(fieldRunbook, /bounded ACK\/OK behavior/);
   assert.match(fieldRunbook, /smoke:action-oauth/);
   assert.match(fieldRunbook, new RegExp(escapeRegExp(`npm run prepare:echo-evidence-drafts -- --action-oauth-smoke ${repoRelative(actionSmokePath)}`)));
   assert.match(fieldRunbook, /Do not rename draft files to completed files without real external evidence/);

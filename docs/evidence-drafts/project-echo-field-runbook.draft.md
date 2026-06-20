@@ -128,6 +128,13 @@ without moving heavy review text onto the glasses:
   `hudBoundary.g2TranslationHidden=true`, and
   `hudBoundary.g2SpeakerLabelsHidden=true`: G2 stays READY/LISTENING/CUE/ACK/
   PAUSED only.
+- `hud.ackBehavior.durationMs` stays between 600 and 900 ms, shows OK only
+  after assisted cue use, returns to LISTENING, and clears its timer on stop or
+  standby.
+- `assist.minimumTwoSignalsForAutoCue=true`,
+  `assist.partnerSpeechBlocksAutoCue=true`, and
+  `assist.recentDismissRateCheckedBeforeAutoCue=true` prove Auto Assist does
+  not fire from a single ambiguous silence or while the partner is speaking.
 
 ## Evidence Queue
 
@@ -156,14 +163,16 @@ without moving heavy review text onto the glasses:
    separation, delayed proxy behavior, voice runtime, wear status, and
    conversation timeline boundaries. For the timeline, prove G2 Mic, Phone Mic,
    and import segmentation, manual speaker correction persistence,
-   partner-turn translation priority, low-confidence translation warnings, and
-   the phone-only timeline / cue-only G2 HUD boundary. For Exit ECHO, preserve
+   partner-turn translation priority, low-confidence translation warnings,
+   bounded ACK/OK behavior, and the phone-only timeline / cue-only G2 HUD
+   boundary. For Exit ECHO, preserve
    proof that the app called `bridge.shutDownPageContainer(1)` from the root-page exit path.
    For Assist, prove silence-only Auto stays
-   quiet, a breakdown signal is required before Auto shows a cue, and the 400 ms
-   grace window cancels the pending cue when speech resumes. Also prove Auto
-   and speech-evaluation cues stay at level 2 or lower, while level 3/full
-   structure appears only after an explicit Manual Assist request.
+   quiet, at least two trigger signals are required before Auto shows a cue,
+   partner speech blocks automatic cues, recent dismiss behavior is checked, and
+   the 400 ms grace window cancels the pending cue when speech resumes. Also
+   prove Auto and speech-evaluation cues stay at level 2 or lower, while level
+   3/full structure appears only after an explicit Manual Assist request.
 7. Run the 5-user A/B/C pilot and export privacy-safe QA data after each run.
 8. Fill `outcomeMetrics` with Conversation Recovery Rate using the fixed
    8-second window, Day 1 and Day 7 Independent Transfer Rates, integer

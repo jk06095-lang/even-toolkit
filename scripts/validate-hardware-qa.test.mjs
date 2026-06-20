@@ -63,6 +63,35 @@ test('requires ACK as a first-class G2 HUD evidence state', async () => {
   assert.match(combinedOutput(extraStateResult), /hud\.states\.TRANSCRIPT: unexpected key; allowed keys: READY, LISTENING, CUE, ACK, PAUSED/);
 });
 
+test('rejects HUD evidence without bounded ACK behavior proof', async () => {
+  const fixture = writeCompletedHardwareFixture('ack-behavior');
+  const invalidHud = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  invalidHud.hud.ackBehavior.visibleText = 'Great job';
+  invalidHud.hud.ackBehavior.durationMs = 1200;
+  invalidHud.hud.ackBehavior.assistedAdaptedTriggersAck = false;
+  invalidHud.hud.ackBehavior.shownOnlyAfterAssistedCueUse = false;
+  invalidHud.hud.ackBehavior.independentSpeechDoesNotAlwaysAck = false;
+  invalidHud.hud.ackBehavior.returnsToListening = false;
+  invalidHud.hud.ackBehavior.evidenceRef = 'ack checked';
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-ack-behavior.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidHud, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /hud\.ackBehavior\.visibleText: must include OK/);
+  assert.match(output, /hud\.ackBehavior\.durationMs: must be between 600 and 900 ms/);
+  assert.match(output, /hud\.ackBehavior\.assistedAdaptedTriggersAck: must be true/);
+  assert.match(output, /hud\.ackBehavior\.shownOnlyAfterAssistedCueUse: must be true/);
+  assert.match(output, /hud\.ackBehavior\.independentSpeechDoesNotAlwaysAck: must be true/);
+  assert.match(output, /hud\.ackBehavior\.returnsToListening: must be true/);
+  assert.match(output, /hud\.ackBehavior\.evidenceRef: must be an https URL or repo path/);
+});
+
 test('rejects audio-source evidence that silently opens Phone Mic for G2 sessions', async () => {
   const template = JSON.parse(readFileSync(templatePath, 'utf8'));
   const invalidAudio = structuredClone(template);
@@ -105,6 +134,9 @@ test('rejects assist evidence without Auto Assist confirmation proof', async () 
   const fixture = writeCompletedHardwareFixture('assist-auto-confirmation');
   const invalidAssist = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
   invalidAssist.assist.autoConfirmationPromptShown = false;
+  invalidAssist.assist.minimumTwoSignalsForAutoCue = false;
+  invalidAssist.assist.partnerSpeechBlocksAutoCue = false;
+  invalidAssist.assist.recentDismissRateCheckedBeforeAutoCue = false;
 
   const invalidPath = path.join(tmpRoot, 'hardware-invalid-assist-auto-confirmation.json');
   writeFileSync(invalidPath, `${JSON.stringify(invalidAssist, null, 2)}\n`, 'utf8');
@@ -114,7 +146,11 @@ test('rejects assist evidence without Auto Assist confirmation proof', async () 
     repoRelative(invalidPath),
   ]);
   assert.notEqual(result.code, 0);
-  assert.match(combinedOutput(result), /assist\.autoConfirmationPromptShown: must be true/);
+  const output = combinedOutput(result);
+  assert.match(output, /assist\.autoConfirmationPromptShown: must be true/);
+  assert.match(output, /assist\.minimumTwoSignalsForAutoCue: must be true/);
+  assert.match(output, /assist\.partnerSpeechBlocksAutoCue: must be true/);
+  assert.match(output, /assist\.recentDismissRateCheckedBeforeAutoCue: must be true/);
 });
 
 test('rejects conversation timeline evidence without source-specific input evidence', async () => {
@@ -396,6 +432,17 @@ function writeCompletedHardwareFixture(name) {
           { rendered: true, noOverlap: true, evidenceRef: evidence },
         ]),
       ),
+      ackBehavior: {
+        visibleText: 'OK',
+        durationMs: 750,
+        assistedAdaptedTriggersAck: true,
+        assistedExactTriggersAck: true,
+        shownOnlyAfterAssistedCueUse: true,
+        independentSpeechDoesNotAlwaysAck: true,
+        returnsToListening: true,
+        timerClearedOnStop: true,
+        evidenceRef: evidence,
+      },
       phoneDetailOnly: true,
       grammarHiddenOnG2: true,
       videoEvidence: video,
@@ -409,6 +456,9 @@ function writeCompletedHardwareFixture(name) {
       speechClearsCue: true,
       silenceOnlyDoesNotAutoCue: true,
       breakdownSignalRequired: true,
+      minimumTwoSignalsForAutoCue: true,
+      partnerSpeechBlocksAutoCue: true,
+      recentDismissRateCheckedBeforeAutoCue: true,
       graceCancelWorks: true,
       autoCueLevelCap: true,
       manualLevelThreeRequiresExplicitRequest: true,
