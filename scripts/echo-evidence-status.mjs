@@ -327,9 +327,13 @@ export function buildProxySmokeEnvStatus(env, options = {}) {
   const evidenceOut = validateProxySmokeEvidenceOut(env.ECHO_PROXY_SMOKE_EVIDENCE_OUT || '', {
     repoRoot: options.repoRoot ?? repoRoot,
   });
+  const baseUrl = validateProductionProxyBaseUrl(env.ECHO_PROXY_BASE_URL || '');
+  const origin = validateProductionProxyOrigin(env.ECHO_PROXY_SMOKE_ORIGIN || '');
 
   return {
     variables,
+    baseUrl,
+    origin,
     evidenceOut: evidenceOut.ok
       ? {
         ok: true,
@@ -340,8 +344,132 @@ export function buildProxySmokeEnvStatus(env, options = {}) {
         ok: false,
         detail: evidenceOut.detail,
       },
-    ready: variables.every((variable) => variable.status === 'set') && evidenceOut.ok,
+    ready: variables.every((variable) => variable.status === 'set')
+      && baseUrl.ok
+      && origin.ok
+      && evidenceOut.ok,
   };
+}
+
+function validateProductionProxyBaseUrl(value) {
+  if (!value) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_BASE_URL is required.',
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_BASE_URL must be a valid URL.',
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_BASE_URL must use https:// for release smoke.',
+    };
+  }
+
+  if (isLocalOrPrivateHost(parsed.hostname)) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_BASE_URL must not point to localhost or a private network host.',
+    };
+  }
+
+  if (parsed.search || parsed.hash) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_BASE_URL must not include query or hash.',
+    };
+  }
+
+  return {
+    ok: true,
+    normalized: normalizeUrlWithoutTrailingSlash(parsed),
+  };
+}
+
+function validateProductionProxyOrigin(value) {
+  if (!value) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_ORIGIN is required.',
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_ORIGIN must be a valid URL origin.',
+    };
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_ORIGIN must use https:// for release smoke.',
+    };
+  }
+
+  if (parsed.origin !== value.replace(/\/$/, '')) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_ORIGIN must be an origin without path, query, or hash.',
+    };
+  }
+
+  if (isLocalOrPrivateHost(parsed.hostname)) {
+    return {
+      ok: false,
+      detail: 'ECHO_PROXY_SMOKE_ORIGIN must not point to localhost or a private network host.',
+    };
+  }
+
+  return {
+    ok: true,
+    normalized: parsed.origin,
+  };
+}
+
+function normalizeUrlWithoutTrailingSlash(parsed) {
+  parsed.search = '';
+  parsed.hash = '';
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+  return parsed.toString().replace(/\/$/, '');
+}
+
+function isLocalOrPrivateHost(hostname) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (
+    host === 'localhost'
+    || host.endsWith('.localhost')
+    || host.endsWith('.local')
+    || host === '127.0.0.1'
+    || host === '::1'
+  ) {
+    return true;
+  }
+
+  const parts = host.split('.').map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [a, b] = parts;
+  return a === 10
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 169 && b === 254);
 }
 
 function formatProxySmokeEnvLines(proxySmokeEnv) {
@@ -350,6 +478,18 @@ function formatProxySmokeEnvLines(proxySmokeEnv) {
     const redacted = variable.redacted ? ' (value redacted)' : '';
     return `- ${marker}: ${variable.name}${redacted}`;
   });
+
+  if (proxySmokeEnv.baseUrl.ok) {
+    lines.push(`- OK: ECHO_PROXY_BASE_URL -> ${proxySmokeEnv.baseUrl.normalized}`);
+  } else {
+    lines.push(`- CHECK: ECHO_PROXY_BASE_URL - ${proxySmokeEnv.baseUrl.detail}`);
+  }
+
+  if (proxySmokeEnv.origin.ok) {
+    lines.push(`- OK: ECHO_PROXY_SMOKE_ORIGIN -> ${proxySmokeEnv.origin.normalized}`);
+  } else {
+    lines.push(`- CHECK: ECHO_PROXY_SMOKE_ORIGIN - ${proxySmokeEnv.origin.detail}`);
+  }
 
   if (proxySmokeEnv.evidenceOut.ok) {
     lines.push(`- OK: ECHO_PROXY_SMOKE_EVIDENCE_OUT -> ${proxySmokeEnv.evidenceOut.repoRelativePath}`);

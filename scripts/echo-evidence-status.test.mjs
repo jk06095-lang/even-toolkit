@@ -171,6 +171,14 @@ test('reports proxy smoke env readiness without leaking the session token', () =
   const proxySmokeEnv = buildProxySmokeEnvStatus(env);
 
   assert.equal(proxySmokeEnv.ready, true);
+  assert.deepEqual(proxySmokeEnv.baseUrl, {
+    ok: true,
+    normalized: 'https://api.project-echo.app',
+  });
+  assert.deepEqual(proxySmokeEnv.origin, {
+    ok: true,
+    normalized: 'https://echo-client.example.test',
+  });
   assert.equal(proxySmokeEnv.evidenceOut.ok, true);
   assert.equal(proxySmokeEnv.evidenceOut.repoRelativePath, 'docs/proxy-smoke-evidence.json');
 
@@ -182,6 +190,8 @@ test('reports proxy smoke env readiness without leaking the session token', () =
   const formatted = formatEvidenceStatus(status);
 
   assert.match(formatted, /SET: ECHO_PROXY_SMOKE_SESSION_TOKEN \(value redacted\)/);
+  assert.match(formatted, /OK: ECHO_PROXY_BASE_URL -> https:\/\/api\.project-echo\.app/);
+  assert.match(formatted, /OK: ECHO_PROXY_SMOKE_ORIGIN -> https:\/\/echo-client\.example\.test/);
   assert.match(formatted, /Ready to attempt production proxy smoke: yes/);
   assert.doesNotMatch(formatted, /secret-smoke-token-must-not-print/);
   assert.doesNotMatch(JSON.stringify(status), /secret-smoke-token-must-not-print/);
@@ -198,4 +208,36 @@ test('rejects unsafe proxy smoke evidence paths in the status preflight', () => 
   assert.equal(proxySmokeEnv.ready, false);
   assert.equal(proxySmokeEnv.evidenceOut.ok, false);
   assert.match(proxySmokeEnv.evidenceOut.detail, /must stay inside the repository/);
+});
+
+test('rejects local or path-shaped proxy smoke URLs in the status preflight', () => {
+  const localBaseUrl = buildProxySmokeEnvStatus({
+    ECHO_PROXY_BASE_URL: 'http://127.0.0.1:8787',
+    ECHO_PROXY_SMOKE_ORIGIN: 'https://echo-client.example.test',
+    ECHO_PROXY_SMOKE_SESSION_TOKEN: 'redacted',
+    ECHO_PROXY_SMOKE_EVIDENCE_OUT: 'docs/proxy-smoke-evidence.json',
+  });
+
+  assert.equal(localBaseUrl.ready, false);
+  assert.equal(localBaseUrl.baseUrl.ok, false);
+  assert.match(localBaseUrl.baseUrl.detail, /must use https/);
+
+  const pathOrigin = buildProxySmokeEnvStatus({
+    ECHO_PROXY_BASE_URL: 'https://api.project-echo.app',
+    ECHO_PROXY_SMOKE_ORIGIN: 'https://echo-client.example.test/app',
+    ECHO_PROXY_SMOKE_SESSION_TOKEN: 'redacted',
+    ECHO_PROXY_SMOKE_EVIDENCE_OUT: 'docs/proxy-smoke-evidence.json',
+  });
+
+  assert.equal(pathOrigin.ready, false);
+  assert.equal(pathOrigin.origin.ok, false);
+  assert.match(pathOrigin.origin.detail, /without path, query, or hash/);
+  assert.match(formatEvidenceStatus({
+    handoff: { path: READINESS_HANDOFF_PATH, status: 'available' },
+    finalGates: [],
+    draftFiles: [],
+    proxySmokeEnv: pathOrigin,
+    missingFinalCount: 0,
+    missingDraftCount: 0,
+  }), /CHECK: ECHO_PROXY_SMOKE_ORIGIN/);
 });

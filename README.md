@@ -107,9 +107,11 @@ npm run status:echo-evidence
 ```
 
 The status command also preflights the production proxy smoke environment
-variables and validates that `ECHO_PROXY_SMOKE_EVIDENCE_OUT` resolves to a
-repo-local JSON path. It reports only whether
-`ECHO_PROXY_SMOKE_SESSION_TOKEN` is set; it does not print the token value.
+variables: `ECHO_PROXY_BASE_URL` must be a public HTTPS URL,
+`ECHO_PROXY_SMOKE_ORIGIN` must be a public HTTPS origin with no path/query/hash,
+and `ECHO_PROXY_SMOKE_EVIDENCE_OUT` must resolve to a repo-local JSON path. It
+reports only whether `ECHO_PROXY_SMOKE_SESSION_TOKEN` is set; it does not print
+the token value.
 After final artifacts exist, add `-- --validate-final` to run the available
 non-mutating validators for present completed manifests and README portfolio
 links:
