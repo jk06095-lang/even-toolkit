@@ -17,6 +17,17 @@ export type AssistTrigger =
   | 'abandoned_utterance'
   | 'repeated_filler'
   | 'comprehension_breakdown';
+export type AutoAssistSignalName =
+  | 'adaptive_silence'
+  | 'incomplete_utterance'
+  | 'repeated_filler';
+export type AutoAssistBlockedBy =
+  | 'partner_speaking'
+  | 'recent_dismiss_rate'
+  | 'auto_paused'
+  | 'session_cap'
+  | 'insufficient_signals'
+  | 'blackout';
 export type CueLevel = 1 | 2 | 3;
 export type CueLevelUsed = 0 | CueLevel;
 export type SpeechAct = 'answer' | 'clarify' | 'ask_repeat' | 'buy_time' | 'repair';
@@ -66,6 +77,24 @@ export interface AssistDecision {
   confidence: number;
   trigger: AssistTrigger;
   maxCueLevel: CueLevel;
+}
+
+export interface AutoAssistSignalEvidence {
+  schemaVersion: typeof ECHO_DOMAIN_V2_SCHEMA_VERSION;
+  id: string;
+  sessionId: string;
+  evaluatedAt: number;
+  trigger: AssistTrigger;
+  action: AssistAction;
+  signalCount: number;
+  requiredSignalCount: number;
+  signals: AutoAssistSignalName[];
+  blockedBy?: AutoAssistBlockedBy;
+  latestSpeaker?: SpeakerRole;
+  silenceDurationMs: number;
+  autoDismissStreak: number;
+  autoTriggerCount: number;
+  maxAutoTriggersPerSession: number;
 }
 
 export interface Cue {
@@ -200,6 +229,15 @@ const assistTriggers = [
   'repeated_filler',
   'comprehension_breakdown',
 ] as const;
+const autoAssistSignals = ['adaptive_silence', 'incomplete_utterance', 'repeated_filler'] as const;
+const autoAssistBlockedBy = [
+  'partner_speaking',
+  'recent_dismiss_rate',
+  'auto_paused',
+  'session_cap',
+  'insufficient_signals',
+  'blackout',
+] as const;
 const cueLevels = [1, 2, 3] as const;
 const cueLevelsUsed = [0, 1, 2, 3] as const;
 const speechActs = ['answer', 'clarify', 'ask_repeat', 'buy_time', 'repair'] as const;
@@ -214,6 +252,23 @@ const breakdownTypes = [
   'turn_taking',
 ] as const;
 const assistDecisionFields = ['action', 'confidence', 'trigger', 'maxCueLevel'] as const;
+const autoAssistSignalEvidenceFields = [
+  'schemaVersion',
+  'id',
+  'sessionId',
+  'evaluatedAt',
+  'trigger',
+  'action',
+  'signalCount',
+  'requiredSignalCount',
+  'signals',
+  'blockedBy',
+  'latestSpeaker',
+  'silenceDurationMs',
+  'autoDismissStreak',
+  'autoTriggerCount',
+  'maxAutoTriggersPerSession',
+] as const;
 const conversationTurnFields = [
   'schemaVersion',
   'id',
@@ -433,6 +488,71 @@ export const assistDecisionSchema = {
   },
 } as const satisfies JsonSchema;
 
+export const autoAssistSignalEvidenceSchema = {
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: `${ECHO_DOMAIN_V2_SCHEMA_BASE_ID}/auto-assist-signal-evidence.schema.json`,
+  title: 'AutoAssistSignalEvidence',
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'schemaVersion',
+    'id',
+    'sessionId',
+    'evaluatedAt',
+    'trigger',
+    'action',
+    'signalCount',
+    'requiredSignalCount',
+    'signals',
+    'silenceDurationMs',
+    'autoDismissStreak',
+    'autoTriggerCount',
+    'maxAutoTriggersPerSession',
+  ],
+  properties: {
+    schemaVersion: schemaVersionProperty,
+    id: idProperty,
+    sessionId: idProperty,
+    evaluatedAt: timestampMsProperty,
+    trigger: { enum: assistTriggers },
+    action: { enum: assistActions },
+    signalCount: { type: 'integer', minimum: 0, maximum: 8 },
+    requiredSignalCount: { type: 'integer', minimum: 2, maximum: 8 },
+    signals: {
+      type: 'array',
+      maxItems: 8,
+      uniqueItems: true,
+      items: { enum: autoAssistSignals },
+    },
+    blockedBy: { enum: autoAssistBlockedBy },
+    latestSpeaker: { enum: speakerRoles },
+    silenceDurationMs: timestampMsProperty,
+    autoDismissStreak: { type: 'integer', minimum: 0 },
+    autoTriggerCount: { type: 'integer', minimum: 0 },
+    maxAutoTriggersPerSession: { type: 'integer', minimum: 1 },
+  },
+  allOf: [
+    {
+      if: {
+        properties: { action: { const: 'show' } },
+        required: ['action'],
+      },
+      then: {
+        not: { required: ['blockedBy'] },
+      },
+    },
+    {
+      if: {
+        properties: { action: { const: 'none' } },
+        required: ['action'],
+      },
+      then: {
+        required: ['blockedBy'],
+      },
+    },
+  ],
+} as const satisfies JsonSchema;
+
 export const cueSchema = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: `${ECHO_DOMAIN_V2_SCHEMA_BASE_ID}/cue.schema.json`,
@@ -638,6 +758,7 @@ export const ECHO_DOMAIN_V2_SCHEMAS = {
   conversationTurn: conversationTurnSchema,
   conversationInputEvidence: conversationTurnSchema.properties.inputEvidence,
   assistDecision: assistDecisionSchema,
+  autoAssistSignalEvidence: autoAssistSignalEvidenceSchema,
   cue: cueSchema,
   assistEpisode: assistEpisodeSchema,
   dialogueExample: dialogueExampleSchema,
@@ -816,6 +937,61 @@ export function validateAssistDecision(value: unknown, path = 'assistDecision'):
   validateNumberField(record, 'confidence', issues, { required: true, min: 0, max: 1 });
   validateEnumField(record, 'trigger', assistTriggers, issues);
   validateEnumField(record, 'maxCueLevel', cueLevels, issues);
+
+  return result(issues);
+}
+
+export function validateAutoAssistSignalEvidence(value: unknown): ValidationResult {
+  const issues: ValidationIssue[] = [];
+  const record = asRecord(value, 'autoAssistSignalEvidence', issues);
+  if (!record) return result(issues);
+
+  validateKnownFields(record, autoAssistSignalEvidenceFields, issues);
+  validateSchemaVersion(record, issues);
+  validateStringField(record, 'id', issues, { required: true, maxLength: 128 });
+  validateStringField(record, 'sessionId', issues, { required: true, maxLength: 128 });
+  validateNumberField(record, 'evaluatedAt', issues, { required: true, min: 0 });
+  validateEnumField(record, 'trigger', assistTriggers, issues);
+  validateEnumField(record, 'action', assistActions, issues);
+  validateNumberField(record, 'signalCount', issues, { required: true, min: 0, max: 8, integer: true });
+  validateNumberField(record, 'requiredSignalCount', issues, { required: true, min: 2, max: 8, integer: true });
+  validateStringArrayField(record, 'signals', issues, { required: true, maxItems: 8, maxLength: 64 });
+  validateEnumField(record, 'blockedBy', autoAssistBlockedBy, issues, false);
+  validateEnumField(record, 'latestSpeaker', speakerRoles, issues, false);
+  validateNumberField(record, 'silenceDurationMs', issues, { required: true, min: 0 });
+  validateNumberField(record, 'autoDismissStreak', issues, { required: true, min: 0, integer: true });
+  validateNumberField(record, 'autoTriggerCount', issues, { required: true, min: 0, integer: true });
+  validateNumberField(record, 'maxAutoTriggersPerSession', issues, { required: true, min: 1, integer: true });
+
+  const signalValues = record.signals;
+  if (Array.isArray(signalValues)) {
+    const uniqueSignals = new Set(signalValues);
+    if (uniqueSignals.size !== signalValues.length) {
+      issues.push(issue('signals', 'Duplicate auto-assist signals are not allowed.'));
+    }
+    for (const [index, value] of signalValues.entries()) {
+      if (!autoAssistSignals.includes(value as AutoAssistSignalName)) {
+        issues.push(issue(`signals.${index}`, `Expected one of: ${autoAssistSignals.join(', ')}.`));
+      }
+    }
+    if (typeof record.signalCount === 'number' && record.signalCount !== uniqueSignals.size) {
+      issues.push(issue('signalCount', 'signalCount must match the number of unique signals.'));
+    }
+  }
+  if (record.action === 'show' && record.blockedBy !== undefined) {
+    issues.push(issue('blockedBy', 'A show decision cannot also have a blocker.'));
+  }
+  if (record.action === 'none' && record.blockedBy === undefined) {
+    issues.push(issue('blockedBy', 'A none decision must record why it was blocked.'));
+  }
+  if (
+    typeof record.signalCount === 'number' &&
+    typeof record.requiredSignalCount === 'number' &&
+    record.action === 'show' &&
+    record.signalCount < record.requiredSignalCount
+  ) {
+    issues.push(issue('signalCount', 'A show decision must satisfy the required signal count.'));
+  }
 
   return result(issues);
 }
@@ -1062,6 +1238,10 @@ export function isConversationTurn(value: unknown): value is ConversationTurn {
 
 export function isAssistDecision(value: unknown): value is AssistDecision {
   return validateAssistDecision(value).ok;
+}
+
+export function isAutoAssistSignalEvidence(value: unknown): value is AutoAssistSignalEvidence {
+  return validateAutoAssistSignalEvidence(value).ok;
 }
 
 export function isCue(value: unknown): value is Cue {

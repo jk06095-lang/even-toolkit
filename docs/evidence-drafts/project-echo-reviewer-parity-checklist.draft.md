@@ -9,8 +9,8 @@ to stable non-draft paths.
 
 - App version: 0.1.8
 - Package path: even-app/echo.ehpk
-- Package bytes: 28365115
-- Package SHA-256: c2607ddd4ac132469503af1199764000400fcb9568da5da8448248ff777586c8
+- Package bytes: 28365748
+- Package SHA-256: 35903337038421f25eef7f96bbb6b5233a2a979d46179434c644d6726ecc3aed
 - Package evidence draft: docs/evidence-drafts/project-echo-build-artifact.md
 - Field runbook draft: docs/evidence-drafts/project-echo-field-runbook.draft.md
 - Field prep report draft: docs/evidence-drafts/project-echo-field-run-prep-report.draft.md

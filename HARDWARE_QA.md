@@ -309,6 +309,10 @@ Automated coverage added on 2026-06-19:
 - Record `minimumTwoSignalsForAutoCue`, `partnerSpeechBlocksAutoCue`, and
   `recentDismissRateCheckedBeforeAutoCue` as `true` with evidence refs in the
   completed hardware manifest.
+- Preserve the session export summary beside the hardware notes and confirm it
+  includes `Auto evals` and `Auto blocked`. Those columns are derived from
+  privacy-safe `AutoAssistSignalEvidence` records and should show at least one
+  blocked one-signal/partner/dismiss/session-cap case plus one shown auto cue.
 - Confirm `rawTranscriptInMetrics` is `false`; Assist metrics must be counts and
   flags only, not raw learner utterances or cue text.
 
@@ -321,6 +325,8 @@ Automated coverage added on 2026-06-19:
   cue text are capped at level 2, while Manual Assist can still request level 3.
 - `session-engine-core` verifies Auto Assist pauses after two dismissed auto cues.
 - `session-engine-core` verifies Auto Assist is capped at three automatic cue generations per session.
+- `session-engine-core` verifies Auto Assist signal evidence records the trigger
+  signals and blockers without raw transcript or cue text.
 - `hud-controller` verifies active-session G2 cue/dismiss gestures map to `request-cue` and `dismiss-cue`.
 - `hud-controller` verifies the pause menu keeps `END PRACTICE` and `EXIT ECHO` as distinct actions.
 

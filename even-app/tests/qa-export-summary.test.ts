@@ -27,6 +27,11 @@ describe('QA export summary script', () => {
           cueUsedCount: 1,
           cueDismissedCount: 1,
           falseTriggerCount: 0,
+          autoAssistSignalEvidenceCount: 2,
+          autoAssistInsufficientSignalCount: 1,
+          autoAssistPartnerBlockedCount: 0,
+          autoAssistDismissBlockedCount: 0,
+          autoAssistSessionCapBlockedCount: 0,
           cueLatencyCount: 2,
           cueLatencyP50Ms: 120,
           cueLatencyP95Ms: 240,
@@ -49,6 +54,11 @@ describe('QA export summary script', () => {
           cueUsedCount: 1,
           cueDismissedCount: 0,
           falseTriggerCount: 1,
+          autoAssistSignalEvidenceCount: 3,
+          autoAssistInsufficientSignalCount: 0,
+          autoAssistPartnerBlockedCount: 1,
+          autoAssistDismissBlockedCount: 1,
+          autoAssistSessionCapBlockedCount: 0,
           cueLatencyCount: 1,
           cueLatencyP50Ms: 300,
           cueLatencyP95Ms: 450,
@@ -67,7 +77,10 @@ describe('QA export summary script', () => {
     expect(summary.overall.phoneFallbackRate).toBe('50%');
     expect(summary.overall.cueUsedCount).toBe(2);
     expect(summary.overall.falseTriggerCount).toBe(1);
+    expect(summary.overall.autoAssistSignalEvidenceCount).toBe(5);
+    expect(summary.overall.autoAssistBlockedCount).toBe(3);
     expect(markdown).toContain('Cafe ordering');
+    expect(markdown).toContain('Auto evals');
     expect(markdown).toContain('VAD threshold');
     expect(markdown).toContain('Calibrated at');
     expect(markdown).toContain('180ms');

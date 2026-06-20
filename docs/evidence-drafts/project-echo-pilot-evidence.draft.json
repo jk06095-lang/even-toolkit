@@ -10,7 +10,7 @@
   },
   "buildArtifact": {
     "packagePath": "even-app/echo.ehpk",
-    "sha256": "c2607ddd4ac132469503af1199764000400fcb9568da5da8448248ff777586c8",
+    "sha256": "35903337038421f25eef7f96bbb6b5233a2a979d46179434c644d6726ecc3aed",
     "packCommand": "npm --prefix even-app run pack",
     "sameArtifactUsedForPilot": false,
     "sameArtifactAsHardwareQa": false,

@@ -22,6 +22,7 @@ import { clearConversationTranslationJobs } from '../src/combat/translation-queu
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   isAssistEpisode,
+  isAutoAssistSignalEvidence,
   isCue,
 } from '@toolkit/echo-domain-v2';
 
@@ -328,6 +329,46 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.cueProvider.generateCalls).toBe(0);
     expect(harness.chunks).toEqual([]);
     expect(harness.engine.currentAssistMetrics.auto_trigger_count).toBe(0);
+  });
+
+  it('records privacy-safe Auto Assist signal evidence before automatic cues', async () => {
+    const storage = installMemoryLocalStorage();
+    const harness = createHarness({
+      chunkResult: {
+        chunk: 'Could you repeat that?',
+        source: 'gemini',
+        latencyMs: 12,
+      },
+    });
+    harness.engine.setAssistMode('auto');
+    await harness.engine.start(harness.hud);
+
+    harness.recognizers[0]!.emitFinalResult('I think maybe my private travel detail...');
+    await triggerAutoSilence(harness);
+    await harness.engine.stop();
+
+    const log = harness.logs[0]!;
+    const showEvidence = log.autoAssistSignalEvidenceRecords.find((record) => record.action === 'show');
+    expect(showEvidence).toBeTruthy();
+    expect(isAutoAssistSignalEvidence(showEvidence)).toBe(true);
+    expect(showEvidence).toMatchObject({
+      trigger: 'long_pause',
+      requiredSignalCount: 2,
+      signalCount: 2,
+      signals: ['adaptive_silence', 'incomplete_utterance'],
+      autoTriggerCount: 0,
+      maxAutoTriggersPerSession: 3,
+    });
+    expect(JSON.stringify(log.autoAssistSignalEvidenceRecords)).not.toContain('private travel detail');
+
+    const analytics = JSON.parse(storage.getItem('echo_session_events') ?? '[]');
+    expect(analytics[0]).toMatchObject({
+      autoAssistSignalEvidenceCount: log.autoAssistSignalEvidenceRecords.length,
+      autoAssistMinSignalCount: 2,
+      autoAssistInsufficientSignalCount: 0,
+      autoAssistPartnerBlockedCount: 0,
+    });
+    expect(JSON.stringify(analytics)).not.toContain('private travel detail');
   });
 
   it('cancels Auto Assist during the grace period when speech resumes', async () => {

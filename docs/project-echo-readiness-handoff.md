@@ -82,8 +82,9 @@ Useful official references:
    permission-denial, console-sanity, HUD, audio-source, wear-state, and
    phone/G2 boundary checks are covered.
 9. Capture hardware QA evidence first: lifecycle, HUD states including `ACK`,
-   explicit G2/Phone mic separation, delayed-proxy cleanup, voice-runtime
-   lazy-load behavior, wear status, and the phone-only conversation timeline.
+   explicit G2/Phone mic separation, delayed-proxy cleanup, Auto Assist signal
+   evidence, voice-runtime lazy-load behavior, wear status, and the phone-only
+   conversation timeline.
 10. Run the 5-user A/B/C pilot on that same package digest, including quiet
    room, cafe, air-conditioner, and outdoor wind VAD calibration exports plus
    summaries.

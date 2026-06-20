@@ -6,10 +6,12 @@ import {
   ECHO_DOMAIN_V2_SCHEMAS,
   createConversationInputEvidence,
   isAssistEpisode,
+  isAutoAssistSignalEvidence,
   isConversationTurn,
   isCue,
   isLearnerProfile,
   isLearningItem,
+  validateAutoAssistSignalEvidence,
   validateConversationTurn,
 } from '../dist/echo-domain-v2/index.js';
 
@@ -71,6 +73,23 @@ const assistEpisode = {
   userAttempt: 'Could you repeat it?',
   acceptedPhrase: 'Could you repeat that?',
   latencyMs: 140,
+};
+
+const autoAssistSignalEvidence = {
+  schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+  id: 'auto-assist-signal-1',
+  sessionId,
+  evaluatedAt: 2550,
+  trigger: 'long_pause',
+  action: 'show',
+  signalCount: 2,
+  requiredSignalCount: 2,
+  signals: ['adaptive_silence', 'incomplete_utterance'],
+  latestSpeaker: 'learner',
+  silenceDurationMs: 5200,
+  autoDismissStreak: 0,
+  autoTriggerCount: 0,
+  maxAutoTriggersPerSession: 3,
 };
 
 const learningItem = {
@@ -138,6 +157,7 @@ assert.equal(ECHO_DOMAIN_V2_SCHEMA_VERSION, '2.0.0');
 assert.deepEqual(Object.keys(ECHO_DOMAIN_V2_SCHEMAS).sort(), [
   'assistDecision',
   'assistEpisode',
+  'autoAssistSignalEvidence',
   'conversationInputEvidence',
   'conversationTurn',
   'cue',
@@ -156,6 +176,7 @@ assert.deepEqual(conversationTurn.inputEvidence, {
 });
 assert.ok(isCue(cue), 'valid stepped Cue should pass');
 assert.ok(isAssistEpisode(assistEpisode), 'valid AssistEpisode should pass');
+assert.ok(isAutoAssistSignalEvidence(autoAssistSignalEvidence), 'valid AutoAssistSignalEvidence should pass');
 assert.ok(isLearningItem(learningItem), 'valid LearningItem should pass');
 assert.ok(isLearnerProfile(learnerProfile), 'valid LearnerProfile should pass');
 
@@ -232,6 +253,34 @@ assert.equal(
   isLearningItem(extraLearningItemField),
   false,
   'runtime guards must reject unknown LearningItem fields',
+);
+
+const weakAutoAssistSignalEvidence = {
+  ...autoAssistSignalEvidence,
+  id: 'auto-assist-weak',
+  signalCount: 1,
+  signals: ['adaptive_silence'],
+};
+const weakAutoAssistResult = validateAutoAssistSignalEvidence(weakAutoAssistSignalEvidence);
+assert.equal(
+  weakAutoAssistResult.ok,
+  false,
+  'Auto Assist cannot show from silence alone',
+);
+assert.ok(
+  weakAutoAssistResult.issues.some((entry) => entry.path === 'signalCount'),
+  'weak Auto Assist evidence should report the signal count',
+);
+
+assert.equal(
+  isAutoAssistSignalEvidence({
+    ...autoAssistSignalEvidence,
+    action: 'none',
+    blockedBy: 'partner_speaking',
+    latestSpeaker: 'partner',
+  }),
+  true,
+  'blocked Auto Assist evidence should carry an explicit blocker',
 );
 
 const extraNestedProfileField = {

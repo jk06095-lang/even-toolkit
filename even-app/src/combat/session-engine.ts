@@ -26,6 +26,9 @@ import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
   type AssistDecision,
   type AssistOutcome,
+  type AutoAssistBlockedBy,
+  type AutoAssistSignalEvidence,
+  type AutoAssistSignalName,
   type ConversationTurn,
   type AssistTrigger,
   type Cue,
@@ -94,6 +97,7 @@ export const WEEK_CONFIGS: Record<number, WeekConfig> = {
   4: { week: 4, silenceThresholdMs: 2000, hintFlashDurationMs: 1200, blackoutProbability: 0.4,  label: 'Independent Practice' },
 };
 const AUTO_ASSIST_GRACE_MS = 400;
+const AUTO_ASSIST_REQUIRED_SIGNAL_COUNT = 2;
 const CUE_CONTEXT_TURN_LIMIT = 5;
 const CUE_CONTEXT_TEXT_LIMIT = 240;
 const FILLER_WORD_PATTERN = /\b(?:uh|um|erm|hmm|like|maybe|well|so)\b/g;
@@ -114,6 +118,7 @@ export interface SessionLog {
   silenceDurations: number[];
   assistMetrics: AssistMetrics;
   cueLatencyRecords: CueLatencyRecord[];
+  autoAssistSignalEvidenceRecords: AutoAssistSignalEvidence[];
   /** Full transcript saved to cache — available for export */
   transcript?: SessionTranscript;
 }
@@ -323,6 +328,7 @@ export class SessionEngine {
   };
   private autoDismissStreak = 0;
   private readonly maxAutoTriggersPerSession = 3;
+  private autoAssistSignalEvidenceRecords: AutoAssistSignalEvidence[] = [];
   private activeCueTrigger: CueTrigger | null = null;
   private cueVisible = false;
   private activeAssistEpisodeId: string | null = null;
@@ -413,6 +419,7 @@ export class SessionEngine {
       auto_assist_paused: false,
     };
     this.autoDismissStreak = 0;
+    this.autoAssistSignalEvidenceRecords = [];
     this.activeCueTrigger = null;
     this.cueVisible = false;
     this.emitAssistMetrics();
@@ -448,12 +455,60 @@ export class SessionEngine {
     return this.analyzer?.getConversationContext() ?? undefined;
   }
 
-  private hasAutoAssistBreakdownSignal(): boolean {
+  private evaluateAutoAssistSignals(): AutoAssistSignalEvidence {
     const latestSpeaker = this.latestConversationTurnSpeaker();
-    if (latestSpeaker === 'partner') return false;
+    const silenceDurationMs = Math.max(0, this.clock.now() - this.lastTranscriptActivityTime);
+    const signals: AutoAssistSignalName[] = [];
+    if (silenceDurationMs >= this.weekConfig.silenceThresholdMs - 200) {
+      signals.push('adaptive_silence');
+    }
+    if (hasIncompleteUtteranceSignal(this.lastLiveTranscript)) {
+      signals.push('incomplete_utterance');
+    }
+    if (hasRepeatedFillerSignal(this.lastLiveTranscript)) {
+      signals.push('repeated_filler');
+    }
 
-    return hasRepeatedFillerSignal(this.lastLiveTranscript)
-      || hasIncompleteUtteranceSignal(this.lastLiveTranscript);
+    let blockedBy: AutoAssistBlockedBy | undefined;
+    if (latestSpeaker === 'partner') {
+      blockedBy = 'partner_speaking';
+    } else if (this.assistMetrics.auto_assist_paused) {
+      blockedBy = 'auto_paused';
+    } else if (this.autoDismissStreak >= 2) {
+      blockedBy = 'recent_dismiss_rate';
+    } else if (this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
+      blockedBy = 'session_cap';
+    } else if (signals.length < AUTO_ASSIST_REQUIRED_SIGNAL_COUNT) {
+      blockedBy = 'insufficient_signals';
+    }
+
+    return {
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      id: cleanDomainId(`${this.sessionRequestScopeId}:auto-assist:${this.autoAssistSignalEvidenceRecords.length + 1}`),
+      sessionId: this.transcriptStore?.sessionId ?? this.sessionRequestScopeId,
+      evaluatedAt: this.clock.now(),
+      trigger: 'long_pause',
+      action: blockedBy ? 'none' : 'show',
+      signalCount: signals.length,
+      requiredSignalCount: AUTO_ASSIST_REQUIRED_SIGNAL_COUNT,
+      signals,
+      ...(blockedBy ? { blockedBy } : {}),
+      ...(latestSpeaker ? { latestSpeaker } : {}),
+      silenceDurationMs,
+      autoDismissStreak: this.autoDismissStreak,
+      autoTriggerCount: this.assistMetrics.auto_trigger_count,
+      maxAutoTriggersPerSession: this.maxAutoTriggersPerSession,
+    };
+  }
+
+  private recordAutoAssistSignalEvidence(): AutoAssistSignalEvidence {
+    const evidence = this.evaluateAutoAssistSignals();
+    this.autoAssistSignalEvidenceRecords.push(evidence);
+    return evidence;
+  }
+
+  private shouldAutoAssistShow(evidence: AutoAssistSignalEvidence): boolean {
+    return evidence.action === 'show' && evidence.signalCount >= evidence.requiredSignalCount;
   }
 
   private scheduleSilenceReturn(delayMs = 1000): void {
@@ -473,23 +528,25 @@ export class SessionEngine {
   private async generateAutoCueAfterGrace(): Promise<void> {
     if (this._state !== 'silence_detected') return;
     if (this.isGenerating) return;
-    if (this.assistMetrics.auto_assist_paused || this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
+    const evidence = this.recordAutoAssistSignalEvidence();
+    if (!this.shouldAutoAssistShow(evidence)) {
       this.scheduleSilenceReturn();
       return;
     }
-    if (!this.hasAutoAssistBreakdownSignal()) {
+
+    // Week 4 blackout check
+    if (this.random.next() < this.weekConfig.blackoutProbability) {
+      this.autoAssistSignalEvidenceRecords[this.autoAssistSignalEvidenceRecords.length - 1] = {
+        ...evidence,
+        action: 'none',
+        blockedBy: 'blackout',
+      };
       this.scheduleSilenceReturn();
       return;
     }
 
     this.assistMetrics.auto_trigger_count++;
     this.emitAssistMetrics();
-
-    // Week 4 blackout check
-    if (this.random.next() < this.weekConfig.blackoutProbability) {
-      this.scheduleSilenceReturn();
-      return;
-    }
 
     await this.generateContextualHint('auto');
   }
@@ -952,6 +1009,26 @@ export class SessionEngine {
     };
   }
 
+  private summarizeAutoAssistSignals(): {
+    count: number;
+    insufficientSignals: number;
+    partnerBlocked: number;
+    dismissBlocked: number;
+    sessionCapBlocked: number;
+  } {
+    const records = this.autoAssistSignalEvidenceRecords;
+    return {
+      count: records.length,
+      insufficientSignals: records.filter((record) => record.blockedBy === 'insufficient_signals').length,
+      partnerBlocked: records.filter((record) => record.blockedBy === 'partner_speaking').length,
+      dismissBlocked: records.filter((record) => (
+        record.blockedBy === 'recent_dismiss_rate' ||
+        record.blockedBy === 'auto_paused'
+      )).length,
+      sessionCapBlocked: records.filter((record) => record.blockedBy === 'session_cap').length,
+    };
+  }
+
   /**
    * Configure the session topic and category before starting.
    */
@@ -1372,6 +1449,7 @@ export class SessionEngine {
       ? Math.round((this.selfResponses / this.speechCount) * 100)
       : 0;
     const cueLatencySummary = this.summarizeCueLatency();
+    const autoAssistSignalSummary = this.summarizeAutoAssistSignals();
 
     this.transcriptStore?.setSessionEventTelemetry({
       audioSource,
@@ -1387,6 +1465,12 @@ export class SessionEngine {
       falseTriggerCount: this.assistMetrics.false_trigger_count,
       cueUsedCount: this.assistMetrics.cue_used_count,
       autoAssistPaused: this.assistMetrics.auto_assist_paused,
+      autoAssistSignalEvidenceCount: autoAssistSignalSummary.count,
+      autoAssistMinSignalCount: AUTO_ASSIST_REQUIRED_SIGNAL_COUNT,
+      autoAssistInsufficientSignalCount: autoAssistSignalSummary.insufficientSignals,
+      autoAssistPartnerBlockedCount: autoAssistSignalSummary.partnerBlocked,
+      autoAssistDismissBlockedCount: autoAssistSignalSummary.dismissBlocked,
+      autoAssistSessionCapBlockedCount: autoAssistSignalSummary.sessionCapBlocked,
       vadSpeechThreshold: this.vadCalibration?.speechThreshold,
       vadNoiseFloorRms: this.vadCalibration?.noiseFloorRms,
       vadSpeechFloorRms: this.vadCalibration?.speechFloorRms,
@@ -1412,6 +1496,7 @@ export class SessionEngine {
       silenceDurations: this.silenceDurations,
       assistMetrics: { ...this.assistMetrics },
       cueLatencyRecords: [...this.cueLatencyRecords],
+      autoAssistSignalEvidenceRecords: [...this.autoAssistSignalEvidenceRecords],
       transcript,
     };
 
@@ -1566,16 +1651,20 @@ export class SessionEngine {
       return;
     }
 
-    if (this.assistMetrics.auto_assist_paused || this.assistMetrics.auto_trigger_count >= this.maxAutoTriggersPerSession) {
-      this.setState('silence_detected');
-      this.callbacks.onSilenceStart();
-      this.scheduleSilenceReturn();
-      return;
-    }
-
     // Check if user missed the active hint (silence = they didn't use it)
-    if (this.analyzer?.getActiveHint()) {
-      const activeHint = this.analyzer.getActiveHint()!;
+    const activeHint = this.analyzer?.getActiveHint();
+    if (activeHint) {
+      const preHintEvidence = this.recordAutoAssistSignalEvidence();
+      if (
+        preHintEvidence.blockedBy === 'auto_paused' ||
+        preHintEvidence.blockedBy === 'recent_dismiss_rate' ||
+        preHintEvidence.blockedBy === 'session_cap'
+      ) {
+        this.setState('silence_detected');
+        this.callbacks.onSilenceStart();
+        this.scheduleSilenceReturn();
+        return;
+      }
 
       // Try to simplify the missed hint
       this.isGenerating = true;
@@ -1666,7 +1755,8 @@ export class SessionEngine {
 
     this.setState('silence_detected');
     this.callbacks.onSilenceStart();
-    if (!this.hasAutoAssistBreakdownSignal()) {
+    const evidence = this.recordAutoAssistSignalEvidence();
+    if (!this.shouldAutoAssistShow(evidence)) {
       this.scheduleSilenceReturn();
       return;
     }

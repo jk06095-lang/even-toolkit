@@ -105,6 +105,12 @@ export interface SessionEventAnalytics {
   falseTriggerCount?: number;
   cueUsedCount?: number;
   autoAssistPaused?: boolean;
+  autoAssistSignalEvidenceCount?: number;
+  autoAssistMinSignalCount?: number;
+  autoAssistInsufficientSignalCount?: number;
+  autoAssistPartnerBlockedCount?: number;
+  autoAssistDismissBlockedCount?: number;
+  autoAssistSessionCapBlockedCount?: number;
   vadSpeechThreshold?: number;
   vadNoiseFloorRms?: number;
   vadSpeechFloorRms?: number;
