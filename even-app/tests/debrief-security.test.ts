@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getDebriefImportSourceLabel, parseDebriefJSON } from '../src/debrief/json-parser';
+import { getDebriefImportSourceLabel, normalizeStoredDebrief, parseDebriefJSON } from '../src/debrief/json-parser';
 
 describe('debrief import safety', () => {
   it('accepts markdown-wrapped JSON after validating safe text fields', () => {
@@ -188,6 +188,124 @@ describe('debrief import safety', () => {
         ],
       }))).toThrow(/executable URL schemes|control characters/);
     }
+  });
+
+  it('rejects unsafe schema-versioned debriefs already present in storage', () => {
+    expect(normalizeStoredDebrief({
+      report: {
+        schemaVersion: '2.0.0',
+        importKind: 'echo_review_items',
+        session_date: '2026-06-19',
+        bottleneck_chunks: [],
+        learningItems: [
+          makeDomainLearningItem({
+            canonicalExpression: 'Email me at learner@example.com',
+          }),
+        ],
+      },
+      importedAt: 1,
+      scheduledPushes: [],
+    })).toBeNull();
+
+    expect(normalizeStoredDebrief({
+      report: {
+        schemaVersion: '2.0.0',
+        importKind: 'echo_review_items',
+        session_date: '2026-06-19',
+        bottleneck_chunks: [
+          {
+            target: '<img src=x onerror=alert(1)>',
+            interval: [],
+          },
+        ],
+        learningItems: [makeDomainLearningItem()],
+      },
+      importedAt: 1,
+      scheduledPushes: [],
+    })).toBeNull();
+  });
+
+  it('normalizes safe stored debriefs without keeping stale unsafe scheduled text', () => {
+    const stored = normalizeStoredDebrief({
+      report: {
+        schemaVersion: '2.0.0',
+        importKind: 'echo_review_items',
+        session_date: '2026-06-19',
+        bottleneck_chunks: [],
+        learningItems: [makeDomainLearningItem()],
+      },
+      importedAt: 1,
+      scheduledPushes: [
+        {
+          chunk: '<script>alert(1)</script>',
+          scheduledTime: Date.parse('2026-06-20T00:00:00.000Z'),
+          pushed: true,
+          learningItemId: 'domain-review-01',
+        },
+      ],
+    });
+
+    expect(stored).not.toBeNull();
+    expect(stored?.scheduledPushes).toEqual([
+      {
+        chunk: 'Could you repeat that?',
+        scheduledTime: Date.parse('2026-06-20T00:00:00.000Z'),
+        pushed: true,
+        learningItemId: 'domain-review-01',
+      },
+    ]);
+  });
+
+  it('rejects unsafe legacy debriefs already present in storage', () => {
+    expect(normalizeStoredDebrief({
+      report: {
+        session_date: '2026-06-19',
+        fsi_stress_level: 'Medium',
+        bottleneck_chunks: [
+          {
+            target: 'javascript:alert(1)',
+            interval: [10],
+          },
+        ],
+      },
+      importedAt: 1,
+      scheduledPushes: [],
+    } as Parameters<typeof normalizeStoredDebrief>[0])).toBeNull();
+  });
+
+  it('normalizes legacy stored debrief reminders from validated chunks', () => {
+    const stored = normalizeStoredDebrief({
+      report: {
+        session_date: '2026-06-19',
+        fsi_stress_level: 'Medium',
+        bottleneck_chunks: [
+          {
+            target: 'Could you repeat that?',
+            interval: [10],
+          },
+        ],
+      },
+      importedAt: 1,
+      scheduledPushes: [
+        {
+          chunk: '<script>alert(1)</script>',
+          scheduledTime: 123,
+          pushed: true,
+        },
+      ],
+    } as Parameters<typeof normalizeStoredDebrief>[0]);
+
+    expect(stored).not.toBeNull();
+    expect(stored?.report).toMatchObject({
+      schemaVersion: '2.0.0',
+      importKind: 'legacy_debrief',
+      fsi_stress_level: 'Medium',
+    });
+    expect(stored?.scheduledPushes).toHaveLength(1);
+    expect(stored?.scheduledPushes[0]).toMatchObject({
+      chunk: 'Could you repeat that?',
+      pushed: false,
+    });
   });
 
   it('rejects overlarge import arrays before scheduling reminders', () => {

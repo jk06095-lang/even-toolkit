@@ -47,6 +47,10 @@ legacy migration path and converted into conservative `LearningItem` records
 without revealing the saved English phrase in the recall prompt. The Review
 screen labels those imports as `Legacy FSI Import`, not as a current stress or
 mastery signal, and any fixed interval reminders are shown as legacy intervals.
+Stored review reports are also revalidated on load, so older IndexedDB/local
+review data with HTML-like text, executable URL schemes, direct contact
+identifiers, or stale scheduled reminder text is dropped or rebuilt before it
+can reach the Review or Echo Reminders screens.
 The Echo Reminders screen also shows an Imported Review Items list with due
 time, meaning, speech act, and scenario tag so learners can confirm imported
 items are present without exposing the answer before recall.

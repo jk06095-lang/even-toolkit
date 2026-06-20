@@ -585,38 +585,142 @@ export function clearImportedLearningItemsForRecall(): void {
   }
 }
 
-function normalizeStoredDebrief(value: StoredDebrief): StoredDebrief | null {
+export function normalizeStoredDebrief(value: StoredDebrief): StoredDebrief | null {
   if (!value || typeof value !== 'object' || !value.report) return null;
   const report = value.report as DebriefReport;
   if (Array.isArray(report.learningItems) && report.schemaVersion === ECHO_DOMAIN_V2_SCHEMA_VERSION) {
-    return value;
+    return normalizeCurrentSchemaStoredDebrief(value, report);
   }
 
   if (
     typeof report.session_date === 'string' &&
     Array.isArray(report.bottleneck_chunks)
   ) {
-    const chunks = report.bottleneck_chunks.filter((chunk) => (
-      chunk &&
-      typeof chunk.target === 'string' &&
-      Array.isArray(chunk.interval)
-    ));
+    return normalizeLegacyStoredDebrief(value, report);
+  }
+
+  return null;
+}
+
+function normalizeLegacyStoredDebrief(value: StoredDebrief, report: DebriefReport): StoredDebrief | null {
+  try {
+    const sessionDate = parseSafeText(report.session_date, 'session_date', MAX_SESSION_DATE_CHARS);
+    const bottleneckChunks = normalizeStoredBottleneckChunks(report.bottleneck_chunks, [], 'legacy_debrief');
+    if (bottleneckChunks.length === 0) return null;
+
+    const learningItems = bottleneckChunks.map((chunk, index) => {
+      const item = createLegacyLearningItem(sessionDate, chunk, index);
+      assertLearningItemSafeText(item, index);
+      return item;
+    });
+    const fsiStressLevel = normalizeFsiStressLevel(report.fsi_stress_level);
     const migratedReport: DebriefReport = {
       schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
       importKind: 'legacy_debrief',
-      session_date: report.session_date,
-      fsi_stress_level: report.fsi_stress_level,
-      bottleneck_chunks: chunks,
-      learningItems: chunks.map((chunk, index) => createLegacyLearningItem(report.session_date, chunk, index)),
+      session_date: sessionDate,
+      ...(fsiStressLevel ? { fsi_stress_level: fsiStressLevel } : {}),
+      bottleneck_chunks: bottleneckChunks,
+      learningItems,
     };
     return {
       ...value,
       report: migratedReport,
-      scheduledPushes: Array.isArray(value.scheduledPushes) ? value.scheduledPushes : generateSchedule(migratedReport),
+      scheduledPushes: normalizeStoredScheduledPushes(value.scheduledPushes, migratedReport),
     };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCurrentSchemaStoredDebrief(value: StoredDebrief, report: DebriefReport): StoredDebrief | null {
+  try {
+    const importKind = report.importKind === 'legacy_debrief' || report.importKind === 'echo_review_items'
+      ? report.importKind
+      : null;
+    if (!importKind) return null;
+
+    const sessionDate = parseSafeText(report.session_date, 'session_date', MAX_SESSION_DATE_CHARS);
+    const learningItems = report.learningItems.map((item, index) => {
+      if (!isLearningItem(item)) {
+        throw new Error(`Invalid stored learningItems[${index}] domain item.`);
+      }
+      assertLearningItemSafeText(item, index);
+      return item;
+    });
+    if (learningItems.length === 0) return null;
+
+    const bottleneckChunks = normalizeStoredBottleneckChunks(report.bottleneck_chunks, learningItems, importKind);
+    const fsiStressLevel = normalizeFsiStressLevel(report.fsi_stress_level);
+    const normalizedReport: DebriefReport = {
+      schemaVersion: ECHO_DOMAIN_V2_SCHEMA_VERSION,
+      importKind,
+      session_date: sessionDate,
+      ...(fsiStressLevel ? { fsi_stress_level: fsiStressLevel } : {}),
+      bottleneck_chunks: bottleneckChunks,
+      learningItems,
+    };
+
+    return {
+      ...value,
+      report: normalizedReport,
+      scheduledPushes: normalizeStoredScheduledPushes(value.scheduledPushes, normalizedReport),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeFsiStressLevel(value: unknown): 'Low' | 'Medium' | 'High' | undefined {
+  if (value === 'Low' || value === 'Medium' || value === 'High') return value;
+  return undefined;
+}
+
+function normalizeStoredBottleneckChunks(
+  value: unknown,
+  learningItems: LearningItem[],
+  importKind: DebriefImportKind,
+): BottleneckChunk[] {
+  if (Array.isArray(value)) {
+    const chunks = value.flatMap((chunk, index): BottleneckChunk[] => {
+      if (!chunk || typeof chunk !== 'object') return [];
+      const record = chunk as Record<string, unknown>;
+      if (typeof record.target !== 'string') return [];
+      const target = parseSafeText(record.target, `bottleneck_chunks[${index}].target`, MAX_TARGET_CHARS);
+      const interval = Array.isArray(record.interval)
+        ? record.interval.filter((entry): entry is number => (
+          typeof entry === 'number'
+          && Number.isInteger(entry)
+          && entry > 0
+          && entry <= MAX_INTERVAL_MINUTES
+        )).slice(0, MAX_INTERVALS_PER_CHUNK)
+        : [];
+      return [{ target, interval: importKind === 'echo_review_items' ? [] : interval }];
+    });
+    if (chunks.length > 0) return chunks;
   }
 
-  return null;
+  return learningItems.map((item) => ({
+    target: item.canonicalExpression,
+    interval: [],
+  }));
+}
+
+function normalizeStoredScheduledPushes(value: unknown, report: DebriefReport): ScheduledPush[] {
+  const existing = Array.isArray(value) ? value : [];
+  return generateSchedule(report).map((push) => {
+    const matched = existing.find((entry) => (
+      entry
+      && typeof entry === 'object'
+      && (
+        ('learningItemId' in entry && entry.learningItemId === push.learningItemId && push.learningItemId)
+        || ('chunk' in entry && entry.chunk === push.chunk && entry.scheduledTime === push.scheduledTime)
+      )
+    ));
+    return {
+      ...push,
+      pushed: matched && 'pushed' in matched ? matched.pushed === true : push.pushed,
+    };
+  });
 }
 
 /**
