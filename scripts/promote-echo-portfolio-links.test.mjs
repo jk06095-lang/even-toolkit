@@ -97,8 +97,8 @@ function createEvidenceFiles() {
   mkdirSync(notesDir, { recursive: true });
   mkdirSync(videosDir, { recursive: true });
 
-  const ko = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.ko.md'), '# KO case study\n');
-  const en = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.en.md'), '# EN case study\n');
+  const ko = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.ko.md'), caseStudyContent('KO'));
+  const en = writeEvidenceFile(path.join(evidenceDir, 'project-echo-case-study.en.md'), caseStudyContent('EN'));
   const architecture = writeEvidenceFile(path.join(evidenceDir, 'project-echo-architecture.md'), '# Architecture\n');
   const outcomeSummary = writeEvidenceFile(path.join(evidenceDir, 'project-echo-outcome-summary.md'), '# Outcome summary\n');
   const video = writeEvidenceFile(path.join(videosDir, 'project-echo-real-g2-video.mp4'), 'video placeholder\n');
@@ -153,6 +153,20 @@ function createEvidenceFiles() {
       );
     },
   };
+}
+
+function caseStudyContent(language) {
+  return `# ${language} case study
+
+## Core Outcome Metrics
+
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| Conversation Recovery Rate | 0.72 | pilot scorecard |
+| Independent Transfer Rate Day 1 | 0.48 | pilot scorecard |
+| Independent Transfer Rate Day 7 | 0.36 | pilot scorecard |
+| Transfer scenario count | 10 | transfer evidence refs |
+`;
 }
 
 function writeEvidenceFile(filePath, contents) {

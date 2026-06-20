@@ -71,6 +71,13 @@ const VIDEO_EXTENSIONS = ['mp4', 'mov', 'webm', 'mkv'];
 const PILOT_ARTIFACT_EXTENSIONS = ['json', 'md', 'txt', 'log'];
 const PACKAGE_EXTENSIONS = ['ehpk'];
 const QA_SUMMARY_EXTENSIONS = ['md', 'txt', 'log'];
+const TEXT_CASE_STUDY_EXTENSIONS = new Set(['.md', '.html']);
+const CASE_STUDY_REQUIRED_OUTCOME_TEXT = [
+  { label: 'Conversation Recovery Rate', pattern: /Conversation\s+Recovery\s+Rate/i },
+  { label: 'Independent Transfer Rate Day 1', pattern: /Independent\s+Transfer\s+Rate\s+Day\s+1/i },
+  { label: 'Independent Transfer Rate Day 7', pattern: /Independent\s+Transfer\s+Rate\s+Day\s+7/i },
+  { label: 'Transfer scenario count', pattern: /Transfer\s+scenario\s+count/i },
+];
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
@@ -303,6 +310,38 @@ function validateRepoEvidenceFile(object, key, pointer, options = {}) {
   }
 
   return resolveRepoEvidencePath(value, fieldPointer);
+}
+
+function validateCaseStudyEvidence(object, key, pointer) {
+  const fieldPointer = `${pointer}.${key}`;
+  const value = object?.[key];
+  validateEvidenceLink(object, key, pointer);
+
+  if (allowDraft && (value === null || isPlaceholder(value))) return;
+  if (typeof value !== 'string' || isPlaceholder(value)) return;
+  if (/^https:\/\//i.test(value.trim())) return;
+
+  const resolvedPath = resolveRepoEvidencePath(value, fieldPointer);
+  if (!resolvedPath) return;
+
+  if (!TEXT_CASE_STUDY_EXTENSIONS.has(path.extname(resolvedPath).toLowerCase())) {
+    addWarning(fieldPointer, 'repo-local case-study content check only inspects .md and .html files');
+    return;
+  }
+
+  let content;
+  try {
+    content = readFileSync(resolvedPath, 'utf8');
+  } catch (error) {
+    addError(fieldPointer, `could not read repo-local case-study file: ${error.message}`);
+    return;
+  }
+
+  for (const cue of CASE_STUDY_REQUIRED_OUTCOME_TEXT) {
+    if (!cue.pattern.test(content)) {
+      addError(fieldPointer, `case-study file must include ${cue.label}`);
+    }
+  }
 }
 
 function looksLikeEvidenceLink(value, extensions) {
@@ -879,8 +918,8 @@ function validateManifest(manifestObject) {
   validateOutcomeMetrics(manifestObject);
 
   if (validateObject(manifestObject.caseStudy, 'caseStudy')) {
-    validateEvidenceLink(manifestObject.caseStudy, 'koreanCaseStudyUrl', 'caseStudy');
-    validateEvidenceLink(manifestObject.caseStudy, 'englishCaseStudyUrl', 'caseStudy');
+    validateCaseStudyEvidence(manifestObject.caseStudy, 'koreanCaseStudyUrl', 'caseStudy');
+    validateCaseStudyEvidence(manifestObject.caseStudy, 'englishCaseStudyUrl', 'caseStudy');
     validateEvidenceLink(manifestObject.caseStudy, 'architectureDiagramUrl', 'caseStudy', {
       extensions: ARCHITECTURE_EXTENSIONS,
     });

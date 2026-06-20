@@ -104,6 +104,37 @@ test('rejects completed pilot evidence without core outcome KPI proof', async ()
   assert.match(output, /outcomeMetrics\.evidenceRef: must be an https URL or repo path/);
 });
 
+test('rejects repo-local case studies without core outcome metric text', async () => {
+  const fixture = writeCompletedPilotFixture('missing-case-study-outcome-text');
+  const manifest = readFixture(fixture.manifestPath);
+  const koPath = path.resolve(repoRoot, manifest.caseStudy.koreanCaseStudyUrl);
+  const enPath = path.resolve(repoRoot, manifest.caseStudy.englishCaseStudyUrl);
+
+  writeFileSync(
+    koPath,
+    '# KO case study\nConversation Recovery Rate\nIndependent Transfer Rate Day 1\nTransfer scenario count\n',
+    'utf8',
+  );
+  writeFileSync(enPath, '# EN case study\nOutcome summary pending.\n', 'utf8');
+
+  const result = await runValidator(fixture.manifestPath);
+  const output = combinedOutput(result);
+
+  assert.notEqual(result.code, 0);
+  assert.match(
+    output,
+    /caseStudy\.koreanCaseStudyUrl: case-study file must include Independent Transfer Rate Day 7/,
+  );
+  assert.match(
+    output,
+    /caseStudy\.englishCaseStudyUrl: case-study file must include Conversation Recovery Rate/,
+  );
+  assert.match(
+    output,
+    /caseStudy\.englishCaseStudyUrl: case-study file must include Independent Transfer Rate Day 1/,
+  );
+});
+
 test('rejects completed pilot evidence that points to draft evidence files', async () => {
   const fixture = writeCompletedPilotFixture('draft-evidence-ref');
   const manifest = readFixture(fixture.manifestPath);
@@ -233,13 +264,32 @@ function createEvidenceRefs(fixtureDir) {
   };
 
   for (const [key, filePath] of Object.entries(files)) {
-    const content = key === 'qaExport' ? '{"eventAnalytics":{}}\n' : `${key} evidence\n`;
+    let content = `${key} evidence\n`;
+    if (key === 'qaExport') {
+      content = '{"eventAnalytics":{}}\n';
+    } else if (key === 'caseStudyKo' || key === 'caseStudyEn') {
+      content = caseStudyFixtureContent(key);
+    }
     writeFileSync(filePath, content, 'utf8');
   }
 
   return Object.fromEntries(
     Object.entries(files).map(([key, filePath]) => [key, repoRelative(filePath)]),
   );
+}
+
+function caseStudyFixtureContent(key) {
+  return `# ${key} evidence
+
+## Core Outcome Metrics
+
+| Metric | Value | Evidence |
+| --- | ---: | --- |
+| Conversation Recovery Rate | 0.72 | pilot scorecard |
+| Independent Transfer Rate Day 1 | 0.48 | pilot scorecard |
+| Independent Transfer Rate Day 7 | 0.36 | pilot scorecard |
+| Transfer scenario count | 10 | transfer evidence refs |
+`;
 }
 
 function participantFixture(index, refs) {

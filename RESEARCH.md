@@ -115,7 +115,12 @@ exists in the repository; a future path or filename-only placeholder is not
 accepted. Per-run `qaExportPath` / `observerNotesPath` and each VAD
 `qaExportPath` must also be real `https://` evidence URLs or repo paths to
 existing `.json`, `.md`, `.txt`, or `.log` files; status text such as `done` is
-not completed evidence.
+not completed evidence. When the KO/EN case-study targets are repo-local
+Markdown or HTML files, the validator also reads those files and requires the
+visible outcome labels `Conversation Recovery Rate`,
+`Independent Transfer Rate Day 1`, `Independent Transfer Rate Day 7`, and
+`Transfer scenario count`, so final portfolio evidence cannot omit the pilot's
+core metrics while still passing the manifest gate.
 VAD calibration evidence must also be internally consistent: speech floor above
 noise floor, threshold between those floors, and noisy environment floors and
 thresholds no lower than quiet-room values.
