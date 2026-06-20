@@ -58,6 +58,8 @@ describe('Project ECHO UI copy', () => {
     const ambientHtml = renderAmbientView();
 
     expect(reviewHtml).toContain('"importKind": "echo_review_items"');
+    expect(reviewHtml).toContain('"meaningKo": "다시 말해 달라고 요청하기"');
+    expect(reviewHtml).not.toContain('?ㅼ떆');
     expect(reviewHtml).toContain('<div class="label">Source</div>');
     expect(reviewHtml).not.toContain('<div class="label">Intensity</div>');
 
