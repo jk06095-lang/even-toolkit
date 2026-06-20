@@ -313,6 +313,9 @@ Automated coverage added on 2026-06-19:
   includes `Auto evals` and `Auto blocked`. Those columns are derived from
   privacy-safe `AutoAssistSignalEvidence` records and should show at least one
   blocked one-signal/partner/dismiss/session-cap case plus one shown auto cue.
+- Fill `assist.signalEvidenceSummary` in the completed manifest with the QA
+  summary path, the two-signal minimum, aggregate blocker counts, and
+  `rawTranscriptInSignalEvidence=false`.
 - Confirm `rawTranscriptInMetrics` is `false`; Assist metrics must be counts and
   flags only, not raw learner utterances or cue text.
 

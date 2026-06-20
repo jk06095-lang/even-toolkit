@@ -64,6 +64,14 @@ const ASSIST_METRICS = [
   { key: 'false_trigger_count', min: 0 },
   { key: 'cue_used_count', min: 0 },
 ];
+const ASSIST_SIGNAL_EVIDENCE_METRICS = [
+  { key: 'autoAssistSignalEvidenceCount', min: 2 },
+  { key: 'autoAssistBlockedCount', min: 1 },
+  { key: 'insufficientSignalBlockCount', min: 1 },
+  { key: 'partnerSpeechBlockCount', min: 1 },
+  { key: 'dismissRateBlockCount', min: 0 },
+  { key: 'sessionCapBlockCount', min: 0 },
+];
 const DELAYED_PROXY_NUMERIC_METADATA = [
   'silence_detected_at',
   'cue_request_started_at',
@@ -775,7 +783,60 @@ function validateAssist(manifestObject) {
       validateCountMetric(manifestObject.assist.metrics, metric, 'assist.metrics');
     }
   }
+  validateAssistSignalEvidenceSummary(manifestObject.assist);
   validateEvidenceLink(manifestObject.assist, 'evidenceRef', 'assist');
+}
+
+function validateAssistSignalEvidenceSummary(assist) {
+  if (!validateObject(assist.signalEvidenceSummary, 'assist.signalEvidenceSummary')) return;
+
+  const summary = assist.signalEvidenceSummary;
+  const qaSummaryPath = validateRepoEvidenceFile(summary, 'qaSummaryPath', 'assist.signalEvidenceSummary', {
+    extensions: REPORT_EXTENSIONS,
+  });
+  if (qaSummaryPath) {
+    validateAssistQaSummaryReport(qaSummaryPath);
+  }
+
+  validateExpectedNumber(summary, 'minRequiredSignalCount', 2, 'assist.signalEvidenceSummary');
+  for (const metric of ASSIST_SIGNAL_EVIDENCE_METRICS) {
+    validateCountMetric(summary, metric, 'assist.signalEvidenceSummary');
+  }
+  validateExpected(summary, 'rawTranscriptInSignalEvidence', false, 'assist.signalEvidenceSummary');
+
+  const blockedTotal = summary.autoAssistBlockedCount;
+  const detailTotal = [
+    summary.insufficientSignalBlockCount,
+    summary.partnerSpeechBlockCount,
+    summary.dismissRateBlockCount,
+    summary.sessionCapBlockCount,
+  ].filter((value) => Number.isInteger(value)).reduce((total, value) => total + value, 0);
+  if (
+    Number.isInteger(blockedTotal) &&
+    detailTotal > blockedTotal
+  ) {
+    addError(
+      'assist.signalEvidenceSummary.autoAssistBlockedCount',
+      'must be >= the sum of detailed blocker counts',
+    );
+  }
+}
+
+function validateAssistQaSummaryReport(reportPath) {
+  let text = '';
+  try {
+    text = readFileSync(reportPath, 'utf8');
+  } catch (error) {
+    addError('assist.signalEvidenceSummary.qaSummaryPath', `could not read QA summary: ${error.message}`);
+    return;
+  }
+
+  if (!text.includes('Auto evals')) {
+    addError('assist.signalEvidenceSummary.qaSummaryPath', 'QA summary must include the Auto evals column');
+  }
+  if (!text.includes('Auto blocked')) {
+    addError('assist.signalEvidenceSummary.qaSummaryPath', 'QA summary must include the Auto blocked column');
+  }
 }
 
 function validateAudioSources(manifestObject) {

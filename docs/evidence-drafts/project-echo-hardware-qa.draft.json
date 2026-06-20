@@ -305,6 +305,17 @@
       "false_trigger_count": null,
       "cue_used_count": null
     },
+    "signalEvidenceSummary": {
+      "qaSummaryPath": "TBD",
+      "minRequiredSignalCount": null,
+      "autoAssistSignalEvidenceCount": null,
+      "autoAssistBlockedCount": null,
+      "insufficientSignalBlockCount": null,
+      "partnerSpeechBlockCount": null,
+      "dismissRateBlockCount": null,
+      "sessionCapBlockCount": null,
+      "rawTranscriptInSignalEvidence": null
+    },
     "evidenceRef": "TBD"
   },
   "audioSources": {

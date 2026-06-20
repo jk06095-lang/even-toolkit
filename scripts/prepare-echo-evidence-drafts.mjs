@@ -599,6 +599,10 @@ without moving heavy review text onto the glasses:
   \`assist.partnerSpeechBlocksAutoCue=true\`, and
   \`assist.recentDismissRateCheckedBeforeAutoCue=true\` prove Auto Assist does
   not fire from a single ambiguous silence or while the partner is speaking.
+- \`assist.signalEvidenceSummary.qaSummaryPath\` must point to the QA export
+  summary with \`Auto evals\` and \`Auto blocked\`; the completed manifest also
+  records the two-signal minimum, blocker counts, and
+  \`rawTranscriptInSignalEvidence=false\`.
 
 ## Evidence Queue
 

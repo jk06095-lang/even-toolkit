@@ -153,6 +153,36 @@ test('rejects assist evidence without Auto Assist confirmation proof', async () 
   assert.match(output, /assist\.recentDismissRateCheckedBeforeAutoCue: must be true/);
 });
 
+test('rejects assist evidence without Auto Assist signal QA summary proof', async () => {
+  const fixture = writeCompletedHardwareFixture('assist-signal-evidence');
+  const invalidAssist = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
+  invalidAssist.assist.signalEvidenceSummary.qaSummaryPath = fixture.evidencePath;
+  invalidAssist.assist.signalEvidenceSummary.minRequiredSignalCount = 1;
+  invalidAssist.assist.signalEvidenceSummary.autoAssistSignalEvidenceCount = 1;
+  invalidAssist.assist.signalEvidenceSummary.autoAssistBlockedCount = 0;
+  invalidAssist.assist.signalEvidenceSummary.insufficientSignalBlockCount = 0;
+  invalidAssist.assist.signalEvidenceSummary.partnerSpeechBlockCount = 0;
+  invalidAssist.assist.signalEvidenceSummary.rawTranscriptInSignalEvidence = true;
+
+  const invalidPath = path.join(tmpRoot, 'hardware-invalid-assist-signal-evidence.json');
+  writeFileSync(invalidPath, `${JSON.stringify(invalidAssist, null, 2)}\n`, 'utf8');
+
+  const result = await runNode([
+    'scripts/validate-hardware-qa.mjs',
+    repoRelative(invalidPath),
+  ]);
+  assert.notEqual(result.code, 0);
+  const output = combinedOutput(result);
+  assert.match(output, /assist\.signalEvidenceSummary\.qaSummaryPath: QA summary must include the Auto evals column/);
+  assert.match(output, /assist\.signalEvidenceSummary\.qaSummaryPath: QA summary must include the Auto blocked column/);
+  assert.match(output, /assist\.signalEvidenceSummary\.minRequiredSignalCount: must be 2/);
+  assert.match(output, /assist\.signalEvidenceSummary\.autoAssistSignalEvidenceCount: must be >= 2/);
+  assert.match(output, /assist\.signalEvidenceSummary\.autoAssistBlockedCount: must be >= 1/);
+  assert.match(output, /assist\.signalEvidenceSummary\.insufficientSignalBlockCount: must be >= 1/);
+  assert.match(output, /assist\.signalEvidenceSummary\.partnerSpeechBlockCount: must be >= 1/);
+  assert.match(output, /assist\.signalEvidenceSummary\.rawTranscriptInSignalEvidence: must be false/);
+});
+
 test('rejects conversation timeline evidence without source-specific input evidence', async () => {
   const fixture = writeCompletedHardwareFixture('conversation-input-evidence');
   const invalidTimeline = JSON.parse(readFileSync(path.join(repoRoot, fixture.manifestPath), 'utf8'));
@@ -336,17 +366,24 @@ function writeCompletedHardwareFixture(name) {
   const videoRef = path.join(fixtureDir, 'evidence.mp4');
   const debugLogRef = path.join(fixtureDir, 'debug.log');
   const reportRef = path.join(fixtureDir, 'bundle-report.json');
+  const qaSummaryRef = path.join(fixtureDir, 'qa-summary.md');
   const packagePath = path.join(fixtureDir, 'echo.ehpk');
   writeFileSync(evidenceRef, '{"ok":true}\n', 'utf8');
   writeFileSync(videoRef, 'video evidence placeholder\n', 'utf8');
   writeFileSync(debugLogRef, 'debug log placeholder\n', 'utf8');
   writeFileSync(reportRef, '{"ok":true}\n', 'utf8');
+  writeFileSync(
+    qaSummaryRef,
+    '| Segment | Sessions | Auto evals | Auto blocked |\n| --- | ---: | ---: | ---: |\n| All sessions | 2 | 5 | 3 |\n',
+    'utf8',
+  );
   writeFileSync(packagePath, 'packaged echo artifact\n', 'utf8');
 
   const evidence = repoRelative(evidenceRef);
   const video = repoRelative(videoRef);
   const debugLog = repoRelative(debugLogRef);
   const report = repoRelative(reportRef);
+  const qaSummary = repoRelative(qaSummaryRef);
   const packageRelativePath = repoRelative(packagePath);
   const appVersion = JSON.parse(readFileSync(path.join(repoRoot, 'even-app/package.json'), 'utf8')).version;
   const packageSha = createHash('sha256').update(readFileSync(packagePath)).digest('hex');
@@ -491,6 +528,17 @@ function writeCompletedHardwareFixture(name) {
         false_trigger_count: 0,
         cue_used_count: 1,
       },
+      signalEvidenceSummary: {
+        qaSummaryPath: qaSummary,
+        minRequiredSignalCount: 2,
+        autoAssistSignalEvidenceCount: 5,
+        autoAssistBlockedCount: 3,
+        insufficientSignalBlockCount: 1,
+        partnerSpeechBlockCount: 1,
+        dismissRateBlockCount: 1,
+        sessionCapBlockCount: 0,
+        rawTranscriptInSignalEvidence: false,
+      },
       rawTranscriptInMetrics: false,
       evidenceRef: evidence,
     },
@@ -593,6 +641,7 @@ function writeCompletedHardwareFixture(name) {
 
   return {
     manifestPath: repoRelative(manifestPath),
+    evidencePath: evidence,
     packagePath: packageRelativePath,
   };
 }
