@@ -45,6 +45,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   const caseStudyEnPath = path.join(tmpRoot, 'project-echo-case-study.en.draft.md');
   const architecturePath = path.join(tmpRoot, 'project-echo-architecture.draft.md');
   const videoShotListPath = path.join(tmpRoot, 'project-echo-real-g2-video-shot-list.draft.md');
+  const reviewerChecklistPath = path.join(tmpRoot, 'project-echo-reviewer-parity-checklist.draft.md');
   const fieldRunbookPath = path.join(tmpRoot, 'project-echo-field-runbook.draft.md');
   const buildReportPath = path.join(tmpRoot, 'project-echo-build-artifact.md');
 
@@ -57,6 +58,7 @@ test('prepares draft evidence manifests without marking external evidence comple
     caseStudyEnPath,
     architecturePath,
     videoShotListPath,
+    reviewerChecklistPath,
     fieldRunbookPath,
     buildReportPath,
   ]) {
@@ -168,6 +170,7 @@ test('prepares draft evidence manifests without marking external evidence comple
   const caseStudyEn = readFileSync(caseStudyEnPath, 'utf8');
   const architecture = readFileSync(architecturePath, 'utf8');
   const videoShotList = readFileSync(videoShotListPath, 'utf8');
+  const reviewerChecklist = readFileSync(reviewerChecklistPath, 'utf8');
   const fieldRunbook = readFileSync(fieldRunbookPath, 'utf8');
 
   assert.match(caseStudyKo, /\uCD08\uC548 \uC804\uC6A9/);
@@ -190,7 +193,17 @@ test('prepares draft evidence manifests without marking external evidence comple
   assert.match(videoShotList, /Permission denial path shows recoverable phone-side guidance/);
   assert.match(videoShotList, /Partner turns are translated before learner\/unknown turns/);
   assert.match(videoShotList, /Low-confidence transcript shows a Korean-translation review warning/);
+  assert.match(reviewerChecklist, /Project ECHO Even Hub Reviewer-Parity Checklist Draft/);
+  assert.match(reviewerChecklist, /Even Hub Private Testing or Beta Testing/);
+  assert.match(reviewerChecklist, /Five-minute locked-phone run survives backgrounding/);
+  assert.match(reviewerChecklist, /Root double-tap shows system exit dialog and exits with target 1/);
+  assert.match(reviewerChecklist, /Permission denial path is recoverable and phone-side/);
+  assert.match(reviewerChecklist, /Console sanity has no release-blocking errors/);
+  assert.match(reviewerChecklist, /G2 shows only READY, LISTENING, CUE, ACK, PAUSED/);
+  assert.match(reviewerChecklist, /#2\/#3\/#6\/#12\/#13\/#14\/#28/);
+  assert.match(reviewerChecklist, /Do not close any issue from this draft file/);
   assert.match(fieldRunbook, /Project ECHO Field Runbook Draft/);
+  assert.match(fieldRunbook, /project-echo-reviewer-parity-checklist\.draft\.md/);
   assert.match(fieldRunbook, /npm run prepare:echo-field-run/);
   assert.match(fieldRunbook, /project-echo-field-run-prep-report\.draft\.md/);
   assert.match(fieldRunbook, /npm run readiness:echo/);

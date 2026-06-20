@@ -12,6 +12,7 @@ GPT Action deployment proof, or real G2 video.
 - Package SHA-256: c2607ddd4ac132469503af1199764000400fcb9568da5da8448248ff777586c8
 - Package evidence draft: docs/evidence-drafts/project-echo-build-artifact.md
 - Bundle evidence draft: docs/evidence-drafts/project-echo-bundle-report.md
+- Reviewer-parity checklist draft: docs/evidence-drafts/project-echo-reviewer-parity-checklist.draft.md
 - Evidence status: draft
 
 ## Official Even Hub Fidelity Boundary

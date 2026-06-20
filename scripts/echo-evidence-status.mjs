@@ -84,6 +84,10 @@ export const DRAFT_SUPPORT_FILES = [
     path: 'docs/evidence-drafts/project-echo-field-run-prep-report.draft.md',
   },
   {
+    name: 'Even Hub reviewer-parity checklist',
+    path: 'docs/evidence-drafts/project-echo-reviewer-parity-checklist.draft.md',
+  },
+  {
     name: 'build artifact summary',
     path: 'docs/evidence-drafts/project-echo-build-artifact.md',
   },

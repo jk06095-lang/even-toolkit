@@ -49,6 +49,7 @@ Smoke preflight:
 Draft support files:
 - READY: field runbook - docs/evidence-drafts/project-echo-field-runbook.draft.md
 - READY: field-run prep report - docs/evidence-drafts/project-echo-field-run-prep-report.draft.md
+- READY: Even Hub reviewer-parity checklist - docs/evidence-drafts/project-echo-reviewer-parity-checklist.draft.md
 - READY: build artifact summary - docs/evidence-drafts/project-echo-build-artifact.md
 - READY: bundle report - docs/evidence-drafts/project-echo-bundle-report.md
 - READY: hardware QA draft - docs/evidence-drafts/project-echo-hardware-qa.draft.json

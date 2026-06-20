@@ -167,7 +167,9 @@ package outlines. The generator also writes
 checklist mapping the remaining issues to their final evidence gates and the
 Even Hub private/beta testing boundary. The field prep command additionally
 writes `docs/evidence-drafts/project-echo-field-run-prep-report.draft.md`, a
-reviewable local prep snapshot for the packaged `.ehpk`. They stay in `draft`
+reviewable local prep snapshot for the packaged `.ehpk`; the draft generator
+also writes `docs/evidence-drafts/project-echo-reviewer-parity-checklist.draft.md`
+for the Even Hub Private/Beta reviewer-parity capture. They stay in `draft`
 status and do not replace the required `*.completed.json` evidence files, the final
 `docs/key-rotation-evidence.md`, or the final README portfolio links.
 Final validators reject repo-local `docs/evidence-drafts/`, `.draft.`, and

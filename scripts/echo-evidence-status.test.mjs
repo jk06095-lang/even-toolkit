@@ -50,6 +50,7 @@ test('reports missing final evidence without treating draft support as complete'
   assert.match(formatted, /Action OAuth smoke env preflight/);
   assert.match(formatted, /MISSING #5\/#10: completed 5-user pilot manifest/);
   assert.match(formatted, /READY: field-run prep report - docs\/evidence-drafts\/project-echo-field-run-prep-report\.draft\.md/);
+  assert.match(formatted, /READY: Even Hub reviewer-parity checklist - docs\/evidence-drafts\/project-echo-reviewer-parity-checklist\.draft\.md/);
   assert.match(formatted, /Draft support: docs\/evidence-drafts\/project-echo-pilot-evidence\.draft\.json \(available\)/);
   assert.match(formatted, /proxy smoke env ready: no/);
   assert.match(formatted, /Action OAuth smoke env ready: no/);
