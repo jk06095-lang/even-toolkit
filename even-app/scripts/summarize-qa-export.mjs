@@ -24,6 +24,10 @@ function formatNumber(value, digits = 4) {
   return Number.isFinite(value) ? Number(value).toFixed(digits) : 'n/a';
 }
 
+function formatTimestamp(value) {
+  return Number.isFinite(value) ? new Date(value).toISOString() : 'n/a';
+}
+
 function sessionWeight(session) {
   return Math.max(1, numberOrNull(session.cueLatencyCount) ?? 0);
 }
@@ -100,6 +104,7 @@ function summarizeCalibration(sessions) {
       threshold: numberOrNull(session.vadSpeechThreshold),
       noiseFloor: numberOrNull(session.vadNoiseFloorRms),
       speechFloor: numberOrNull(session.vadSpeechFloorRms),
+      calibratedAt: numberOrNull(session.vadCalibratedAt),
     }));
 }
 
@@ -165,8 +170,8 @@ export function renderQaExportMarkdown(summary) {
     '',
     '## Calibration Evidence',
     '',
-    '| Session | Topic | Audio | VAD threshold | Noise floor | Speech floor |',
-    '| --- | --- | --- | ---: | ---: | ---: |',
+    '| Session | Topic | Audio | VAD threshold | Noise floor | Speech floor | Calibrated at |',
+    '| --- | --- | --- | ---: | ---: | ---: | --- |',
     ...summary.calibration.map((row) => [
       row.sessionId,
       row.topic,
@@ -174,11 +179,12 @@ export function renderQaExportMarkdown(summary) {
       formatNumber(row.threshold),
       formatNumber(row.noiseFloor),
       formatNumber(row.speechFloor),
+      formatTimestamp(row.calibratedAt),
     ].join(' | ')).map((row) => `| ${row} |`),
   ];
 
   if (summary.calibration.length === 0) {
-    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a |');
+    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | n/a |');
   }
 
   lines.push(

@@ -36,6 +36,7 @@ describe('QA export summary script', () => {
           vadSpeechThreshold: 0.032,
           vadNoiseFloorRms: 0.009,
           vadSpeechFloorRms: 0.061,
+          vadCalibratedAt: Date.UTC(2026, 5, 20, 9, 30, 0),
         },
         {
           sessionId: 's2',
@@ -68,10 +69,11 @@ describe('QA export summary script', () => {
     expect(summary.overall.falseTriggerCount).toBe(1);
     expect(markdown).toContain('Cafe ordering');
     expect(markdown).toContain('VAD threshold');
+    expect(markdown).toContain('Calibrated at');
     expect(markdown).toContain('180ms');
     expect(markdown).toContain('310ms');
     expect(markdown).toContain('470ms');
-    expect(markdown).toContain('| s1 | Cafe ordering | bridge | 0.0320 | 0.0090 | 0.0610 |');
+    expect(markdown).toContain('| s1 | Cafe ordering | bridge | 0.0320 | 0.0090 | 0.0610 | 2026-06-20T09:30:00.000Z |');
     expect(markdown).not.toContain('private utterance should not appear');
     expect(markdown).not.toContain('private cue should not appear');
   });

@@ -17,6 +17,7 @@ import type { HybridRecognizerCallbacks, HybridRecognizerOptions, HybridMode } f
 import type { SessionAnalysis } from '../src/combat/transcript-analyzer';
 import type { SessionTranscript, TranscriptStoreOptions } from '../src/combat/transcript-store';
 import type { TranslationApiRequest, TranslationApiResponse } from '../src/services/echo-api';
+import type { VadCalibration } from '../src/dsp/calibration';
 import { clearConversationTranslationJobs } from '../src/combat/translation-queue';
 import {
   ECHO_DOMAIN_V2_SCHEMA_VERSION,
@@ -111,7 +112,7 @@ class FakeAudioDetector implements AudioDetector {
   restartCount = 0;
 
   constructor(
-    private readonly config: VADConfig,
+    readonly config: VADConfig,
     source: 'bridge' | 'browser' = 'bridge',
     private readonly startError: Error | null = null,
   ) {
@@ -251,6 +252,27 @@ class FakeHud implements GlassDisplay {
   showGoodJob(): void {
     this.events.push('showGoodJob');
   }
+}
+
+function installMemoryLocalStorage() {
+  const data = new Map<string, string>();
+  const storage = {
+    getItem: (key: string): string | null => data.get(key) ?? null,
+    setItem: (key: string, value: string): void => {
+      data.set(key, String(value));
+    },
+    removeItem: (key: string): void => {
+      data.delete(key);
+    },
+    clear: (): void => {
+      data.clear();
+    },
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storage,
+    configurable: true,
+  });
+  return storage;
 }
 
 describe('SessionEngine core behavior with injected dependencies', () => {
@@ -932,6 +954,35 @@ describe('SessionEngine core behavior with injected dependencies', () => {
     expect(harness.states).toEqual(['loading_vad']);
   });
 
+  it('passes saved VAD calibration into the detector and privacy-safe QA telemetry', async () => {
+    const storage = installMemoryLocalStorage();
+    const calibratedAt = Date.UTC(2026, 5, 20, 9, 30, 0);
+    const vadCalibration: VadCalibration = {
+      noiseFloorRms: 0.018,
+      speechFloorRms: 0.091,
+      speechThreshold: 0.047,
+      calibratedAt,
+    };
+    const harness = createHarness({ vadCalibration });
+
+    await harness.engine.start(harness.hud);
+
+    expect(harness.vad.config.calibration).toEqual(vadCalibration);
+
+    await harness.engine.stop();
+
+    const analyticsRaw = storage.getItem('echo_session_events');
+    expect(analyticsRaw).not.toBeNull();
+    expect(JSON.parse(analyticsRaw ?? '[]')[0]).toMatchObject({
+      audioSource: 'bridge',
+      vadSpeechThreshold: 0.047,
+      vadNoiseFloorRms: 0.018,
+      vadSpeechFloorRms: 0.091,
+      vadCalibratedAt: calibratedAt,
+      rawTranscriptSaved: false,
+    });
+  });
+
   it('starts bridge-only recognition for G2 Mic sessions', async () => {
     const harness = createHarness({ audioSource: 'bridge' });
 
@@ -1225,6 +1276,7 @@ function createHarness(options: {
   rejectChunkOnAbort?: boolean;
   transcriptOptions?: TranscriptStoreOptions;
   cloudProcessingEnabled?: boolean;
+  vadCalibration?: VadCalibration;
 } = {}) {
   const clock = options.clock ?? new FakeClock();
   const states: string[] = [];
@@ -1287,7 +1339,7 @@ function createHarness(options: {
     options.week ?? 1,
     callbacks,
     options.audioSource ?? 'bridge',
-    null,
+    options.vadCalibration ?? null,
     {
       clock,
       random: {
